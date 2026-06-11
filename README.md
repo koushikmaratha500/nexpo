@@ -1,36 +1,58 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Corporate Pro Ledger (nexpo)
 
-## Getting Started
+A responsive Next.js application implementing the **Global Spend SaaS Tracker** from the Stitch design system. Built with Tailwind CSS v4 and designed to support Mobile, Tablet, and Desktop resolutions.
+
+---
+
+## Simulated Accounts & Login Credentials
+
+Authentication is simulated locally based on the following preset profiles:
+
+* **Administrator Profile**
+  * **Email:** `admin@nexpo.com`
+  * **Password:** Any character string longer than **6 characters** (e.g. `admin1234`)
+  * **Default View:** Dashboard Overview, User & Category Management, Global Reports
+
+* **Standard User (Customer) Profile**
+  * **Email:** `user@nexpo.com`
+  * **Password:** Any character string longer than **6 characters** (e.g. `user1234`)
+  * **Default View:** Personal Dashboard, Expense Slips Recording & List, Statement Reports
+
+---
+
+## Configuration & Environment Variables
+
+Create a `.env.local` file in the root of your directory to customize testing features:
+
+```env
+# Set to 'true' to display the floating role-switcher widget in dashboard layouts.
+# Set to 'false' in production configurations to hide this testing utility.
+NEXT_PUBLIC_SHOW_TESTING_HELPER=true
+```
+
+---
+
+## Project Structure & Architecture
+
+* **Mock Module (`/mock`):** Contains central mock datasets including default users, transactions, spend distributions, and system growth metrics.
+* **Global Components (`/components/ui`):** Reusable layout-agnostic interfaces (e.g. `Button`, `Card`, `Modal`, `Table`).
+* **Authentication Context (`/components/auth`):** Context provider managing route redirection, authentication validation checks, and user session storage.
+* **Layouts & Subpages (`/app`):** Dynamic page modules organized under role paths (`/admin` and `/customer`) with fluid responsive grids and bento spacing.
+
+---
+
+## Local Development Execution
 
 First, run the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your web browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+To validate production correctness, compile the bundle:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run build
+```

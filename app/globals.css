@@ -1,26 +1,370 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f7f9fb;
+  --foreground: #191c1e;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+@theme {
+  /* Design System Colors */
+  --color-primary: #000000;
+  --color-on-primary: #ffffff;
+  --color-inverse-on-surface: #eff1f3;
+  --color-surface-container-low: #f2f4f6;
+  --color-inverse-primary: #bec6e0;
+  --color-inverse-surface: #2d3133;
+  --color-surface: #f7f9fb;
+  --color-on-secondary-fixed: #002113;
+  --color-on-secondary-container: #00714d;
+  --color-on-error-container: #93000a;
+  --color-on-secondary: #ffffff;
+  --color-on-primary-container: #7c839b;
+  --color-tertiary-container: #07006c;
+  --color-surface-container-high: #e6e8ea;
+  --color-primary-container: #131b2e;
+  --color-outline: #76777d;
+  --color-error-container: #ffdad6;
+  --color-primary-fixed: #dae2fd;
+  --color-background: #f7f9fb;
+  --color-on-surface: #191c1e;
+  --color-surface-variant: #e0e3e5;
+  --color-surface-container: #eceef0;
+  --color-on-tertiary-container: #7073ff;
+  --color-secondary: #006c49;
+  --color-primary-fixed-dim: #bec6e0;
+  --color-tertiary-fixed: #e1e0ff;
+  --color-on-primary-fixed: #131b2e;
+  --color-surface-container-highest: #e0e3e5;
+  --color-on-surface-variant: #45464d;
+  --color-outline-variant: #c6c6cd;
+  --color-surface-tint: #565e74;
+  --color-tertiary: #000000;
+  --color-on-primary-fixed-variant: #3f465c;
+  --color-secondary-fixed-dim: #4edea3;
+  --color-error: #ba1a1a;
+  --color-on-tertiary: #ffffff;
+  --color-secondary-container: #6cf8bb;
+  --color-on-tertiary-fixed: #07006c;
+  --color-on-background: #191c1e;
+  --color-on-secondary-fixed-variant: #005236;
+  --color-on-tertiary-fixed-variant: #2f2ebe;
+  --color-surface-bright: #f7f9fb;
+  --color-tertiary-fixed-dim: #c0c1ff;
+  --color-surface-dim: #d8dadc;
+  --color-surface-container-lowest: #ffffff;
+  --color-secondary-fixed: #6ffbbe;
+  --color-on-error: #ffffff;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* Custom Border Radius */
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+
+  /* Typography - Font Sizes & Metas in Tailwind v4 */
+  --text-mono-data: 14px;
+  --text-mono-data-line-height: 20px;
+  --text-mono-data-letter-spacing: -0.01em;
+  --text-mono-data-font-weight: 400;
+
+  --text-body-lg: 16px;
+  --text-body-lg-line-height: 24px;
+  
+  --text-label-md: 12px;
+  --text-label-md-line-height: 16px;
+  --text-label-md-letter-spacing: 0.02em;
+  --text-label-md-font-weight: 500;
+
+  --text-headline-md: 24px;
+  --text-headline-md-line-height: 32px;
+  --text-headline-md-letter-spacing: -0.01em;
+  --text-headline-md-font-weight: 600;
+
+  --text-headline-lg: 30px;
+  --text-headline-lg-line-height: 36px;
+  --text-headline-lg-letter-spacing: -0.02em;
+  --text-headline-lg-font-weight: 600;
+
+  --text-body-md: 14px;
+  --text-body-md-line-height: 20px;
+
+  --text-headline-sm: 20px;
+  --text-headline-sm-line-height: 28px;
+  --text-headline-sm-font-weight: 600;
+
+  --text-title-md: 16px;
+  --text-title-md-line-height: 24px;
+  --text-title-md-font-weight: 500;
+
+  /* Custom Font Families */
+  --font-mono-data: Geist Mono, ui-monospace, monospace;
+  --font-body-lg: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
+  --font-label-md: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
+  --font-headline-md: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
+  --font-headline-lg: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
+  --font-body-md: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
+  --font-headline-sm: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
+  --font-title-md: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
 }
+
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined' !important;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  display: inline-block;
+  line-height: 1;
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--color-outline-variant);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* --- DESIGN SYSTEM CUSTOM SPACING UTILITIES (Tailwind CSS v4) --- */
+
+/* Paddings */
+@utility p-xs { padding: 4px; }
+@utility p-sm { padding: 8px; }
+@utility p-md { padding: 16px; }
+@utility p-lg { padding: 24px; }
+@utility p-xl { padding: 32px; }
+@utility p-2xl { padding: 48px; }
+@utility p-3xl { padding: 64px; }
+
+@utility px-xs { padding-left: 4px; padding-right: 4px; }
+@utility px-sm { padding-left: 8px; padding-right: 8px; }
+@utility px-md { padding-left: 16px; padding-right: 16px; }
+@utility px-lg { padding-left: 24px; padding-right: 24px; }
+@utility px-xl { padding-left: 32px; padding-right: 32px; }
+@utility px-2xl { padding-left: 48px; padding-right: 48px; }
+@utility px-3xl { padding-left: 64px; padding-right: 64px; }
+
+@utility py-xs { padding-top: 4px; padding-bottom: 4px; }
+@utility py-sm { padding-top: 8px; padding-bottom: 8px; }
+@utility py-md { padding-top: 16px; padding-bottom: 16px; }
+@utility py-lg { padding-top: 24px; padding-bottom: 24px; }
+@utility py-xl { padding-top: 32px; padding-bottom: 32px; }
+@utility py-2xl { padding-top: 48px; padding-bottom: 48px; }
+@utility py-3xl { padding-top: 64px; padding-bottom: 64px; }
+
+@utility pt-xs { padding-top: 4px; }
+@utility pt-sm { padding-top: 8px; }
+@utility pt-md { padding-top: 16px; }
+@utility pt-lg { padding-top: 24px; }
+@utility pt-xl { padding-top: 32px; }
+@utility pt-2xl { padding-top: 48px; }
+@utility pt-3xl { padding-top: 64px; }
+
+@utility pb-xs { padding-bottom: 4px; }
+@utility pb-sm { padding-bottom: 8px; }
+@utility pb-md { padding-bottom: 16px; }
+@utility pb-lg { padding-bottom: 24px; }
+@utility pb-xl { padding-bottom: 32px; }
+@utility pb-2xl { padding-bottom: 48px; }
+@utility pb-3xl { padding-bottom: 64px; }
+
+@utility pl-xs { padding-left: 4px; }
+@utility pl-sm { padding-left: 8px; }
+@utility pl-md { padding-left: 16px; }
+@utility pl-lg { padding-left: 24px; }
+@utility pl-xl { padding-left: 32px; }
+@utility pl-2xl { padding-left: 48px; }
+@utility pl-3xl { padding-left: 64px; }
+
+@utility pr-xs { padding-right: 4px; }
+@utility pr-sm { padding-right: 8px; }
+@utility pr-md { padding-right: 16px; }
+@utility pr-lg { padding-right: 24px; }
+@utility pr-xl { padding-right: 32px; }
+@utility pr-2xl { padding-right: 48px; }
+@utility pr-3xl { padding-right: 64px; }
+
+/* Margins */
+@utility m-xs { margin: 4px; }
+@utility m-sm { margin: 8px; }
+@utility m-md { margin: 16px; }
+@utility m-lg { margin: 24px; }
+@utility m-xl { margin: 32px; }
+@utility m-2xl { margin: 48px; }
+@utility m-3xl { margin: 64px; }
+
+@utility mx-xs { margin-left: 4px; margin-right: 4px; }
+@utility mx-sm { margin-left: 8px; margin-right: 8px; }
+@utility mx-md { margin-left: 16px; margin-right: 16px; }
+@utility mx-lg { margin-left: 24px; margin-right: 24px; }
+@utility mx-xl { margin-left: 32px; margin-right: 32px; }
+@utility mx-2xl { margin-left: 48px; margin-right: 48px; }
+@utility mx-3xl { margin-left: 64px; margin-right: 64px; }
+
+@utility my-xs { margin-top: 4px; margin-bottom: 4px; }
+@utility my-sm { margin-top: 8px; margin-bottom: 8px; }
+@utility my-md { margin-top: 16px; margin-bottom: 16px; }
+@utility my-lg { margin-top: 24px; margin-bottom: 24px; }
+@utility my-xl { margin-top: 32px; margin-bottom: 32px; }
+@utility my-2xl { margin-top: 48px; margin-bottom: 48px; }
+@utility my-3xl { margin-top: 64px; margin-bottom: 64px; }
+
+@utility mt-xs { margin-top: 4px; }
+@utility mt-sm { margin-top: 8px; }
+@utility mt-md { margin-top: 16px; }
+@utility mt-lg { margin-top: 24px; }
+@utility mt-xl { margin-top: 32px; }
+@utility mt-2xl { margin-top: 48px; }
+@utility mt-3xl { margin-top: 64px; }
+
+@utility mb-xs { margin-bottom: 4px; }
+@utility mb-sm { margin-bottom: 8px; }
+@utility mb-md { margin-bottom: 16px; }
+@utility mb-lg { margin-bottom: 24px; }
+@utility mb-xl { margin-bottom: 32px; }
+@utility mb-2xl { margin-bottom: 48px; }
+@utility mb-3xl { margin-bottom: 64px; }
+
+@utility ml-xs { margin-left: 4px; }
+@utility ml-sm { margin-left: 8px; }
+@utility ml-md { margin-left: 16px; }
+@utility ml-lg { margin-left: 24px; }
+@utility ml-xl { margin-left: 32px; }
+@utility ml-2xl { margin-left: 48px; }
+@utility ml-3xl { margin-left: 64px; }
+
+@utility mr-xs { margin-right: 4px; }
+@utility mr-sm { margin-right: 8px; }
+@utility mr-md { margin-right: 16px; }
+@utility mr-lg { margin-right: 24px; }
+@utility mr-xl { margin-right: 32px; }
+@utility mr-2xl { margin-right: 48px; }
+@utility mr-3xl { margin-right: 64px; }
+
+/* Grid Gaps */
+@utility gap-xs { gap: 4px; }
+@utility gap-sm { gap: 8px; }
+@utility gap-md { gap: 16px; }
+@utility gap-lg { gap: 24px; }
+@utility gap-xl { gap: 32px; }
+@utility gap-2xl { gap: 48px; }
+@utility gap-3xl { gap: 64px; }
+@utility gap-gutter { gap: 24px; }
+
+@utility gap-x-xs { column-gap: 4px; }
+@utility gap-x-sm { column-gap: 8px; }
+@utility gap-x-md { column-gap: 16px; }
+@utility gap-x-lg { column-gap: 24px; }
+@utility gap-x-xl { column-gap: 32px; }
+@utility gap-x-2xl { column-gap: 48px; }
+@utility gap-x-3xl { column-gap: 64px; }
+
+@utility gap-y-xs { row-gap: 4px; }
+@utility gap-y-sm { row-gap: 8px; }
+@utility gap-y-md { row-gap: 16px; }
+@utility gap-y-lg { row-gap: 24px; }
+@utility gap-y-xl { row-gap: 32px; }
+@utility gap-y-2xl { row-gap: 48px; }
+@utility gap-y-3xl { row-gap: 64px; }
+
+/* Flexbox Flow Spacings */
+@utility space-y-xs {
+  & > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 4px;
+  }
+}
+@utility space-y-sm {
+  & > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 8px;
+  }
+}
+@utility space-y-md {
+  & > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 16px;
+  }
+}
+@utility space-y-lg {
+  & > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 24px;
+  }
+}
+@utility space-y-xl {
+  & > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 32px;
+  }
+}
+@utility space-y-2xl {
+  & > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 48px;
+  }
+}
+@utility space-y-3xl {
+  & > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 64px;
+  }
+}
+
+@utility space-x-xs {
+  & > :not([hidden]) ~ :not([hidden]) {
+    margin-left: 4px;
+  }
+}
+@utility space-x-sm {
+  & > :not([hidden]) ~ :not([hidden]) {
+    margin-left: 8px;
+  }
+}
+@utility space-x-md {
+  & > :not([hidden]) ~ :not([hidden]) {
+    margin-left: 16px;
+  }
+}
+@utility space-x-lg {
+  & > :not([hidden]) ~ :not([hidden]) {
+    margin-left: 24px;
+  }
+}
+@utility space-x-xl {
+  & > :not([hidden]) ~ :not([hidden]) {
+    margin-left: 32px;
+  }
+}
+@utility space-x-2xl {
+  & > :not([hidden]) ~ :not([hidden]) {
+    margin-left: 48px;
+  }
+}
+@utility space-x-3xl {
+  & > :not([hidden]) ~ :not([hidden]) {
+    margin-left: 64px;
+  }
+}
+
+/* Absolute Positioning Offsets */
+@utility top-xs { top: 4px; }
+@utility top-sm { top: 8px; }
+@utility top-md { top: 16px; }
+@utility top-lg { top: 24px; }
+@utility top-xl { top: 32px; }
+
+@utility bottom-xs { bottom: 4px; }
+@utility bottom-sm { bottom: 8px; }
+@utility bottom-md { bottom: 16px; }
+@utility bottom-lg { bottom: 24px; }
+@utility bottom-xl { bottom: 32px; }
+
+@utility left-xs { left: 4px; }
+@utility left-sm { left: 8px; }
+@utility left-md { left: 16px; }
+@utility left-lg { left: 24px; }
+@utility left-xl { left: 32px; }
+
+@utility right-xs { right: 4px; }
+@utility right-sm { right: 8px; }
+@utility right-md { right: 16px; }
+@utility right-lg { right: 24px; }
+@utility right-xl { right: 32px; }

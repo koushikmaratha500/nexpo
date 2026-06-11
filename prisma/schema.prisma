@@ -1,0 +1,364 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  CUSTOMER
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  BLOCKED
+}
+
+enum AuthProvider {
+  EMAIL
+  GOOGLE
+  MOBILE
+}
+
+enum RecurringFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum InsightType {
+  SUMMARY
+  FORECAST
+  ANOMALY
+  RECOMMENDATION
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  BLOCK
+  ACTIVATE
+}
+
+model User {
+  id String @id @default(uuid())
+
+  email        String? @unique
+  passwordHash String?
+
+  mobile String? @unique
+
+  firstName String
+  lastName  String?
+
+  profileImageUrl String?
+
+  role   UserRole   @default(CUSTOMER)
+  status UserStatus @default(PENDING)
+
+  emailVerified  Boolean @default(false)
+  mobileVerified Boolean @default(false)
+
+  countryId  String?
+  currencyId String?
+
+  country  Country?  @relation(fields: [countryId], references: [id])
+  currency Currency? @relation(fields: [currencyId], references: [id])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  expenses          Expense[]
+  budgets           Budget[]
+  tags              Tag[]
+  recurringExpenses RecurringExpense[]
+  aiInsights        AIInsight[]
+  auditLogs         AuditLog[]
+  authAccounts      AuthAccount[]
+  otpVerifications  OtpVerification[]
+  notifications     Notification[]
+
+  @@index([email])
+  @@index([mobile])
+  @@index([status])
+}
+
+model AuthAccount {
+  id String @id @default(uuid())
+
+  userId String
+
+  provider AuthProvider
+
+  providerAccountId String
+
+  accessToken  String?
+  refreshToken String?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([provider, providerAccountId])
+}
+
+model Country {
+  id String @id @default(uuid())
+
+  name    String
+  isoCode String @unique
+
+  defaultCurrencyId String
+  defaultCurrency   Currency @relation("CountryDefaultCurrency", fields: [defaultCurrencyId], references: [id])
+
+  users User[]
+}
+
+model Currency {
+  id String @id @default(uuid())
+
+  code   String @unique
+  name   String
+  symbol String
+
+  users             User[]
+  expenses          Expense[]
+  budgets           Budget[]
+  recurringExpenses RecurringExpense[]
+
+  defaultCountries Country[] @relation("CountryDefaultCurrency")
+}
+
+model Category {
+  id String @id @default(uuid())
+
+  name String @unique
+
+  description String?
+
+  icon String?
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  expenses          Expense[]
+  budgets           Budget[]
+  recurringExpenses RecurringExpense[]
+}
+
+model Expense {
+  id String @id @default(uuid())
+
+  userId     String
+  categoryId String
+  currencyId String
+
+  amount Decimal @db.Decimal(18, 2)
+
+  expenseDate DateTime
+
+  notes       String?
+  paymentType String
+
+  receiptUrl      String?
+  receiptFileName String?
+  receiptMimeType String?
+  receiptSize     Int?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  user     User     @relation(fields: [userId], references: [id])
+  category Category @relation(fields: [categoryId], references: [id])
+  currency Currency @relation(fields: [currencyId], references: [id])
+
+  tags ExpenseTag[]
+
+  @@index([userId])
+  @@index([categoryId])
+  @@index([expenseDate])
+  @@index([currencyId])
+}
+
+model Tag {
+  id String @id @default(uuid())
+
+  userId String
+
+  name String
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  expenseTags ExpenseTag[]
+
+  @@unique([userId, name])
+}
+
+model ExpenseTag {
+  expenseId String
+  tagId     String
+
+  expense Expense @relation(fields: [expenseId], references: [id])
+  tag     Tag     @relation(fields: [tagId], references: [id])
+
+  @@id([expenseId, tagId])
+}
+
+model Budget {
+  id String @id @default(uuid())
+
+  userId String
+
+  categoryId String?
+
+  currencyId String
+
+  amount Decimal @db.Decimal(18, 2)
+
+  startDate DateTime
+  endDate   DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  category Category? @relation(fields: [categoryId], references: [id])
+  currency Currency  @relation(fields: [currencyId], references: [id])
+
+  @@index([userId])
+}
+
+model RecurringExpense {
+  id String @id @default(uuid())
+
+  userId String
+
+  categoryId String
+
+  currencyId String
+
+  title String
+
+  amount Decimal @db.Decimal(18, 2)
+
+  frequency RecurringFrequency
+
+  startDate DateTime
+
+  nextRunDate DateTime
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  category Category @relation(fields: [categoryId], references: [id])
+  currency Currency @relation(fields: [currencyId], references: [id])
+
+  @@index([userId])
+  @@index([nextRunDate])
+}
+
+model AIInsight {
+  id String @id @default(uuid())
+
+  userId String
+
+  insightType InsightType
+
+  title String
+
+  description String @db.Text
+
+  periodStart DateTime
+
+  periodEnd DateTime
+
+  generatedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model OtpVerification {
+  id String @id @default(uuid())
+
+  userId String?
+
+  mobile String?
+
+  otp String
+
+  expiresAt DateTime
+
+  verified Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+}
+
+model AuditLog {
+  id String @id @default(uuid())
+
+  userId String?
+
+  action AuditAction
+
+  entity String
+
+  entityId String?
+
+  oldValue Json?
+  newValue Json?
+
+  ipAddress String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Notification {
+  id String @id @default(uuid())
+
+  userId String
+
+  title String
+
+  message String @db.Text
+
+  isRead Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
