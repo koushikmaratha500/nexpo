@@ -368,3 +368,12 @@ body {
 @utility right-md { right: 16px; }
 @utility right-lg { right: 24px; }
 @utility right-xl { right: 32px; }
+
+@keyframes toast-progress {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+@utility animate-toast-progress {
+  animation: toast-progress 3000ms linear forwards;
+}

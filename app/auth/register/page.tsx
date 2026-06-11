@@ -4,34 +4,48 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { useForm } from 'react-hook-form';
+import { useToast } from '@/hooks/useToast';
 import Link from 'next/link';
 import { useAuth } from '@/components/auth/AuthContext';
 
 export default function RegisterPage() {
   const router = useRouter();
   const { isLoading } = useAuth();
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
-  const [country, setCountry] = useState('India');
-  const [password, setPassword] = useState('');
+  const { addToast } = useToast();
+  
   const [success, setSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm({
+    defaultValues: {
+      firstName: '',
+      lastName: '',
+      email: '',
+      country: 'India',
+      password: '',
+    },
+  });
+
+  const onSubmit = (data: any) => {
     setErrorMsg('');
     setIsSubmitting(true);
 
-    if (password.length <= 6) {
-      setErrorMsg('Password must be more than 6 characters long.');
+    if (data.password.length < 7) {
+      setErrorMsg('Password must be at least 7 characters long.');
+      addToast('Password must be at least 7 characters.', 'error');
       setIsSubmitting(false);
       return;
     }
 
     // Success simulation
     setSuccess(true);
+    addToast('Registration request sent successfully!', 'success');
     setTimeout(() => {
       router.push('/');
     }, 3000);
@@ -124,7 +138,7 @@ export default function RegisterPage() {
 
         <Card className="flex flex-col gap-6 bg-surface-container-lowest" glass={false}>
           {success ? (
-            <div className="text-center py-8 flex flex-col items-center gap-4">
+            <div className="text-center py-8 flex flex-col items-center gap-4 animate-in zoom-in-95 duration-300">
               <div className="w-16 h-16 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center mb-4">
                 <span className="material-symbols-outlined text-xl">check_circle</span>
               </div>
@@ -141,13 +155,13 @@ export default function RegisterPage() {
               </div>
 
               {errorMsg && (
-                <div className="p-4 bg-error-container/20 border border-error/20 text-error rounded-lg text-body-md font-medium flex items-center gap-2">
+                <div className="p-4 bg-error-container/20 border border-error/20 text-error rounded-lg text-body-md font-medium flex items-center gap-2 animate-in fade-in duration-200">
                   <span className="material-symbols-outlined text-md">error</span>
                   <span>{errorMsg}</span>
                 </div>
               )}
 
-              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex flex-col gap-1">
                     <label htmlFor="firstName" className="font-label-md text-label-md text-on-surface font-bold uppercase tracking-wide">
@@ -156,12 +170,16 @@ export default function RegisterPage() {
                     <input
                       id="firstName"
                       type="text"
-                      required
                       placeholder="Jane"
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
+                      {...register('firstName', { required: 'First name is required' })}
                       className="px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary transition-all text-on-surface w-full"
                     />
+                    {errors.firstName && (
+                      <span className="text-error text-xs font-semibold mt-1 flex items-center gap-1 animate-in slide-in-from-top-1">
+                        <span className="material-symbols-outlined text-xs">error</span>
+                        {errors.firstName.message}
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex flex-col gap-1">
@@ -172,8 +190,7 @@ export default function RegisterPage() {
                       id="lastName"
                       type="text"
                       placeholder="Sterling"
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
+                      {...register('lastName')}
                       className="px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary transition-all text-on-surface w-full"
                     />
                   </div>
@@ -186,12 +203,19 @@ export default function RegisterPage() {
                   <input
                     id="email"
                     type="email"
-                    required
                     placeholder="name@company.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    {...register('email', {
+                      required: 'Email is required',
+                      pattern: { value: /^\S+@\S+$/i, message: 'Invalid email address' },
+                    })}
                     className="px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary transition-all text-on-surface"
                   />
+                  {errors.email && (
+                    <span className="text-error text-xs font-semibold mt-1 flex items-center gap-1 animate-in slide-in-from-top-1">
+                      <span className="material-symbols-outlined text-xs">error</span>
+                      {errors.email.message}
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex flex-col gap-1">
@@ -201,8 +225,7 @@ export default function RegisterPage() {
                   <div className="relative">
                     <select
                       id="country"
-                      value={country}
-                      onChange={(e) => setCountry(e.target.value)}
+                      {...register('country')}
                       className="w-full px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary transition-all text-on-surface appearance-none font-bold"
                     >
                       <option value="India">India</option>
@@ -224,12 +247,19 @@ export default function RegisterPage() {
                   <input
                     id="password"
                     type="password"
-                    required
                     placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    {...register('password', {
+                      required: 'Password is required',
+                      minLength: { value: 7, message: 'Password must be at least 7 characters' },
+                    })}
                     className="px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary transition-all text-on-surface"
                   />
+                  {errors.password && (
+                    <span className="text-error text-xs font-semibold mt-1 flex items-center gap-1 animate-in slide-in-from-top-1">
+                      <span className="material-symbols-outlined text-xs">error</span>
+                      {errors.password.message}
+                    </span>
+                  )}
                 </div>
 
                 <Button type="submit" disabled={isSubmitting} className="w-full h-11">

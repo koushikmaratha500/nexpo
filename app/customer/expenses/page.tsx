@@ -5,14 +5,30 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table';
-import { MOCK_EXPENSES, MOCK_CATEGORIES, Expense } from '@/mock/data';
+import { MOCK_CATEGORIES, Expense } from '@/mock/data';
+import { useExpenseStore } from '@/store/expenseStore';
+import { useToast } from '@/hooks/useToast';
+import { Pagination } from '@/components/ui/Pagination';
+import { useForm } from 'react-hook-form';
 
 const getCurrencySymbol = (currencyCode: string) => {
   return '₹';
 };
 
+interface ExpenseFormInput {
+  merchant: string;
+  category: string;
+  amount: string;
+  date: string;
+  paymentType: string;
+  notes: string;
+  currency: string;
+}
+
 export default function ExpenseManagementPage() {
-  const [expenses, setExpenses] = useState<Expense[]>(MOCK_EXPENSES);
+  const { addToast } = useToast();
+  const { expenses, fetchExpenses, addExpense, updateExpense, deleteExpense } = useExpenseStore();
+
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
@@ -23,11 +39,6 @@ export default function ExpenseManagementPage() {
   const [startDate, setStartDate] = useState('2023-10-01');
   const [endDate, setEndDate] = useState('2023-10-31');
 
-  // Reset page when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search, selectedCategory, startDate, endDate]);
-
   // Modal Dialog states
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -35,22 +46,49 @@ export default function ExpenseManagementPage() {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
   const [isPreviewLoading, setIsPreviewLoading] = useState(true);
+  const [receiptFile, setReceiptFile] = useState<{ name: string; size: string; date: string; url?: string } | null>(null);
+
+  // React Hook Form for Add Modal
+  const {
+    register: registerAdd,
+    handleSubmit: handleSubmitAdd,
+    reset: resetAdd,
+    formState: { errors: errorsAdd },
+  } = useForm<ExpenseFormInput>({
+    defaultValues: {
+      merchant: '',
+      category: 'FOOD',
+      amount: '',
+      date: new Date().toISOString().split('T')[0],
+      paymentType: 'Credit Card',
+      notes: '',
+      currency: 'INR',
+    },
+  });
+
+  // React Hook Form for Edit Modal
+  const {
+    register: registerEdit,
+    handleSubmit: handleSubmitEdit,
+    reset: resetEdit,
+    formState: { errors: errorsEdit },
+  } = useForm<ExpenseFormInput>();
+
+  // Fetch expenses on mount
+  useEffect(() => {
+    fetchExpenses();
+  }, [fetchExpenses]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, selectedCategory, startDate, endDate]);
 
   useEffect(() => {
     if (selectedExpense) {
       setIsPreviewLoading(true);
     }
   }, [selectedExpense]);
-
-  // Form Fields State
-  const [merchant, setMerchant] = useState('');
-  const [category, setCategory] = useState('FOOD');
-  const [amount, setAmount] = useState('');
-  const [date, setDate] = useState('');
-  const [paymentType, setPaymentType] = useState('Credit Card');
-  const [notes, setNotes] = useState('');
-  const [currency, setCurrency] = useState('INR');
-  const [receiptFile, setReceiptFile] = useState<{ name: string; size: string; date: string; url?: string } | null>(null);
 
   // Date converters
   const formatDateToInput = (dateStr: string) => {
@@ -94,67 +132,61 @@ export default function ExpenseManagementPage() {
   });
 
   const totalItems = filteredExpenses.length;
-  const totalPages = Math.max(Math.ceil(totalItems / itemsPerPage), 1);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedExpenses = filteredExpenses.slice(startIndex, startIndex + itemsPerPage);
 
-  const pageRange = [];
-  const startPage = Math.max(1, currentPage - 2);
-  const endPage = Math.min(totalPages, currentPage + 2);
-  for (let i = startPage; i <= endPage; i++) {
-    pageRange.push(i);
-  }
-
   // Handle Add Expense Trigger
   const handleOpenAdd = () => {
-    setMerchant('');
-    setCategory('FOOD');
-    setAmount('');
-    setDate(new Date().toISOString().split('T')[0]);
-    setPaymentType('Credit Card');
-    setNotes('');
-    setCurrency('INR');
+    resetAdd({
+      merchant: '',
+      category: 'FOOD',
+      amount: '',
+      date: new Date().toISOString().split('T')[0],
+      paymentType: 'Credit Card',
+      notes: '',
+      currency: 'INR',
+    });
     setReceiptFile(null);
     setIsAddOpen(true);
   };
 
   // Save New Expense
-  const handleSaveAdd = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!merchant || !amount || !category || !date || !paymentType || !currency) return;
-
-    const newExpense: Expense = {
-      id: `e${expenses.length + 1}`,
-      merchant,
-      description: merchant, // default description to merchant title
-      category,
-      date: formatDateFromInput(date),
-      status: 'PENDING',
-      amount: parseFloat(amount),
-      submittedBy: 'Alex Sterling',
-      paymentType,
-      currency,
-      notes: notes || undefined,
-      receiptName: receiptFile?.name,
-      receiptSize: receiptFile?.size,
-      receiptDate: receiptFile?.date,
-      receiptUrl: receiptFile?.url || (receiptFile ? '/basic-text.pdf' : undefined)
-    };
-
-    setExpenses([newExpense, ...expenses]);
-    setIsAddOpen(false);
+  const onSaveAdd = async (data: any) => {
+    try {
+      await addExpense({
+        merchant: data.merchant,
+        description: data.merchant,
+        category: data.category,
+        amount: parseFloat(data.amount),
+        date: data.date,
+        paymentType: data.paymentType,
+        notes: data.notes,
+        currency: data.currency,
+        receiptName: receiptFile?.name,
+        receiptSize: receiptFile?.size,
+        receiptDate: receiptFile?.date,
+        receiptUrl: receiptFile?.url || (receiptFile ? '/basic-text.pdf' : undefined)
+      });
+      addToast('Expense recorded successfully!', 'success');
+      setIsAddOpen(false);
+      resetAdd();
+    } catch (e) {
+      addToast('Failed to record expense.', 'error');
+    }
   };
 
   // Handle Edit Expense Trigger
   const handleOpenEdit = (expense: Expense) => {
     setSelectedExpense(expense);
-    setMerchant(expense.merchant);
-    setCategory(expense.category);
-    setAmount(expense.amount.toString());
-    setDate(formatDateToInput(expense.date));
-    setPaymentType(expense.paymentType);
-    setNotes(expense.notes || '');
-    setCurrency(expense.currency);
+    resetEdit({
+      merchant: expense.merchant,
+      category: expense.category,
+      amount: expense.amount.toString(),
+      date: formatDateToInput(expense.date),
+      paymentType: expense.paymentType,
+      notes: expense.notes || '',
+      currency: expense.currency,
+    });
     if (expense.receiptName) {
       setReceiptFile({
         name: expense.receiptName,
@@ -170,32 +202,28 @@ export default function ExpenseManagementPage() {
   };
 
   // Save Edit Expense
-  const handleSaveEdit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedExpense || !merchant || !amount || !category || !date || !paymentType || !currency) return;
-
-    setExpenses(prev => prev.map(item => {
-      if (item.id === selectedExpense.id) {
-        return {
-          ...item,
-          merchant,
-          description: merchant, // default description to merchant title
-          category,
-          amount: parseFloat(amount),
-          date: formatDateFromInput(date),
-          paymentType,
-          currency,
-          notes: notes || undefined,
-          receiptName: receiptFile?.name,
-          receiptSize: receiptFile?.size,
-          receiptDate: receiptFile?.date,
-          receiptUrl: receiptFile?.url || (receiptFile ? '/basic-text.pdf' : undefined)
-        };
-      }
-      return item;
-    }));
-
-    setIsEditOpen(false);
+  const onSaveEdit = async (data: any) => {
+    if (!selectedExpense) return;
+    try {
+      await updateExpense(selectedExpense.id, {
+        merchant: data.merchant,
+        description: data.merchant,
+        category: data.category,
+        amount: parseFloat(data.amount),
+        date: data.date,
+        paymentType: data.paymentType,
+        notes: data.notes,
+        currency: data.currency,
+        receiptName: receiptFile?.name,
+        receiptSize: receiptFile?.size,
+        receiptDate: receiptFile?.date,
+        receiptUrl: receiptFile?.url || (receiptFile ? '/basic-text.pdf' : undefined)
+      });
+      addToast('Expense updated successfully!', 'success');
+      setIsEditOpen(false);
+    } catch (e) {
+      addToast('Failed to update expense.', 'error');
+    }
   };
 
   // Open Details Modal
@@ -211,11 +239,16 @@ export default function ExpenseManagementPage() {
   };
 
   // Confirm Delete
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!selectedExpense) return;
-    setExpenses(prev => prev.filter(item => item.id !== selectedExpense.id));
-    setSelectedExpense(null);
-    setIsDeleteOpen(false);
+    try {
+      await deleteExpense(selectedExpense.id);
+      addToast('Expense deleted successfully!', 'success');
+      setSelectedExpense(null);
+      setIsDeleteOpen(false);
+    } catch (e) {
+      addToast('Failed to delete expense.', 'error');
+    }
   };
 
   return (
@@ -248,75 +281,80 @@ export default function ExpenseManagementPage() {
         </div>
 
         {/* Category Filter */}
-        <div className="flex items-center gap-2 w-full md:w-auto">
-          <span className="font-label-md text-label-md text-on-surface-variant uppercase font-bold whitespace-nowrap">Category:</span>
-          <select 
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none text-on-surface font-bold w-full md:w-40"
-          >
-            <option value="ALL">ALL Categories</option>
-            {MOCK_CATEGORIES.map(c => (
-              <option key={c.id} value={c.code}>{c.name}</option>
-            ))}
-          </select>
+        <div className="flex flex-col gap-xs w-full md:w-48">
+          <div className="relative">
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="w-full pl-4 pr-10 py-2 bg-surface-container-low border border-outline-variant rounded-lg font-body-md text-body-md focus:outline-none focus:border-primary appearance-none font-bold text-on-surface"
+            >
+              <option value="ALL">All Categories</option>
+              {MOCK_CATEGORIES.map(c => (
+                <option key={c.id} value={c.code}>{c.name}</option>
+              ))}
+            </select>
+            <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-outline">expand_more</span>
+          </div>
         </div>
 
         {/* Start Date */}
         <div className="flex items-center gap-2 w-full md:w-auto">
           <span className="font-label-md text-label-md text-on-surface-variant uppercase font-bold whitespace-nowrap">Start:</span>
-          <input 
-            type="date" 
-            value={startDate} 
-            onChange={(e) => setStartDate(e.target.value)} 
-            className="px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none text-on-surface font-bold w-full md:w-40"
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md font-bold focus:outline-none text-on-surface w-full md:w-auto"
           />
         </div>
 
         {/* End Date */}
         <div className="flex items-center gap-2 w-full md:w-auto">
           <span className="font-label-md text-label-md text-on-surface-variant uppercase font-bold whitespace-nowrap">End:</span>
-          <input 
-            type="date" 
-            value={endDate} 
-            onChange={(e) => setEndDate(e.target.value)} 
-            className="px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none text-on-surface font-bold w-full md:w-40"
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md font-bold focus:outline-none text-on-surface w-full md:w-auto"
           />
         </div>
       </Card>
 
-      {/* Main Expenses Table */}
-      <Card className="bg-surface-container-lowest p-0 overflow-hidden" glass={false}>
-        <div className="w-full overflow-x-auto scrollbar-hide">
-          <Table>
+      {/* Main Ledger Table */}
+      <div className="w-full overflow-x-auto scrollbar-hide border border-outline-variant/40 rounded-xl bg-surface-container-lowest">
+        <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Title</TableHead>
               <TableHead>Category</TableHead>
-              <TableHead>Submittal Date</TableHead>
+              <TableHead>Date</TableHead>
               <TableHead align="right">Amount</TableHead>
-              <TableHead align="right">Action</TableHead>
+              <TableHead align="right" className="w-[100px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {paginatedExpenses.length === 0 ? (
               <TableRow>
-                <TableCell className="text-center py-8 text-on-surface-variant text-body-md" {...{colSpan: 5}}>
-                  No records match the filter criteria.
+                <TableCell colSpan={5} className="text-center py-12 text-on-surface-variant">
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <span className="material-symbols-outlined text-outline text-[40px]">search_off</span>
+                    <p className="font-title-md text-title-md font-bold text-on-surface">No expenses found</p>
+                    <p className="font-label-md text-label-md max-w-xs">No entries match your search criteria. Try modifying your filters or date ranges.</p>
+                  </div>
                 </TableCell>
               </TableRow>
             ) : (
               paginatedExpenses.map((item) => {
-                const iconName = item.category === 'FOOD' ? 'restaurant' : item.category === 'TRAVEL' ? 'flight' : item.category === 'RENT' ? 'home_work' : 'category';
                 return (
-                  <TableRow key={item.id} onClick={() => handleOpenDetails(item)}>
-                    <TableCell>
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary border border-outline-variant/30">
-                          <span className="material-symbols-outlined text-sm">{iconName}</span>
-                        </div>
-                        <p className="font-body-md text-body-md font-bold text-primary">
-                          {item.merchant.length > 20 ? item.merchant.slice(0, 20) + '...' : item.merchant}
+                  <TableRow 
+                    key={item.id}
+                    onClick={() => handleOpenDetails(item)}
+                    className="cursor-pointer group hover:bg-surface-container-low/40 transition-colors"
+                  >
+                    <TableCell className="font-title-md text-title-md font-semibold text-primary">
+                      <div>
+                        <p className="truncate max-w-[200px]" title={item.merchant}>
+                          {item.merchant.length > 20 ? `${item.merchant.slice(0, 20)}...` : item.merchant}
                         </p>
                       </div>
                     </TableCell>
@@ -335,14 +373,14 @@ export default function ExpenseManagementPage() {
                       <div className="flex justify-end gap-1">
                         <button 
                           onClick={() => handleOpenEdit(item)}
-                          className="p-1 hover:bg-surface-container rounded-full text-on-surface-variant hover:text-primary transition-all"
+                          className="p-1 hover:bg-surface-container rounded-full text-on-surface-variant hover:text-primary transition-all cursor-pointer"
                           title="Modify details"
                         >
                           <span className="material-symbols-outlined text-sm">edit</span>
                         </button>
                         <button 
                           onClick={() => handleOpenDelete(item)}
-                          className="p-1 hover:bg-surface-container rounded-full text-on-surface-variant hover:text-error transition-all"
+                          className="p-1 hover:bg-surface-container rounded-full text-on-surface-variant hover:text-error transition-all cursor-pointer"
                           title="Revoke entry"
                         >
                           <span className="material-symbols-outlined text-sm">delete</span>
@@ -358,46 +396,12 @@ export default function ExpenseManagementPage() {
       </div>
 
       {/* Pagination Footer */}
-      <div className="flex flex-col sm:flex-row items-center justify-between px-lg py-md border-t border-outline-variant/44 bg-surface-container-lowest gap-4">
-        <span className="font-label-md text-label-md text-on-surface-variant font-medium text-center sm:text-left">
-          Showing {totalItems > 0 ? startIndex + 1 : 0} to {Math.min(startIndex + itemsPerPage, totalItems)} of {totalItems} entries
-        </span>
-        <div className="flex items-center gap-sm">
-          {currentPage > 1 && (
-            <button
-              type="button"
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-              className="px-sm py-1 rounded hover:bg-surface-container text-xs font-bold transition-all flex items-center cursor-pointer text-on-surface-variant"
-            >
-              Back
-            </button>
-          )}
-          {pageRange.map(p => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => setCurrentPage(p)}
-              className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold transition-all cursor-pointer ${
-                currentPage === p
-                  ? 'bg-primary text-on-primary shadow-sm active:scale-90'
-                  : 'text-on-surface-variant hover:bg-surface-container'
-              }`}
-            >
-              {p}
-            </button>
-          ))}
-          {currentPage < totalPages && (
-            <button
-              type="button"
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-              className="px-sm py-1 rounded hover:bg-surface-container text-xs font-bold transition-all flex items-center cursor-pointer text-on-surface-variant"
-            >
-              Next
-            </button>
-          )}
-        </div>
-      </div>
-    </Card>
+      <Pagination
+        currentPage={currentPage}
+        totalItems={totalItems}
+        itemsPerPage={itemsPerPage}
+        onPageChange={setCurrentPage}
+      />
 
       {/* Record Expense Modal (Add) */}
       <Modal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} title="Add New Expense" customHeader={true} cardPadding="p-0" maxWidth="max-w-2xl">
@@ -406,23 +410,27 @@ export default function ExpenseManagementPage() {
             <h2 className="font-headline-sm text-headline-sm text-on-surface">Add New Expense</h2>
             <p className="font-label-md text-label-md text-on-surface-variant mt-1">Record a new transaction for your enterprise ledger.</p>
           </div>
-          <button type="button" className="p-2 hover:bg-surface-container-highest rounded-full transition-colors text-on-surface-variant" onClick={() => setIsAddOpen(false)}>
+          <button type="button" className="p-2 hover:bg-surface-container-highest rounded-full transition-colors text-on-surface-variant cursor-pointer" onClick={() => setIsAddOpen(false)}>
             <span className="material-symbols-outlined">close</span>
           </button>
         </div>
-        <form onSubmit={handleSaveAdd}>
+        <form onSubmit={handleSubmitAdd(onSaveAdd)}>
           <div className="px-xl py-xl space-y-lg max-h-[70vh] overflow-y-auto overflow-x-hidden">
             {/* Title (Full Row) */}
             <div className="flex flex-col gap-sm">
               <label className="font-label-md text-label-md text-on-surface-variant uppercase font-bold">Title *</label>
               <input
                 type="text"
-                required
                 placeholder="e.g. Delta Airlines Flight"
-                value={merchant}
-                onChange={(e) => setMerchant(e.target.value)}
-                className="w-full h-12 bg-surface-container-lowest border border-outline-variant rounded-lg px-md font-body-md text-body-md focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none"
+                {...registerAdd('merchant', { required: 'Title is required' })}
+                className="w-full h-12 bg-surface-container-lowest border border-outline-variant rounded-lg px-md font-body-md text-body-md focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none text-on-surface"
               />
+              {errorsAdd.merchant && (
+                <span className="text-error text-xs font-semibold flex items-center gap-1 animate-in slide-in-from-top-1">
+                  <span className="material-symbols-outlined text-xs">error</span>
+                  {errorsAdd.merchant.message}
+                </span>
+              )}
             </div>
 
             {/* Category + Date (50% / 50%) */}
@@ -431,9 +439,8 @@ export default function ExpenseManagementPage() {
                 <label className="font-label-md text-label-md text-on-surface-variant uppercase font-bold">Spend Category *</label>
                 <div className="relative">
                   <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="w-full h-12 bg-surface-container-lowest border border-outline-variant rounded-lg px-md font-body-md text-body-md appearance-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none font-bold"
+                    {...registerAdd('category')}
+                    className="w-full h-12 bg-surface-container-lowest border border-outline-variant rounded-lg px-md font-body-md text-body-md appearance-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none font-bold text-on-surface"
                   >
                     {MOCK_CATEGORIES.map(c => (
                       <option key={c.id} value={c.code}>{c.name}</option>
@@ -446,11 +453,15 @@ export default function ExpenseManagementPage() {
                 <label className="font-label-md text-label-md text-on-surface-variant uppercase font-bold">Expense Date *</label>
                 <input
                   type="date"
-                  required
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="w-full h-12 bg-surface-container-lowest border border-outline-variant rounded-lg px-md font-body-md text-body-md focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none"
+                  {...registerAdd('date', { required: 'Date is required' })}
+                  className="w-full h-12 bg-surface-container-lowest border border-outline-variant rounded-lg px-md font-body-md text-body-md focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none text-on-surface font-bold"
                 />
+                {errorsAdd.date && (
+                  <span className="text-error text-xs font-semibold flex items-center gap-1 animate-in slide-in-from-top-1">
+                    <span className="material-symbols-outlined text-xs">error</span>
+                    {errorsAdd.date.message}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -459,27 +470,28 @@ export default function ExpenseManagementPage() {
               <div className="flex flex-col gap-sm">
                 <label className="font-label-md text-label-md text-on-surface-variant uppercase font-bold">Amount *</label>
                 <div className="relative">
-                  <span className="absolute left-md top-1/2 -translate-y-1/2 text-on-surface-variant font-mono-data font-bold">
-                    {getCurrencySymbol(currency)}
-                  </span>
+                  <span className="absolute left-md top-1/2 -translate-y-1/2 text-on-surface-variant font-mono-data font-bold">₹</span>
                   <input
                     type="number"
                     step="0.01"
-                    required
                     placeholder="0.00"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    className="w-full h-12 bg-surface-container-lowest border border-outline-variant rounded-lg pl-8 pr-md font-mono-data text-body-md focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none font-bold"
+                    {...registerAdd('amount', { required: 'Amount is required', min: { value: 0.01, message: 'Amount must be greater than 0' } })}
+                    className="w-full h-12 bg-surface-container-lowest border border-outline-variant rounded-lg pl-8 pr-md font-mono-data text-body-md focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none font-bold text-on-surface"
                   />
                 </div>
+                {errorsAdd.amount && (
+                  <span className="text-error text-xs font-semibold flex items-center gap-1 animate-in slide-in-from-top-1">
+                    <span className="material-symbols-outlined text-xs">error</span>
+                    {errorsAdd.amount.message}
+                  </span>
+                )}
               </div>
               <div className="flex flex-col gap-sm">
                 <label className="font-label-md text-label-md text-on-surface-variant uppercase font-bold">Currency *</label>
                 <div className="relative">
                   <select
-                    value={currency}
-                    onChange={(e) => setCurrency(e.target.value)}
-                    className="w-full h-12 bg-surface-container-lowest border border-outline-variant rounded-lg px-md font-body-md text-body-md appearance-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none font-bold"
+                    {...registerAdd('currency')}
+                    className="w-full h-12 bg-surface-container-lowest border border-outline-variant rounded-lg px-md font-body-md text-body-md appearance-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none font-bold text-on-surface"
                   >
                     <option value="INR">INR (₹)</option>
                   </select>
@@ -493,9 +505,8 @@ export default function ExpenseManagementPage() {
               <label className="font-label-md text-label-md text-on-surface-variant uppercase font-bold">Payment Type *</label>
               <div className="relative">
                 <select
-                  value={paymentType}
-                  onChange={(e) => setPaymentType(e.target.value)}
-                  className="w-full h-12 bg-surface-container-lowest border border-outline-variant rounded-lg px-md font-body-md text-body-md appearance-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none font-bold"
+                  {...registerAdd('paymentType')}
+                  className="w-full h-12 bg-surface-container-lowest border border-outline-variant rounded-lg px-md font-body-md text-body-md appearance-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none font-bold text-on-surface"
                 >
                   <option value="Credit Card">Credit Card</option>
                   <option value="Debit Card">Debit Card</option>
@@ -522,7 +533,7 @@ export default function ExpenseManagementPage() {
                     <button
                       type="button"
                       onClick={() => setReceiptFile(null)}
-                      className="p-sm text-on-surface-variant hover:bg-error-container/20 hover:text-error rounded-full transition-all"
+                      className="p-sm text-on-surface-variant hover:bg-error-container/20 hover:text-error rounded-full transition-all cursor-pointer"
                       title="Remove file"
                     >
                       <span className="material-symbols-outlined">delete</span>
@@ -561,7 +572,7 @@ export default function ExpenseManagementPage() {
                     };
                     fileInput.click();
                   }}
-                  className="border-2 border-dashed border-outline-variant rounded-xl p-xl flex flex-col items-center justify-center bg-surface-container-low/30 hover:bg-secondary-container/5 hover:border-secondary transition-all cursor-pointer group"
+                  className="border-2 border-dashed border-outline-variant rounded-xl p-xl flex flex-col items-center justify-center bg-surface-container-low/30 hover:bg-secondary-container/5 hover:border-secondary transition-all cursor-pointer group animate-in fade-in"
                 >
                   <div className="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center mb-md group-hover:bg-secondary-container group-hover:text-on-secondary-container transition-colors">
                     <span className="material-symbols-outlined">upload_file</span>
@@ -572,7 +583,7 @@ export default function ExpenseManagementPage() {
                     <span className="material-symbols-outlined text-[18px]">info</span>
                     <span>Single file upload only</span>
                   </div>
-                  <button type="button" className="mt-md text-secondary font-label-md text-label-md underline underline-offset-4 font-bold">or browse files</button>
+                  <button type="button" className="mt-md text-secondary font-label-md text-label-md underline underline-offset-4 font-bold cursor-pointer">or browse files</button>
                 </div>
               )}
             </div>
@@ -581,9 +592,8 @@ export default function ExpenseManagementPage() {
             <div className="flex flex-col gap-sm">
               <label className="font-label-md text-label-md text-on-surface-variant uppercase font-bold">Notes (Optional)</label>
               <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg p-md font-body-md text-body-md resize-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none"
+                {...registerAdd('notes')}
+                className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg p-md font-body-md text-body-md resize-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none text-on-surface"
                 placeholder="Add details about the purpose of this expense..."
                 rows={3}
               />
@@ -591,10 +601,10 @@ export default function ExpenseManagementPage() {
           </div>
 
           <div className="px-xl py-lg bg-surface-container-low border-t border-outline-variant flex justify-end items-center gap-md">
-            <button type="button" className="px-xl h-11 rounded-lg border border-outline-variant text-on-surface-variant font-title-md text-title-md hover:bg-surface-container-high transition-colors active:scale-95 duration-150 font-semibold" onClick={() => setIsAddOpen(false)}>
+            <button type="button" className="px-xl h-11 rounded-lg border border-outline-variant text-on-surface-variant font-title-md text-title-md hover:bg-surface-container-high transition-colors active:scale-95 duration-150 font-semibold cursor-pointer" onClick={() => setIsAddOpen(false)}>
               Cancel
             </button>
-            <button type="submit" className="px-xl h-11 rounded-lg bg-primary text-on-primary font-title-md text-title-md hover:shadow-lg transition-all active:scale-95 duration-150 flex items-center gap-sm font-semibold">
+            <button type="submit" className="px-xl h-11 rounded-lg bg-primary text-on-primary font-title-md text-title-md hover:shadow-lg transition-all active:scale-95 duration-150 flex items-center gap-sm font-semibold cursor-pointer">
               <span>Save Expense</span>
               <span className="material-symbols-outlined text-[18px]">check_circle</span>
             </button>
@@ -609,22 +619,26 @@ export default function ExpenseManagementPage() {
             <span className="material-symbols-outlined text-secondary" style={{ fontVariationSettings: "'FILL' 1" }}>edit_note</span>
             <h2 className="font-headline-sm text-headline-sm text-on-surface">Edit Expense</h2>
           </div>
-          <button type="button" className="p-2 hover:bg-surface-container-highest rounded-full transition-colors text-on-surface-variant" onClick={() => setIsEditOpen(false)}>
+          <button type="button" className="p-2 hover:bg-surface-container-highest rounded-full transition-colors text-on-surface-variant cursor-pointer" onClick={() => setIsEditOpen(false)}>
             <span className="material-symbols-outlined">close</span>
           </button>
         </div>
-        <form onSubmit={handleSaveEdit}>
+        <form onSubmit={handleSubmitEdit(onSaveEdit)}>
           <div className="px-xl py-xl space-y-lg max-h-[70vh] overflow-y-auto overflow-x-hidden">
             {/* Title (Full Row) */}
             <div className="flex flex-col gap-sm">
               <label className="font-label-md text-label-md text-on-surface-variant uppercase font-bold">Title *</label>
               <input
                 type="text"
-                required
-                value={merchant}
-                onChange={(e) => setMerchant(e.target.value)}
-                className="w-full h-12 bg-surface-container-lowest border border-outline-variant rounded-lg px-md font-body-md text-body-md focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none"
+                {...registerEdit('merchant', { required: 'Title is required' })}
+                className="w-full h-12 bg-surface-container-lowest border border-outline-variant rounded-lg px-md font-body-md text-body-md focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none text-on-surface"
               />
+              {errorsEdit.merchant && (
+                <span className="text-error text-xs font-semibold flex items-center gap-1 animate-in slide-in-from-top-1">
+                  <span className="material-symbols-outlined text-xs">error</span>
+                  {errorsEdit.merchant.message}
+                </span>
+              )}
             </div>
 
             {/* Category + Date (50% / 50%) */}
@@ -633,9 +647,8 @@ export default function ExpenseManagementPage() {
                 <label className="font-label-md text-label-md text-on-surface-variant uppercase font-bold">Spend Category *</label>
                 <div className="relative">
                   <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="w-full h-12 bg-surface-container-lowest border border-outline-variant rounded-lg px-md font-body-md text-body-md appearance-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none font-bold"
+                    {...registerEdit('category')}
+                    className="w-full h-12 bg-surface-container-lowest border border-outline-variant rounded-lg px-md font-body-md text-body-md appearance-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none font-bold text-on-surface"
                   >
                     {MOCK_CATEGORIES.map(c => (
                       <option key={c.id} value={c.code}>{c.name}</option>
@@ -648,11 +661,15 @@ export default function ExpenseManagementPage() {
                 <label className="font-label-md text-label-md text-on-surface-variant uppercase font-bold">Expense Date *</label>
                 <input
                   type="date"
-                  required
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="w-full h-12 bg-surface-container-lowest border border-outline-variant rounded-lg px-md font-body-md text-body-md focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none"
+                  {...registerEdit('date', { required: 'Date is required' })}
+                  className="w-full h-12 bg-surface-container-lowest border border-outline-variant rounded-lg px-md font-body-md text-body-md focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none text-on-surface font-bold"
                 />
+                {errorsEdit.date && (
+                  <span className="text-error text-xs font-semibold flex items-center gap-1 animate-in slide-in-from-top-1">
+                    <span className="material-symbols-outlined text-xs">error</span>
+                    {errorsEdit.date.message}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -661,26 +678,27 @@ export default function ExpenseManagementPage() {
               <div className="flex flex-col gap-sm">
                 <label className="font-label-md text-label-md text-on-surface-variant uppercase font-bold">Amount *</label>
                 <div className="relative">
-                  <span className="absolute left-md top-1/2 -translate-y-1/2 text-on-surface-variant font-mono-data font-bold">
-                    {getCurrencySymbol(currency)}
-                  </span>
+                  <span className="absolute left-md top-1/2 -translate-y-1/2 text-on-surface-variant font-mono-data font-bold">₹</span>
                   <input
                     type="number"
                     step="0.01"
-                    required
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    className="w-full h-12 bg-surface-container-lowest border border-outline-variant rounded-lg pl-8 pr-md font-mono-data text-body-md focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none font-bold"
+                    {...registerEdit('amount', { required: 'Amount is required', min: { value: 0.01, message: 'Amount must be greater than 0' } })}
+                    className="w-full h-12 bg-surface-container-lowest border border-outline-variant rounded-lg pl-8 pr-md font-mono-data text-body-md focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none font-bold text-on-surface"
                   />
                 </div>
+                {errorsEdit.amount && (
+                  <span className="text-error text-xs font-semibold flex items-center gap-1 animate-in slide-in-from-top-1">
+                    <span className="material-symbols-outlined text-xs">error</span>
+                    {errorsEdit.amount.message}
+                  </span>
+                )}
               </div>
               <div className="flex flex-col gap-sm">
                 <label className="font-label-md text-label-md text-on-surface-variant uppercase font-bold">Currency *</label>
                 <div className="relative">
                   <select
-                    value={currency}
-                    onChange={(e) => setCurrency(e.target.value)}
-                    className="w-full h-12 bg-surface-container-lowest border border-outline-variant rounded-lg px-md font-body-md text-body-md appearance-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none font-bold"
+                    {...registerEdit('currency')}
+                    className="w-full h-12 bg-surface-container-lowest border border-outline-variant rounded-lg px-md font-body-md text-body-md appearance-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none font-bold text-on-surface"
                   >
                     <option value="INR">INR (₹)</option>
                   </select>
@@ -694,9 +712,8 @@ export default function ExpenseManagementPage() {
               <label className="font-label-md text-label-md text-on-surface-variant uppercase font-bold">Payment Type *</label>
               <div className="relative">
                 <select
-                  value={paymentType}
-                  onChange={(e) => setPaymentType(e.target.value)}
-                  className="w-full h-12 bg-surface-container-lowest border border-outline-variant rounded-lg px-md font-body-md text-body-md appearance-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none font-bold"
+                  {...registerEdit('paymentType')}
+                  className="w-full h-12 bg-surface-container-lowest border border-outline-variant rounded-lg px-md font-body-md text-body-md appearance-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none font-bold text-on-surface"
                 >
                   <option value="Credit Card">Credit Card</option>
                   <option value="Debit Card">Debit Card</option>
@@ -740,7 +757,7 @@ export default function ExpenseManagementPage() {
                           };
                           fileInput.click();
                         }}
-                        className="flex items-center gap-xs px-md py-sm bg-secondary-container/10 text-secondary border border-secondary/20 rounded-lg font-label-md text-label-md hover:bg-secondary-container/20 transition-all font-semibold"
+                        className="flex items-center gap-xs px-md py-sm bg-secondary-container/10 text-secondary border border-secondary/20 rounded-lg font-label-md text-label-md hover:bg-secondary-container/20 transition-all font-semibold cursor-pointer"
                       >
                         <span className="material-symbols-outlined text-[18px]">upload</span>
                         Upload New
@@ -748,7 +765,7 @@ export default function ExpenseManagementPage() {
                       <button
                         type="button"
                         onClick={() => setReceiptFile(null)}
-                        className="p-sm text-on-surface-variant hover:bg-error-container/20 hover:text-error rounded-full transition-all"
+                        className="p-sm text-on-surface-variant hover:bg-error-container/20 hover:text-error rounded-full transition-all cursor-pointer"
                         title="Remove file"
                       >
                         <span className="material-symbols-outlined">delete</span>
@@ -776,7 +793,7 @@ export default function ExpenseManagementPage() {
                     };
                     fileInput.click();
                   }}
-                  className="w-full flex items-center justify-center p-md bg-surface-container rounded-xl border-2 border-dashed border-outline-variant hover:border-secondary transition-colors text-secondary text-label-md font-semibold"
+                  className="w-full flex items-center justify-center p-md bg-surface-container rounded-xl border-2 border-dashed border-outline-variant hover:border-secondary transition-colors text-secondary text-label-md font-semibold cursor-pointer"
                 >
                   <span className="material-symbols-outlined mr-2">upload</span>
                   Upload Receipt File
@@ -788,19 +805,18 @@ export default function ExpenseManagementPage() {
             <div className="flex flex-col gap-sm">
               <label className="font-label-md text-label-md text-on-surface-variant uppercase font-bold">Notes (Optional)</label>
               <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg p-md font-body-md text-body-md resize-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none"
+                {...registerEdit('notes')}
+                className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg p-md font-body-md text-body-md resize-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none text-on-surface"
                 placeholder="Add details about the purpose of this expense..."
                 rows={3}
               />
             </div>
           </div>
           <div className="px-xl py-lg bg-surface-container-low border-t border-outline-variant flex justify-end items-center gap-md">
-            <button type="button" className="px-xl h-11 rounded-lg border border-outline-variant text-on-surface-variant font-title-md text-title-md hover:bg-surface-container-high transition-colors active:scale-95 duration-150 font-semibold" onClick={() => setIsEditOpen(false)}>
+            <button type="button" className="px-xl h-11 rounded-lg border border-outline-variant text-on-surface-variant font-title-md text-title-md hover:bg-surface-container-high transition-colors active:scale-95 duration-150 font-semibold cursor-pointer" onClick={() => setIsEditOpen(false)}>
               Cancel
             </button>
-            <button type="submit" className="px-xl h-11 rounded-lg bg-secondary text-on-secondary font-title-md text-title-md hover:shadow-lg transition-all active:scale-95 duration-150 flex items-center gap-sm font-semibold">
+            <button type="submit" className="px-xl h-11 rounded-lg bg-secondary text-on-secondary font-title-md text-title-md hover:shadow-lg transition-all active:scale-95 duration-150 flex items-center gap-sm font-semibold cursor-pointer">
               <span>Update Expense</span>
               <span className="material-symbols-outlined text-[18px]">check_circle</span>
             </button>
@@ -822,7 +838,7 @@ export default function ExpenseManagementPage() {
                   <p className="font-label-md text-label-md text-on-surface-variant">Transaction ID: {selectedExpense.id.toUpperCase()}</p>
                 </div>
               </div>
-              <button className="p-xs text-on-surface-variant hover:bg-surface-container-high rounded-full transition-colors" onClick={() => setIsDetailsOpen(false)}>
+              <button className="p-xs text-on-surface-variant hover:bg-surface-container-high rounded-full transition-colors cursor-pointer" onClick={() => setIsDetailsOpen(false)}>
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
@@ -946,10 +962,10 @@ export default function ExpenseManagementPage() {
               </div>
             </div>
             <div className="px-xl py-lg bg-surface-bright border-t border-outline-variant flex justify-end items-center gap-md">
-              <button className="px-xl py-2 font-title-md text-title-md border border-outline-variant text-on-surface rounded-lg hover:bg-surface-container-high active:scale-95 transition-all font-semibold" onClick={() => setIsDetailsOpen(false)}>
+              <button className="px-xl py-2 font-title-md text-title-md border border-outline-variant text-on-surface rounded-lg hover:bg-surface-container-high active:scale-95 transition-all font-semibold cursor-pointer" onClick={() => setIsDetailsOpen(false)}>
                 Close Details
               </button>
-              <button className="px-xl py-2 font-title-md text-title-md bg-secondary text-on-secondary rounded-lg hover:bg-secondary/90 active:scale-95 transition-all flex items-center gap-sm font-semibold" onClick={() => handleOpenEdit(selectedExpense)}>
+              <button className="px-xl py-2 font-title-md text-title-md bg-secondary text-on-secondary rounded-lg hover:bg-secondary/90 active:scale-95 transition-all flex items-center gap-sm font-semibold cursor-pointer" onClick={() => handleOpenEdit(selectedExpense)}>
                 <span className="material-symbols-outlined text-[20px]">edit</span>
                 Edit Expense
               </button>
@@ -982,10 +998,10 @@ export default function ExpenseManagementPage() {
           </div>
         </div>
         <div className="p-lg bg-surface-container-low flex flex-col-reverse sm:flex-row gap-md sm:justify-end border-t border-outline-variant">
-          <button className="px-xl h-11 flex items-center justify-center rounded-lg border border-outline text-on-surface font-title-md text-title-md hover:bg-surface-container-high transition-colors active:scale-95 duration-150 font-semibold" onClick={() => setIsDeleteOpen(false)}>
+          <button className="px-xl h-11 flex items-center justify-center rounded-lg border border-outline text-on-surface font-title-md text-title-md hover:bg-surface-container-high transition-colors active:scale-95 duration-150 font-semibold cursor-pointer" onClick={() => setIsDeleteOpen(false)}>
             Keep
           </button>
-          <button className="px-xl h-11 flex items-center justify-center rounded-lg bg-error text-on-error font-title-md text-title-md shadow-md hover:opacity-90 transition-all active:scale-95 duration-150 font-semibold" onClick={handleConfirmDelete}>
+          <button className="px-xl h-11 flex items-center justify-center rounded-lg bg-error text-on-error font-title-md text-title-md shadow-md hover:opacity-90 transition-all active:scale-95 duration-150 font-semibold cursor-pointer" onClick={handleConfirmDelete}>
             Delete
           </button>
         </div>

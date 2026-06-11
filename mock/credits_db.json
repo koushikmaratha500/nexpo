@@ -1,0 +1,54 @@
+[
+  {
+    "id": "cr1",
+    "title": "Q4 Salary Paycheck",
+    "amount": 85000,
+    "currency": "INR",
+    "category": "Salary",
+    "notes": "Monthly corporate base pay disbursement.",
+    "type": "Account",
+    "documentName": "paycheck_slip_oct.pdf",
+    "documentSize": "450 KB",
+    "documentDate": "Oct 30",
+    "date": "Oct 30, 2023",
+    "status": "VERIFIED",
+    "documentUrl": "/basic-text.pdf"
+  },
+  {
+    "id": "cr2",
+    "title": "Savings Account Interest",
+    "amount": 1240.5,
+    "currency": "INR",
+    "category": "Savings",
+    "notes": "Quarterly interest yield on savings reserve.",
+    "type": "Account",
+    "date": "Oct 15, 2023",
+    "status": "VERIFIED"
+  },
+  {
+    "id": "cr3",
+    "title": "Birthday Gift from Family",
+    "amount": 5000,
+    "currency": "INR",
+    "category": "Gift",
+    "notes": "Gift from parents.",
+    "type": "Cash",
+    "date": "Oct 10, 2023",
+    "status": "VERIFIED"
+  },
+  {
+    "id": "cr4",
+    "title": "Travel Expense Reimbursement",
+    "amount": 15400,
+    "currency": "INR",
+    "category": "Returns",
+    "notes": "Refund for flight ticket refund claim.",
+    "type": "Account",
+    "documentName": "reimbursement_invoice.pdf",
+    "documentSize": "1.1 MB",
+    "documentDate": "Oct 05",
+    "date": "Oct 05, 2023",
+    "status": "VERIFIED",
+    "documentUrl": "/basic-text.pdf"
+  }
+]

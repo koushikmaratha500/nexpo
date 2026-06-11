@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { Pagination } from '@/components/ui/Pagination';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table';
@@ -48,12 +49,7 @@ export default function CustomerReportsPage() {
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedExpenses = filteredExpenses.slice(startIndex, startIndex + itemsPerPage);
 
-  const pageRange = [];
-  const startPage = Math.max(1, currentPage - 2);
-  const endPage = Math.min(totalPages, currentPage + 2);
-  for (let i = startPage; i <= endPage; i++) {
-    pageRange.push(i);
-  }
+
 
   // Compute filtered category breakdown dynamically based on current filtered dataset
   const filteredCategoryBreakdown = MOCK_CATEGORIES.map(cat => {
@@ -249,45 +245,12 @@ export default function CustomerReportsPage() {
         </div>
 
         {/* Pagination Footer */}
-        <div className="flex flex-col sm:flex-row items-center justify-between px-lg py-md border-t border-outline-variant/44 bg-surface-container-lowest gap-4">
-          <span className="font-label-md text-label-md text-on-surface-variant font-medium text-center sm:text-left">
-            Showing {totalItems > 0 ? startIndex + 1 : 0} to {Math.min(startIndex + itemsPerPage, totalItems)} of {totalItems} entries
-          </span>
-          <div className="flex items-center gap-sm">
-            {currentPage > 1 && (
-              <button
-                type="button"
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                className="px-sm py-1 rounded hover:bg-surface-container text-xs font-bold transition-all flex items-center cursor-pointer text-on-surface-variant"
-              >
-                Back
-              </button>
-            )}
-            {pageRange.map(p => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setCurrentPage(p)}
-                className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold transition-all cursor-pointer ${
-                  currentPage === p
-                    ? 'bg-primary text-on-primary shadow-sm active:scale-90'
-                    : 'text-on-surface-variant hover:bg-surface-container'
-                }`}
-              >
-                {p}
-              </button>
-            ))}
-            {currentPage < totalPages && (
-              <button
-                type="button"
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                className="px-sm py-1 rounded hover:bg-surface-container text-xs font-bold transition-all flex items-center cursor-pointer text-on-surface-variant"
-              >
-                Next
-              </button>
-            )}
-          </div>
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          totalItems={totalItems}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+        />
       </Card>
 
     </div>

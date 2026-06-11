@@ -5,29 +5,45 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthContext';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { useForm } from 'react-hook-form';
+import { useToast } from '@/hooks/useToast';
 import Link from 'next/link';
 
 export default function LoginPage() {
   const { login, user, isLoading } = useAuth();
   const router = useRouter();
+  const { addToast } = useToast();
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm({
+    defaultValues: {
+      email: '',
+      password: '',
+      rememberMe: false,
+    },
+  });
+
+  const rememberMe = watch('rememberMe');
 
   // Load remembered credentials if present
   useEffect(() => {
     const savedRememberMe = localStorage.getItem('nexpo_remember_me');
     if (savedRememberMe === 'true') {
-      setRememberMe(true);
+      setValue('rememberMe', true);
       const savedEmail = localStorage.getItem('nexpo_saved_email');
       const savedPassword = localStorage.getItem('nexpo_saved_password');
-      if (savedEmail) setEmail(savedEmail);
-      if (savedPassword) setPassword(savedPassword);
+      if (savedEmail) setValue('email', savedEmail);
+      if (savedPassword) setValue('password', savedPassword);
     }
-  }, []);
+  }, [setValue]);
 
   // If already logged in, redirect
   useEffect(() => {
@@ -42,37 +58,40 @@ export default function LoginPage() {
 
   const handlePreFill = (role: 'ADMIN' | 'CUSTOMER') => {
     if (role === 'ADMIN') {
-      setEmail('admin@nexpo.com');
-      setPassword('admin1234');
+      setValue('email', 'admin@nexpo.com');
+      setValue('password', 'admin1234');
     } else {
-      setEmail('user@nexpo.com');
-      setPassword('user1234');
+      setValue('email', 'user@nexpo.com');
+      setValue('password', 'user1234');
     }
     setErrorMsg('');
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = async (data: any) => {
     setErrorMsg('');
     setIsSubmitting(true);
 
     try {
-      const result = await login(email, password);
+      const result = await login(data.email, data.password);
       if (result.success) {
-        if (rememberMe) {
+        addToast('Welcome back! Signed in successfully.', 'success');
+        if (data.rememberMe) {
           localStorage.setItem('nexpo_remember_me', 'true');
-          localStorage.setItem('nexpo_saved_email', email);
-          localStorage.setItem('nexpo_saved_password', password);
+          localStorage.setItem('nexpo_saved_email', data.email);
+          localStorage.setItem('nexpo_saved_password', data.password);
         } else {
           localStorage.removeItem('nexpo_remember_me');
           localStorage.removeItem('nexpo_saved_email');
           localStorage.removeItem('nexpo_saved_password');
         }
       } else {
-        setErrorMsg(result.error || 'Authentication failed.');
+        const errMsg = result.error || 'Authentication failed.';
+        setErrorMsg(errMsg);
+        addToast(errMsg, 'error');
       }
     } catch (err) {
       setErrorMsg('An unexpected error occurred. Please try again.');
+      addToast('An unexpected error occurred.', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -171,13 +190,13 @@ export default function LoginPage() {
           </div>
 
           {errorMsg && (
-            <div className="p-4 bg-error-container/20 border border-error/20 text-error rounded-lg text-body-md font-medium flex items-center gap-2">
+            <div className="p-4 bg-error-container/20 border border-error/20 text-error rounded-lg text-body-md font-medium flex items-center gap-2 animate-in fade-in duration-200">
               <span className="material-symbols-outlined text-md">error</span>
               <span>{errorMsg}</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
             <div className="flex flex-col gap-1">
               <label htmlFor="email" className="font-label-md text-label-md text-on-surface font-bold uppercase tracking-wide">
                 Email Address
@@ -185,12 +204,19 @@ export default function LoginPage() {
               <input
                 id="email"
                 type="email"
-                required
                 placeholder="name@company.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                {...register('email', {
+                  required: 'Email is required',
+                  pattern: { value: /^\S+@\S+$/i, message: 'Invalid email address' },
+                })}
                 className="px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary transition-all text-on-surface"
               />
+              {errors.email && (
+                <span className="text-error text-xs font-semibold mt-1 flex items-center gap-1 animate-in slide-in-from-top-1">
+                  <span className="material-symbols-outlined text-xs">error</span>
+                  {errors.email.message}
+                </span>
+              )}
             </div>
 
             <div className="flex flex-col gap-1">
@@ -208,20 +234,26 @@ export default function LoginPage() {
               <input
                 id="password"
                 type="password"
-                required
                 placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                {...register('password', {
+                  required: 'Password is required',
+                  minLength: { value: 6, message: 'Password must be at least 6 characters' },
+                })}
                 className="px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary transition-all text-on-surface"
               />
+              {errors.password && (
+                <span className="text-error text-xs font-semibold mt-1 flex items-center gap-1 animate-in slide-in-from-top-1">
+                  <span className="material-symbols-outlined text-xs">error</span>
+                  {errors.password.message}
+                </span>
+              )}
             </div>
 
             <div className="flex items-center gap-2">
               <input
                 id="remember-me"
                 type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
+                {...register('rememberMe')}
                 className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary accent-primary cursor-pointer"
               />
               <label
@@ -254,7 +286,7 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => handlePreFill('ADMIN')}
-                className="flex items-center justify-center gap-1 py-2 px-4 rounded-lg border border-outline-variant bg-surface-container-lowest text-label-md font-medium text-on-surface hover:bg-surface-container-low transition-all"
+                className="flex items-center justify-center gap-1 py-2 px-4 rounded-lg border border-outline-variant bg-surface-container-lowest text-label-md font-medium text-on-surface hover:bg-surface-container-low transition-all cursor-pointer"
               >
                 <span className="material-symbols-outlined text-xs">admin_panel_settings</span>
                 Admin Auto-Fill
@@ -262,7 +294,7 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => handlePreFill('CUSTOMER')}
-                className="flex items-center justify-center gap-1 py-2 px-4 rounded-lg border border-outline-variant bg-surface-container-lowest text-label-md font-medium text-on-surface hover:bg-surface-container-low transition-all"
+                className="flex items-center justify-center gap-1 py-2 px-4 rounded-lg border border-outline-variant bg-surface-container-lowest text-label-md font-medium text-on-surface hover:bg-surface-container-low transition-all cursor-pointer"
               >
                 <span className="material-symbols-outlined text-xs">person</span>
                 User Auto-Fill
