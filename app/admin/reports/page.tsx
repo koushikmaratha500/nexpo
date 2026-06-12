@@ -1,67 +1,94 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table';
-import { MOCK_EXPENSES, MOCK_CATEGORIES } from '@/mock/data';
 import { Pagination } from '@/components/ui/Pagination';
+import axios from 'axios';
+import { formatDate } from '@/lib/date';
 
 export default function AdminReportsPage() {
-  // Date range state default to October 2023 (matching mock data dates)
-  const [startDate, setStartDate] = useState('2023-10-01');
-  const [endDate, setEndDate] = useState('2023-10-31');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5;
+  const lastFetchedRef = useRef<string | null>(null);
+  const itemsPerPage = 100;
 
-  // Reset page when filters change
+  const [expenses, setExpenses] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch admin reports data
   useEffect(() => {
+    const cacheKey = `${startDate}-${endDate}`;
+    if (lastFetchedRef.current === cacheKey) return;
+    lastFetchedRef.current = cacheKey;
+
+    async function loadReports() {
+      setIsLoading(true);
+      try {
+        const startParam = startDate ? `&startDate=${startDate}` : '';
+        const endParam = endDate ? `&endDate=${endDate}` : '';
+        const res = await axios.get(`/api/admin/reports?pageSize=1000${startParam}${endParam}`);
+        setExpenses(res.data.expenses?.items || []);
+      } catch (err) {
+        console.error('Failed to load admin reports:', err);
+        lastFetchedRef.current = null;
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadReports();
     setCurrentPage(1);
   }, [startDate, endDate]);
 
-  // Filter expenses by date range normalized to local day start/end
-  const filteredExpenses = useMemo(() => {
-    return MOCK_EXPENSES.filter(item => {
-      const itemTime = new Date(item.date).setHours(0, 0, 0, 0);
-      if (startDate) {
-        const startTime = new Date(startDate).setHours(0, 0, 0, 0);
-        if (itemTime < startTime) return false;
-      }
-      if (endDate) {
-        const endTime = new Date(endDate).setHours(23, 59, 59, 999);
-        if (itemTime > endTime) return false;
-      }
-      return true;
-    });
-  }, [startDate, endDate]);
-
-  // Compute aggregate metrics on filtered expenses
+  // Compute aggregates dynamically
   const totalSpend = useMemo(() => {
-    return filteredExpenses.reduce((sum, item) => sum + item.amount, 0);
-  }, [filteredExpenses]);
+    return expenses.reduce((sum, item) => sum + (typeof item.amount === 'string' ? parseFloat(item.amount) : item.amount), 0);
+  }, [expenses]);
 
-  const totalCount = filteredExpenses.length;
+  const totalCount = expenses.length;
 
   const avgSpend = useMemo(() => {
     return totalCount > 0 ? totalSpend / totalCount : 0;
   }, [totalSpend, totalCount]);
-  
-  // Category aggregation
+
+  // Group by category dynamically
   const categoryBreakdown = useMemo(() => {
-    return filteredExpenses.reduce((acc, curr) => {
-      const catObj = MOCK_CATEGORIES.find(c => c.code === curr.category);
-      const catName = catObj ? catObj.name : curr.category;
-      acc[catName] = (acc[catName] || 0) + curr.amount;
+    return expenses.reduce((acc, curr) => {
+      const catName = curr.category?.name || 'Other';
+      const amountVal = typeof curr.amount === 'string' ? parseFloat(curr.amount) : curr.amount;
+      acc[catName] = (acc[catName] || 0) + amountVal;
       return acc;
     }, {} as Record<string, number>);
-  }, [filteredExpenses]);
+  }, [expenses]);
 
-  const totalItems = filteredExpenses.length;
-  const totalPages = Math.max(Math.ceil(totalItems / itemsPerPage), 1);
+  const totalItems = expenses.length;
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedExpenses = filteredExpenses.slice(startIndex, startIndex + itemsPerPage);
+  const paginatedExpenses = expenses.slice(startIndex, startIndex + itemsPerPage);
 
-
+  const handleExportCSV = () => {
+    if (expenses.length === 0) return;
+    const headers = ['User', 'Title', 'Description', 'Category', 'Submission Date', 'Amount'];
+    const rows = expenses.map(item => [
+      `"${[item.user?.firstName, item.user?.lastName].filter(Boolean).join(' ').replace(/"/g, '""')}"`,
+      `"${(item.title || item.merchant || '').replace(/"/g, '""')}"`,
+      `"${(item.description || '').replace(/"/g, '""')}"`,
+      `"${(item.category?.name || 'Other').replace(/"/g, '""')}"`,
+      `"${formatDate(item.expenseDate)}"`,
+      `"${(typeof item.amount === 'string' ? parseFloat(item.amount) : item.amount).toFixed(2)}"`
+    ]);
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `global_spend_report_${formatDate(new Date())}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-5 duration-300">
@@ -77,7 +104,7 @@ export default function AdminReportsPage() {
             <span className="material-symbols-outlined text-sm">print</span>
             <span>Print Ledger</span>
           </Button>
-          <Button variant="primary">
+          <Button variant="primary" onClick={handleExportCSV}>
             <span className="material-symbols-outlined text-sm">download</span>
             <span>Download CSV</span>
           </Button>
@@ -130,10 +157,12 @@ export default function AdminReportsPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="bg-surface-container-lowest" glass={false}>
           <h4 className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider font-bold">Total Disbursed Volume</h4>
-          <h3 className="font-headline-md text-headline-md text-primary font-black mt-1">₹{totalSpend.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</h3>
+          <h3 className="font-headline-md text-headline-md text-primary font-black mt-1">
+            ₹{totalSpend.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+          </h3>
           <p className="font-label-md text-[10px] text-secondary font-bold mt-2 flex items-center gap-1">
             <span className="material-symbols-outlined text-xs">trending_flat</span>
-            <span>100% matched with bank records</span>
+            <span>Matched with ledger records</span>
           </p>
         </Card>
 
@@ -147,103 +176,144 @@ export default function AdminReportsPage() {
 
         <Card className="bg-surface-container-lowest" glass={false}>
           <h4 className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider font-bold">Average Transaction Value</h4>
-          <h3 className="font-headline-md text-headline-md text-primary font-black mt-1">₹{avgSpend.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</h3>
-          <p className="font-label-md text-[10px] text-on-surface-variant mt-2 flex items-center gap-1">
-            <span className="material-symbols-outlined text-xs">analytics</span>
-            <span>Average value per entry</span>
+          <h3 className="font-headline-md text-headline-md text-primary font-black mt-1">
+            ₹{avgSpend.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+          </h3>
+          <p className="font-label-md text-[10px] text-on-surface-variant mt-2">
+            Dynamic average of filtered dataset
           </p>
         </Card>
       </div>
 
-      {/* Bento breakdown */}
-      <div className="grid grid-cols-12 gap-6">
-        {/* Category chart mockup */}
-        <Card className="col-span-12 md:col-span-6 bg-surface-container-lowest" glass={false}>
-          <h4 className="font-title-md text-title-md font-bold text-primary mb-6">Expenditure by Category</h4>
-          
-          <div className="space-y-md">
-            {Object.entries(categoryBreakdown).length === 0 ? (
-              <div className="text-center py-8 text-on-surface-variant font-body-md">
-                No expense data found for this date range.
-              </div>
-            ) : (
-              Object.entries(categoryBreakdown).map(([category, amount]) => {
-                const maxAmount = Math.max(...Object.values(categoryBreakdown), 1);
-                const percentage = (amount / maxAmount) * 100;
-                return (
-                  <div key={category} className="space-y-xs">
-                    <div className="flex justify-between items-center text-body-md">
-                      <span className="font-bold text-primary">{category}</span>
-                      <span className="font-mono-data text-mono-data text-on-surface-variant">
-                        ₹{amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                    <div className="w-full bg-surface-container h-2 rounded-full overflow-hidden">
-                      <div 
-                        style={{ width: `${percentage}%` }} 
-                        className="bg-primary h-full transition-all duration-500"
-                      />
-                    </div>
+      {/* Category Distribution Breakdown */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card className="bg-surface-container-lowest" glass={false}>
+          <h4 className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider font-bold mb-4">Category Distribution</h4>
+          <div className="space-y-4">
+            {Object.entries(categoryBreakdown).map(([catName, amountVal]) => {
+              const amount = amountVal as number;
+              const percentage = totalSpend > 0 ? (amount / totalSpend) * 100 : 0;
+              return (
+                <div key={catName} className="space-y-1">
+                  <div className="flex justify-between items-center text-body-md text-on-surface-variant">
+                    <span className="font-semibold text-primary">{catName}</span>
+                    <span className="font-mono-data font-bold">₹{amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })} ({Math.round(percentage)}%)</span>
                   </div>
-                );
-              })
+                  <div className="w-full bg-surface-container-high h-2 rounded-full overflow-hidden">
+                    <div 
+                      style={{ width: `${percentage}%` }}
+                      className="bg-primary h-full rounded-full"
+                    />
+                  </div>
+                </div>
+              );
+            })}
+            {Object.keys(categoryBreakdown).length === 0 && (
+              <p className="italic text-on-surface-variant text-center py-4">No categories recorded in this range</p>
             )}
           </div>
         </Card>
 
-        {/* Global Audit Ledger */}
-        <Card className="col-span-12 md:col-span-6 bg-surface-container-lowest p-0 overflow-hidden" glass={false}>
-          <div className="px-6 py-4 border-b border-outline-variant bg-white/40">
-            <h4 className="font-title-md text-title-md font-bold text-primary">System Ledger Audit</h4>
+        <Card className="bg-surface-container-lowest flex flex-col justify-between" glass={false}>
+          <div>
+            <h4 className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider font-bold mb-2">Category Weight Shares</h4>
+            <p className="text-body-small text-on-surface-variant">Proportional weights of cost centers globally.</p>
           </div>
-          <div className="w-full overflow-x-auto scrollbar-hide">
-            <Table>
+          <div className="flex flex-wrap gap-2 items-center py-4">
+            {Object.entries(categoryBreakdown).map(([catName, amountVal]) => {
+              const amount = amountVal as number;
+              const pct = totalSpend > 0 ? Math.round((amount / totalSpend) * 100) : 0;
+              return (
+                <div key={catName} className="p-3 bg-surface-container-low border border-outline-variant/30 rounded-xl text-center min-w-[100px] flex-1">
+                  <p className="font-label-md text-[9px] text-on-surface-variant font-bold uppercase truncate">{catName}</p>
+                  <p className="font-headline-sm text-headline-sm font-black text-primary mt-1">{pct}%</p>
+                </div>
+              );
+            })}
+            {Object.keys(categoryBreakdown).length === 0 && (
+              <p className="italic text-on-surface-variant text-center w-full">No records found</p>
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {/* Grid details */}
+      <Card className="bg-surface-container-lowest p-0 overflow-hidden" glass={false}>
+        <div className="px-6 py-4 border-b border-outline-variant bg-white/40">
+          <h4 className="font-title-md text-title-md font-bold text-primary">Global Ledger Entries</h4>
+        </div>
+        <div className="w-full overflow-x-auto scrollbar-hide">
+          <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>User</TableHead>
                 <TableHead>Title</TableHead>
                 <TableHead>Category</TableHead>
+                <TableHead>Date</TableHead>
                 <TableHead align="right">Amount</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedExpenses.length === 0 ? (
+              {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={3} align="center" className="text-on-surface-variant py-8">
-                    No transactions found in this period.
+                  <TableCell colSpan={5} className="text-center py-8 text-on-surface-variant">
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="w-5 h-5 border-2 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+                      <span>Loading ledger reports...</span>
+                    </div>
                   </TableCell>
                 </TableRow>
+              ) : paginatedExpenses.length > 0 ? (
+                paginatedExpenses.map(item => {
+                  const titleVal = item.title || item.merchant || 'Expense';
+                  const userFullName = [item.user?.firstName, item.user?.lastName].filter(Boolean).join(' ') || 'Unknown User';
+                  const categoryName = item.category?.name || 'Other';
+                  const formattedDate = formatDate(item.expenseDate);
+                  const amountVal = typeof item.amount === 'string' ? parseFloat(item.amount) : item.amount;
+                  return (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-bold text-primary">
+                        {userFullName}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-on-surface">{titleVal}</span>
+                          <span className="text-[10px] text-on-surface-variant">{item.description || ''}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="px-2 py-0.5 bg-secondary-container/10 text-on-secondary-container rounded-full text-[10px] font-bold">
+                          {categoryName}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-on-surface-variant font-medium">
+                        {formattedDate}
+                      </TableCell>
+                      <TableCell align="right" className="font-mono-data text-mono-data font-bold text-primary">
+                        ₹{amountVal.toFixed(2)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               ) : (
-                paginatedExpenses.map(item => (
-                  <TableRow key={item.id}>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className="text-primary font-bold">{item.merchant}</span>
-                        <span className="text-[10px] text-on-surface-variant">{item.date}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-on-surface-variant font-medium">
-                      {MOCK_CATEGORIES.find(c => c.code === item.category)?.name || item.category}
-                    </TableCell>
-                    <TableCell align="right" className="font-mono-data text-mono-data font-bold text-primary">
-                      -₹{item.amount.toFixed(2)}
-                    </TableCell>
-                  </TableRow>
-                ))
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8 text-on-surface-variant italic">
+                    No ledger entries matched the current filters.
+                  </TableCell>
+                </TableRow>
               )}
             </TableBody>
-            </Table>
-          </div>
+          </Table>
+        </div>
 
-          {/* Pagination Footer */}
-          <Pagination
-            currentPage={currentPage}
-            totalItems={totalItems}
-            itemsPerPage={itemsPerPage}
-            onPageChange={setCurrentPage}
-          />
-        </Card>
-      </div>
-
+        {/* Pagination Footer */}
+        <Pagination
+          currentPage={currentPage}
+          totalItems={totalItems}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+        />
+      </Card>
     </div>
   );
 }

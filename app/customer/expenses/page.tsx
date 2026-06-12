@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -10,6 +10,9 @@ import { useExpenseStore } from '@/store/expenseStore';
 import { useToast } from '@/hooks/useToast';
 import { Pagination } from '@/components/ui/Pagination';
 import { useForm } from 'react-hook-form';
+import axios from 'axios';
+import { formatDate, parseDate, dateToInputFormat } from '@/lib/date';
+import { useSearchParams } from 'next/navigation';
 
 const getCurrencySymbol = (currencyCode: string) => {
   return '₹';
@@ -25,19 +28,25 @@ interface ExpenseFormInput {
   currency: string;
 }
 
-export default function ExpenseManagementPage() {
+function ExpenseManagementContent() {
   const { addToast } = useToast();
-  const { expenses, fetchExpenses, addExpense, updateExpense, deleteExpense } = useExpenseStore();
+  const { expenses, fetchExpenses, addExpense, updateExpense, deleteExpense, isLoading } = useExpenseStore();
+
+  const searchParams = useSearchParams();
 
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5;
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const lastFiltersRef = useRef<string>('');
+  const categoriesFetchedRef = useRef(false);
+  const itemsPerPage = 100;
 
   // Filters State
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
-  const [startDate, setStartDate] = useState('2023-10-01');
-  const [endDate, setEndDate] = useState('2023-10-31');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [categories, setCategories] = useState<any[]>([]);
 
   // Modal Dialog states
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -46,7 +55,19 @@ export default function ExpenseManagementPage() {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
   const [isPreviewLoading, setIsPreviewLoading] = useState(true);
-  const [receiptFile, setReceiptFile] = useState<{ name: string; size: string; date: string; url?: string } | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [existingReceiptUrl, setExistingReceiptUrl] = useState<string | null>(null);
+  const [existingReceiptName, setExistingReceiptName] = useState<string | null>(null);
+  const [existingReceiptSize, setExistingReceiptSize] = useState<string | null>(null);
+
+  const getTodayString = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  const today = getTodayString();
 
   // React Hook Form for Add Modal
   const {
@@ -74,10 +95,33 @@ export default function ExpenseManagementPage() {
     formState: { errors: errorsEdit },
   } = useForm<ExpenseFormInput>();
 
-  // Fetch expenses on mount
+  // Load dynamic categories
   useEffect(() => {
-    fetchExpenses();
-  }, [fetchExpenses]);
+    if (categoriesFetchedRef.current) return;
+    categoriesFetchedRef.current = true;
+    const loadCategories = async () => {
+      try {
+        const res = await axios.get('/api/user/category');
+        setCategories(res.data);
+      } catch (err) {
+        console.error('Failed to load categories', err);
+        categoriesFetchedRef.current = false;
+      }
+    };
+    loadCategories();
+  }, []);
+
+  // Fetch expenses when filters change
+  useEffect(() => {
+    const currentFiltersKey = `${selectedCategory}-${startDate}-${endDate}`;
+    if (lastFiltersRef.current === currentFiltersKey) return;
+    lastFiltersRef.current = currentFiltersKey;
+    fetchExpenses({
+      categoryId: selectedCategory === 'ALL' ? undefined : selectedCategory,
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
+    });
+  }, [fetchExpenses, selectedCategory, startDate, endDate]);
 
   // Reset page when filters change
   useEffect(() => {
@@ -92,32 +136,21 @@ export default function ExpenseManagementPage() {
 
   // Date converters
   const formatDateToInput = (dateStr: string) => {
-    try {
-      const d = new Date(dateStr);
-      if (!isNaN(d.getTime())) {
-        return d.toISOString().split('T')[0];
-      }
-    } catch (e) {}
-    return new Date().toISOString().split('T')[0];
+    return dateToInputFormat(dateStr);
   };
 
   const formatDateFromInput = (dateStr: string) => {
-    try {
-      const d = new Date(dateStr + 'T12:00:00'); // enforce noon to avoid timezone shift
-      if (!isNaN(d.getTime())) {
-        return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
-      }
-    } catch (e) {}
-    return dateStr;
+    return formatDate(dateStr);
   };
 
   // Filtered dataset
   const filteredExpenses = expenses.filter((e) => {
     const matchesSearch = e.merchant.toLowerCase().includes(search.toLowerCase()) || 
                           e.description.toLowerCase().includes(search.toLowerCase());
-    const matchesCategory = selectedCategory === 'ALL' || e.category === selectedCategory;
+    const matchedCatObj = categories.find(c => c.id === selectedCategory);
+    const matchesCategory = selectedCategory === 'ALL' || (matchedCatObj && e.category === matchedCatObj.name.toUpperCase());
     
-    const itemTime = new Date(e.date).setHours(0, 0, 0, 0);
+    const itemTime = parseDate(e.date).setHours(0, 0, 0, 0);
     let matchesDate = true;
     if (startDate) {
       const startTime = new Date(startDate).setHours(0, 0, 0, 0);
@@ -141,17 +174,31 @@ export default function ExpenseManagementPage() {
       merchant: '',
       category: 'FOOD',
       amount: '',
-      date: new Date().toISOString().split('T')[0],
+      date: getTodayString(),
       paymentType: 'Credit Card',
       notes: '',
       currency: 'INR',
     });
-    setReceiptFile(null);
+    setSelectedFile(null);
+    setExistingReceiptUrl(null);
+    setExistingReceiptName(null);
+    setExistingReceiptSize(null);
     setIsAddOpen(true);
   };
 
+  useEffect(() => {
+    const openAddParam = searchParams.get('openAdd');
+    if (openAddParam === 'true') {
+      handleOpenAdd();
+      const url = new URL(window.location.href);
+      url.searchParams.delete('openAdd');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [searchParams]);
+
   // Save New Expense
   const onSaveAdd = async (data: any) => {
+    setIsSubmitting(true);
     try {
       await addExpense({
         merchant: data.merchant,
@@ -162,16 +209,16 @@ export default function ExpenseManagementPage() {
         paymentType: data.paymentType,
         notes: data.notes,
         currency: data.currency,
-        receiptName: receiptFile?.name,
-        receiptSize: receiptFile?.size,
-        receiptDate: receiptFile?.date,
-        receiptUrl: receiptFile?.url || (receiptFile ? '/basic-text.pdf' : undefined)
-      });
+        receiptName: selectedFile ? selectedFile.name : undefined,
+        receiptSize: selectedFile ? `${(selectedFile.size / 1024).toFixed(0)} KB` : undefined,
+      }, selectedFile);
       addToast('Expense recorded successfully!', 'success');
       setIsAddOpen(false);
       resetAdd();
     } catch (e) {
       addToast('Failed to record expense.', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -187,16 +234,10 @@ export default function ExpenseManagementPage() {
       notes: expense.notes || '',
       currency: expense.currency,
     });
-    if (expense.receiptName) {
-      setReceiptFile({
-        name: expense.receiptName,
-        size: expense.receiptSize || '2.4 MB',
-        date: expense.receiptDate || 'Nov 24',
-        url: expense.receiptUrl || '/basic-text.pdf'
-      });
-    } else {
-      setReceiptFile(null);
-    }
+    setSelectedFile(null);
+    setExistingReceiptUrl(expense.receiptUrl || null);
+    setExistingReceiptName(expense.receiptName || null);
+    setExistingReceiptSize(expense.receiptSize || null);
     setIsDetailsOpen(false);
     setIsEditOpen(true);
   };
@@ -204,6 +245,7 @@ export default function ExpenseManagementPage() {
   // Save Edit Expense
   const onSaveEdit = async (data: any) => {
     if (!selectedExpense) return;
+    setIsSubmitting(true);
     try {
       await updateExpense(selectedExpense.id, {
         merchant: data.merchant,
@@ -214,15 +256,16 @@ export default function ExpenseManagementPage() {
         paymentType: data.paymentType,
         notes: data.notes,
         currency: data.currency,
-        receiptName: receiptFile?.name,
-        receiptSize: receiptFile?.size,
-        receiptDate: receiptFile?.date,
-        receiptUrl: receiptFile?.url || (receiptFile ? '/basic-text.pdf' : undefined)
-      });
+        receiptName: selectedFile ? selectedFile.name : (existingReceiptUrl ? (existingReceiptName || undefined) : undefined),
+        receiptSize: selectedFile ? `${(selectedFile.size / 1024).toFixed(0)} KB` : (existingReceiptUrl ? (existingReceiptSize || undefined) : undefined),
+        receiptUrl: selectedFile ? undefined : (existingReceiptUrl ? (existingReceiptUrl || undefined) : undefined),
+      }, selectedFile);
       addToast('Expense updated successfully!', 'success');
       setIsEditOpen(false);
     } catch (e) {
       addToast('Failed to update expense.', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -241,6 +284,7 @@ export default function ExpenseManagementPage() {
   // Confirm Delete
   const handleConfirmDelete = async () => {
     if (!selectedExpense) return;
+    setIsSubmitting(true);
     try {
       await deleteExpense(selectedExpense.id);
       addToast('Expense deleted successfully!', 'success');
@@ -248,6 +292,8 @@ export default function ExpenseManagementPage() {
       setIsDeleteOpen(false);
     } catch (e) {
       addToast('Failed to delete expense.', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -289,8 +335,8 @@ export default function ExpenseManagementPage() {
               className="w-full pl-4 pr-10 py-2 bg-surface-container-low border border-outline-variant rounded-lg font-body-md text-body-md focus:outline-none focus:border-primary appearance-none font-bold text-on-surface"
             >
               <option value="ALL">All Categories</option>
-              {MOCK_CATEGORIES.map(c => (
-                <option key={c.id} value={c.code}>{c.name}</option>
+              {(categories.length > 0 ? categories : MOCK_CATEGORIES).map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
             <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-outline">expand_more</span>
@@ -333,7 +379,19 @@ export default function ExpenseManagementPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paginatedExpenses.length === 0 ? (
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center py-12 text-on-surface-variant">
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <svg className="animate-spin h-8 w-8 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p className="font-title-md text-title-md font-bold text-on-surface">Loading ledger entries...</p>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : paginatedExpenses.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="text-center py-12 text-on-surface-variant">
                   <div className="flex flex-col items-center justify-center gap-2">
@@ -442,7 +500,7 @@ export default function ExpenseManagementPage() {
                     {...registerAdd('category')}
                     className="w-full h-12 bg-surface-container-lowest border border-outline-variant rounded-lg px-md font-body-md text-body-md appearance-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none font-bold text-on-surface"
                   >
-                    {MOCK_CATEGORIES.map(c => (
+                    {(categories.length > 0 ? categories : MOCK_CATEGORIES).map(c => (
                       <option key={c.id} value={c.code}>{c.name}</option>
                     ))}
                   </select>
@@ -453,6 +511,7 @@ export default function ExpenseManagementPage() {
                 <label className="font-label-md text-label-md text-on-surface-variant uppercase font-bold">Expense Date *</label>
                 <input
                   type="date"
+                  max={today}
                   {...registerAdd('date', { required: 'Date is required' })}
                   className="w-full h-12 bg-surface-container-lowest border border-outline-variant rounded-lg px-md font-body-md text-body-md focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none text-on-surface font-bold"
                 />
@@ -520,19 +579,19 @@ export default function ExpenseManagementPage() {
             {/* Receipt Upload (Full Row) */}
             <div className="flex flex-col gap-sm">
               <label className="font-label-md text-label-md text-on-surface-variant uppercase font-bold">Receipt Upload (Optional)</label>
-              {receiptFile ? (
+              {selectedFile ? (
                 <div className="flex items-center p-md bg-surface-container rounded-xl border border-outline-variant">
                   <div className="flex items-center w-full gap-lg">
                     <div className="w-16 h-16 bg-white rounded-lg border border-outline-variant flex-shrink-0 flex items-center justify-center">
                       <span className="material-symbols-outlined text-[32px] text-on-surface-variant">receipt_long</span>
                     </div>
                     <div className="flex-grow min-w-0">
-                      <p className="font-title-md text-title-md text-on-surface font-semibold truncate max-w-xs">{receiptFile.name}</p>
-                      <p className="font-label-md text-label-md text-on-surface-variant">{receiptFile.size} • Uploaded on {receiptFile.date}</p>
+                      <p className="font-title-md text-title-md text-on-surface font-semibold truncate max-w-xs">{selectedFile.name}</p>
+                      <p className="font-label-md text-label-md text-on-surface-variant">{(selectedFile.size / 1024).toFixed(0)} KB • Selected</p>
                     </div>
                     <button
                       type="button"
-                      onClick={() => setReceiptFile(null)}
+                      onClick={() => setSelectedFile(null)}
                       className="p-sm text-on-surface-variant hover:bg-error-container/20 hover:text-error rounded-full transition-all cursor-pointer"
                       title="Remove file"
                     >
@@ -547,12 +606,7 @@ export default function ExpenseManagementPage() {
                     e.preventDefault();
                     const files = e.dataTransfer.files;
                     if (files && files.length > 0) {
-                      setReceiptFile({
-                        name: files[0].name,
-                        size: `${(files[0].size / (1024 * 1024)).toFixed(1)} MB`,
-                        date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit' }),
-                        url: URL.createObjectURL(files[0])
-                      });
+                      setSelectedFile(files[0]);
                     }
                   }}
                   onClick={() => {
@@ -562,12 +616,7 @@ export default function ExpenseManagementPage() {
                     fileInput.onchange = (e) => {
                       const files = (e.target as HTMLInputElement).files;
                       if (files && files.length > 0) {
-                        setReceiptFile({
-                          name: files[0].name,
-                          size: `${(files[0].size / (1024 * 1024)).toFixed(1)} MB`,
-                          date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit' }),
-                          url: URL.createObjectURL(files[0])
-                        });
+                        setSelectedFile(files[0]);
                       }
                     };
                     fileInput.click();
@@ -604,9 +653,19 @@ export default function ExpenseManagementPage() {
             <button type="button" className="px-xl h-11 rounded-lg border border-outline-variant text-on-surface-variant font-title-md text-title-md hover:bg-surface-container-high transition-colors active:scale-95 duration-150 font-semibold cursor-pointer" onClick={() => setIsAddOpen(false)}>
               Cancel
             </button>
-            <button type="submit" className="px-xl h-11 rounded-lg bg-primary text-on-primary font-title-md text-title-md hover:shadow-lg transition-all active:scale-95 duration-150 flex items-center gap-sm font-semibold cursor-pointer">
-              <span>Save Expense</span>
-              <span className="material-symbols-outlined text-[18px]">check_circle</span>
+            <button 
+              type="submit" 
+              disabled={isSubmitting}
+              className="px-xl h-11 rounded-lg bg-primary text-on-primary font-title-md text-title-md hover:shadow-lg transition-all active:scale-95 duration-150 flex items-center gap-sm font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting && (
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              )}
+              <span>{isSubmitting ? 'Saving...' : 'Save Expense'}</span>
+              {!isSubmitting && <span className="material-symbols-outlined text-[18px]">check_circle</span>}
             </button>
           </div>
         </form>
@@ -650,7 +709,7 @@ export default function ExpenseManagementPage() {
                     {...registerEdit('category')}
                     className="w-full h-12 bg-surface-container-lowest border border-outline-variant rounded-lg px-md font-body-md text-body-md appearance-none focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none font-bold text-on-surface"
                   >
-                    {MOCK_CATEGORIES.map(c => (
+                    {(categories.length > 0 ? categories : MOCK_CATEGORIES).map(c => (
                       <option key={c.id} value={c.code}>{c.name}</option>
                     ))}
                   </select>
@@ -661,6 +720,7 @@ export default function ExpenseManagementPage() {
                 <label className="font-label-md text-label-md text-on-surface-variant uppercase font-bold">Expense Date *</label>
                 <input
                   type="date"
+                  max={today}
                   {...registerEdit('date', { required: 'Date is required' })}
                   className="w-full h-12 bg-surface-container-lowest border border-outline-variant rounded-lg px-md font-body-md text-body-md focus:border-secondary focus:ring-2 focus:ring-secondary/20 focus:outline-none text-on-surface font-bold"
                 />
@@ -727,15 +787,19 @@ export default function ExpenseManagementPage() {
             {/* Receipt Upload (Full Row) */}
             <div className="flex flex-col gap-sm">
               <label className="font-label-md text-label-md text-on-surface-variant uppercase font-bold">Receipt Attachment (Optional)</label>
-              {receiptFile ? (
+              {(selectedFile || existingReceiptUrl) ? (
                 <div className="flex items-center p-md bg-surface-container rounded-xl border-2 border-dashed border-outline-variant group hover:border-secondary transition-colors">
                   <div className="flex items-center w-full gap-lg">
                     <div className="w-16 h-16 bg-white rounded-lg border border-outline-variant flex-shrink-0 flex items-center justify-center">
                       <span className="material-symbols-outlined text-[32px] text-on-surface-variant">receipt_long</span>
                     </div>
                     <div className="flex-grow min-w-0">
-                      <p className="font-title-md text-title-md text-on-surface font-semibold truncate">{receiptFile.name}</p>
-                      <p className="font-label-md text-label-md text-on-surface-variant">{receiptFile.size} • Uploaded on {receiptFile.date}</p>
+                      <p className="font-title-md text-title-md text-on-surface font-semibold truncate">
+                        {selectedFile ? selectedFile.name : existingReceiptName}
+                      </p>
+                      <p className="font-label-md text-label-md text-on-surface-variant">
+                        {selectedFile ? `${(selectedFile.size / 1024).toFixed(0)} KB • Selected` : `${existingReceiptSize} • Attached`}
+                      </p>
                     </div>
                     <div className="flex items-center gap-sm">
                       <button
@@ -747,12 +811,7 @@ export default function ExpenseManagementPage() {
                           fileInput.onchange = (e) => {
                             const files = (e.target as HTMLInputElement).files;
                             if (files && files.length > 0) {
-                              setReceiptFile({
-                                name: files[0].name,
-                                size: `${(files[0].size / (1024 * 1024)).toFixed(1)} MB`,
-                                date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit' }),
-                                url: URL.createObjectURL(files[0])
-                              });
+                              setSelectedFile(files[0]);
                             }
                           };
                           fileInput.click();
@@ -764,7 +823,12 @@ export default function ExpenseManagementPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setReceiptFile(null)}
+                        onClick={() => {
+                          setSelectedFile(null);
+                          setExistingReceiptUrl(null);
+                          setExistingReceiptName(null);
+                          setExistingReceiptSize(null);
+                        }}
                         className="p-sm text-on-surface-variant hover:bg-error-container/20 hover:text-error rounded-full transition-all cursor-pointer"
                         title="Remove file"
                       >
@@ -783,12 +847,7 @@ export default function ExpenseManagementPage() {
                     fileInput.onchange = (e) => {
                       const files = (e.target as HTMLInputElement).files;
                       if (files && files.length > 0) {
-                        setReceiptFile({
-                          name: files[0].name,
-                          size: `${(files[0].size / (1024 * 1024)).toFixed(1)} MB`,
-                          date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit' }),
-                          url: URL.createObjectURL(files[0])
-                        });
+                        setSelectedFile(files[0]);
                       }
                     };
                     fileInput.click();
@@ -816,9 +875,19 @@ export default function ExpenseManagementPage() {
             <button type="button" className="px-xl h-11 rounded-lg border border-outline-variant text-on-surface-variant font-title-md text-title-md hover:bg-surface-container-high transition-colors active:scale-95 duration-150 font-semibold cursor-pointer" onClick={() => setIsEditOpen(false)}>
               Cancel
             </button>
-            <button type="submit" className="px-xl h-11 rounded-lg bg-secondary text-on-secondary font-title-md text-title-md hover:shadow-lg transition-all active:scale-95 duration-150 flex items-center gap-sm font-semibold cursor-pointer">
-              <span>Update Expense</span>
-              <span className="material-symbols-outlined text-[18px]">check_circle</span>
+            <button 
+              type="submit" 
+              disabled={isSubmitting}
+              className="px-xl h-11 rounded-lg bg-secondary text-on-secondary font-title-md text-title-md hover:shadow-lg transition-all active:scale-95 duration-150 flex items-center gap-sm font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting && (
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              )}
+              <span>{isSubmitting ? 'Updating...' : 'Update Expense'}</span>
+              {!isSubmitting && <span className="material-symbols-outlined text-[18px]">check_circle</span>}
             </button>
           </div>
         </form>
@@ -1001,12 +1070,37 @@ export default function ExpenseManagementPage() {
           <button className="px-xl h-11 flex items-center justify-center rounded-lg border border-outline text-on-surface font-title-md text-title-md hover:bg-surface-container-high transition-colors active:scale-95 duration-150 font-semibold cursor-pointer" onClick={() => setIsDeleteOpen(false)}>
             Keep
           </button>
-          <button className="px-xl h-11 flex items-center justify-center rounded-lg bg-error text-on-error font-title-md text-title-md shadow-md hover:opacity-90 transition-all active:scale-95 duration-150 font-semibold cursor-pointer" onClick={handleConfirmDelete}>
-            Delete
+          <button 
+            disabled={isSubmitting}
+            className="px-xl h-11 flex items-center justify-center rounded-lg bg-error text-on-error font-title-md text-title-md shadow-md hover:opacity-90 transition-all active:scale-95 duration-150 font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" 
+            onClick={handleConfirmDelete}
+          >
+            {isSubmitting && (
+              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            )}
+            {isSubmitting ? 'Deleting...' : 'Delete'}
           </button>
         </div>
       </Modal>
 
     </div>
+  );
+}
+
+export default function ExpenseManagementPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-[400px]">
+        <svg className="animate-spin h-8 w-8 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+      </div>
+    }>
+      <ExpenseManagementContent />
+    </Suspense>
   );
 }

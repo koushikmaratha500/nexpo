@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -9,6 +9,9 @@ import { useCreditStore, CreditTransaction } from '@/store/creditStore';
 import { useToast } from '@/hooks/useToast';
 import { Pagination } from '@/components/ui/Pagination';
 import { useForm } from 'react-hook-form';
+import { formatDate, parseDate, dateToInputFormat } from '@/lib/date';
+import axios from 'axios';
+import { useSearchParams } from 'next/navigation';
 
 const getCurrencySymbol = (currencyCode: string) => {
   return '₹';
@@ -24,19 +27,23 @@ interface CreditFormInput {
   date: string;
 }
 
-export default function CreditManagementPage() {
+function CreditManagementContent() {
   const { addToast } = useToast();
-  const { credits, fetchCredits, addCredit, updateCredit, deleteCredit } = useCreditStore();
+  const { credits, fetchCredits, addCredit, updateCredit, deleteCredit, isLoading } = useCreditStore();
+
+  const searchParams = useSearchParams();
 
   const [selectedCredit, setSelectedCredit] = useState<CreditTransaction | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5;
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const lastFiltersRef = useRef<string>('');
+  const itemsPerPage = 100;
 
   // Filters State
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
-  const [startDate, setStartDate] = useState('2023-10-01');
-  const [endDate, setEndDate] = useState('2023-10-31');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   // Modal Dialog states
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -45,7 +52,19 @@ export default function CreditManagementPage() {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
   const [isPreviewLoading, setIsPreviewLoading] = useState(true);
-  const [documentFile, setDocumentFile] = useState<{ name: string; size: string; date: string; url?: string } | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [existingDocumentUrl, setExistingDocumentUrl] = useState<string | null>(null);
+  const [existingDocumentName, setExistingDocumentName] = useState<string | null>(null);
+  const [existingDocumentSize, setExistingDocumentSize] = useState<string | null>(null);
+
+  const getTodayString = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  const today = getTodayString();
 
   // React Hook Form for Add Modal
   const {
@@ -73,10 +92,17 @@ export default function CreditManagementPage() {
     formState: { errors: errorsEdit },
   } = useForm<CreditFormInput>();
 
-  // Fetch credits on mount
+  // Fetch credits when filters change
   useEffect(() => {
-    fetchCredits();
-  }, [fetchCredits]);
+    const currentFiltersKey = `${selectedCategory}-${startDate}-${endDate}`;
+    if (lastFiltersRef.current === currentFiltersKey) return;
+    lastFiltersRef.current = currentFiltersKey;
+    fetchCredits({
+      category: selectedCategory === 'ALL' ? undefined : selectedCategory,
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
+    });
+  }, [fetchCredits, selectedCategory, startDate, endDate]);
 
   // Reset page when filters change
   useEffect(() => {
@@ -91,23 +117,11 @@ export default function CreditManagementPage() {
 
   // Date converters
   const formatDateToInput = (dateStr: string) => {
-    try {
-      const d = new Date(dateStr);
-      if (!isNaN(d.getTime())) {
-        return d.toISOString().split('T')[0];
-      }
-    } catch (e) {}
-    return new Date().toISOString().split('T')[0];
+    return dateToInputFormat(dateStr);
   };
 
   const formatDateFromInput = (dateStr: string) => {
-    try {
-      const d = new Date(dateStr + 'T12:00:00'); // enforce noon to avoid timezone shift
-      if (!isNaN(d.getTime())) {
-        return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
-      }
-    } catch (e) {}
-    return dateStr;
+    return formatDate(dateStr);
   };
 
   // Filtered dataset
@@ -116,7 +130,7 @@ export default function CreditManagementPage() {
                           (c.notes && c.notes.toLowerCase().includes(search.toLowerCase()));
     const matchesCategory = selectedCategory === 'ALL' || c.category === selectedCategory;
     
-    const itemTime = new Date(c.date).setHours(0, 0, 0, 0);
+    const itemTime = parseDate(c.date).setHours(0, 0, 0, 0);
     let matchesDate = true;
     if (startDate) {
       const startTime = new Date(startDate).setHours(0, 0, 0, 0);
@@ -143,14 +157,18 @@ export default function CreditManagementPage() {
       currency: 'INR',
       notes: '',
       type: 'Account',
-      date: new Date().toISOString().split('T')[0],
+      date: getTodayString(),
     });
-    setDocumentFile(null);
+    setSelectedFile(null);
+    setExistingDocumentUrl(null);
+    setExistingDocumentName(null);
+    setExistingDocumentSize(null);
     setIsAddOpen(true);
   };
 
   // Save New Credit
   const onSaveAdd = async (data: any) => {
+    setIsSubmitting(true);
     try {
       await addCredit({
         title: data.title,
@@ -159,16 +177,16 @@ export default function CreditManagementPage() {
         date: data.date,
         type: data.type,
         notes: data.notes,
-        documentName: documentFile?.name,
-        documentSize: documentFile?.size,
-        documentDate: documentFile?.date,
-        documentUrl: documentFile?.url || (documentFile ? '/basic-text.pdf' : undefined)
-      });
+        documentName: selectedFile ? selectedFile.name : undefined,
+        documentSize: selectedFile ? `${(selectedFile.size / 1024).toFixed(0)} KB` : undefined,
+      }, selectedFile);
       addToast('Income record saved successfully!', 'success');
       setIsAddOpen(false);
       resetAdd();
     } catch (e) {
       addToast('Failed to save income record.', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -184,16 +202,10 @@ export default function CreditManagementPage() {
       type: credit.type,
       date: formatDateToInput(credit.date),
     });
-    if (credit.documentName) {
-      setDocumentFile({
-        name: credit.documentName,
-        size: credit.documentSize || '1.0 MB',
-        date: credit.documentDate || 'Nov 24',
-        url: credit.documentUrl || '/basic-text.pdf'
-      });
-    } else {
-      setDocumentFile(null);
-    }
+    setSelectedFile(null);
+    setExistingDocumentUrl(credit.documentUrl || null);
+    setExistingDocumentName(credit.documentName || null);
+    setExistingDocumentSize(credit.documentSize || null);
     setIsDetailsOpen(false);
     setIsEditOpen(true);
   };
@@ -201,6 +213,7 @@ export default function CreditManagementPage() {
   // Save Edit Credit
   const onSaveEdit = async (data: any) => {
     if (!selectedCredit) return;
+    setIsSubmitting(true);
     try {
       await updateCredit(selectedCredit.id, {
         title: data.title,
@@ -209,15 +222,16 @@ export default function CreditManagementPage() {
         date: data.date,
         type: data.type,
         notes: data.notes,
-        documentName: documentFile?.name,
-        documentSize: documentFile?.size,
-        documentDate: documentFile?.date,
-        documentUrl: documentFile?.url || (documentFile ? '/basic-text.pdf' : undefined)
-      });
+        documentName: selectedFile ? selectedFile.name : (existingDocumentUrl ? (existingDocumentName || undefined) : undefined),
+        documentSize: selectedFile ? `${(selectedFile.size / 1024).toFixed(0)} KB` : (existingDocumentUrl ? (existingDocumentSize || undefined) : undefined),
+        documentUrl: selectedFile ? undefined : (existingDocumentUrl ? (existingDocumentUrl || undefined) : undefined),
+      }, selectedFile);
       addToast('Income record updated successfully!', 'success');
       setIsEditOpen(false);
     } catch (e) {
       addToast('Failed to update income record.', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -236,6 +250,7 @@ export default function CreditManagementPage() {
   // Confirm Delete
   const handleConfirmDelete = async () => {
     if (!selectedCredit) return;
+    setIsSubmitting(true);
     try {
       await deleteCredit(selectedCredit.id);
       addToast('Income record deleted successfully!', 'success');
@@ -243,6 +258,8 @@ export default function CreditManagementPage() {
       setIsDeleteOpen(false);
     } catch (e) {
       addToast('Failed to delete income record.', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -331,7 +348,19 @@ export default function CreditManagementPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paginatedCredits.length === 0 ? (
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center py-12 text-on-surface-variant">
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <svg className="animate-spin h-8 w-8 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p className="font-title-md text-title-md font-bold text-on-surface">Loading ledger entries...</p>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : paginatedCredits.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center py-12 text-on-surface-variant">
                   <div className="flex flex-col items-center justify-center gap-2">
@@ -529,19 +558,19 @@ export default function CreditManagementPage() {
             {/* Document Upload (Full Row) */}
             <div className="flex flex-col gap-sm">
               <label className="font-label-md text-label-md text-on-surface-variant uppercase font-bold">Document Upload (Optional)</label>
-              {documentFile ? (
+              {selectedFile ? (
                 <div className="flex items-center p-md bg-surface-container rounded-xl border border-outline-variant animate-in fade-in">
                   <div className="flex items-center w-full gap-lg">
                     <div className="w-16 h-16 bg-white rounded-lg border border-outline-variant flex-shrink-0 flex items-center justify-center">
                       <span className="material-symbols-outlined text-[32px] text-on-surface-variant">file_present</span>
                     </div>
                     <div className="flex-grow min-w-0">
-                      <p className="font-title-md text-title-md text-on-surface font-semibold truncate max-w-xs">{documentFile.name}</p>
-                      <p className="font-label-md text-label-md text-on-surface-variant">{documentFile.size} • Uploaded on {documentFile.date}</p>
+                      <p className="font-title-md text-title-md text-on-surface font-semibold truncate max-w-xs">{selectedFile.name}</p>
+                      <p className="font-label-md text-label-md text-on-surface-variant">{(selectedFile.size / 1024).toFixed(0)} KB • Selected</p>
                     </div>
                     <button
                       type="button"
-                      onClick={() => setDocumentFile(null)}
+                      onClick={() => setSelectedFile(null)}
                       className="p-sm text-on-surface-variant hover:bg-error-container/20 hover:text-error rounded-full transition-all cursor-pointer"
                       title="Remove file"
                     >
@@ -556,12 +585,7 @@ export default function CreditManagementPage() {
                     e.preventDefault();
                     const files = e.dataTransfer.files;
                     if (files && files.length > 0) {
-                      setDocumentFile({
-                        name: files[0].name,
-                        size: `${(files[0].size / (1024 * 1024)).toFixed(1)} MB`,
-                        date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit' }),
-                        url: URL.createObjectURL(files[0])
-                      });
+                      setSelectedFile(files[0]);
                     }
                   }}
                   onClick={() => {
@@ -571,12 +595,7 @@ export default function CreditManagementPage() {
                     fileInput.onchange = (e) => {
                       const files = (e.target as HTMLInputElement).files;
                       if (files && files.length > 0) {
-                        setDocumentFile({
-                          name: files[0].name,
-                          size: `${(files[0].size / (1024 * 1024)).toFixed(1)} MB`,
-                          date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit' }),
-                          url: URL.createObjectURL(files[0])
-                        });
+                        setSelectedFile(files[0]);
                       }
                     };
                     fileInput.click();
@@ -621,9 +640,19 @@ export default function CreditManagementPage() {
             <button type="button" className="px-xl h-11 rounded-lg border border-outline-variant text-on-surface-variant font-title-md text-title-md hover:bg-surface-container-high transition-colors active:scale-95 duration-150 font-semibold cursor-pointer" onClick={() => setIsAddOpen(false)}>
               Cancel
             </button>
-            <button type="submit" className="px-xl h-11 rounded-lg bg-primary text-on-primary font-title-md text-title-md hover:shadow-lg transition-all active:scale-95 duration-150 flex items-center gap-sm font-semibold cursor-pointer">
-              <span>Save Income</span>
-              <span className="material-symbols-outlined text-[18px]">check_circle</span>
+            <button 
+              type="submit" 
+              disabled={isSubmitting}
+              className="px-xl h-11 rounded-lg bg-primary text-on-primary font-title-md text-title-md hover:shadow-lg transition-all active:scale-95 duration-150 flex items-center gap-sm font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting && (
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              )}
+              <span>{isSubmitting ? 'Saving...' : 'Save Income'}</span>
+              {!isSubmitting && <span className="material-symbols-outlined text-[18px]">check_circle</span>}
             </button>
           </div>
         </form>
@@ -744,15 +773,19 @@ export default function CreditManagementPage() {
             {/* Document Upload (Full Row) */}
             <div className="flex flex-col gap-sm">
               <label className="font-label-md text-label-md text-on-surface-variant uppercase font-bold">Document Attachment (Optional)</label>
-              {documentFile ? (
+              {(selectedFile || existingDocumentUrl) ? (
                 <div className="flex items-center p-md bg-surface-container rounded-xl border-2 border-dashed border-outline-variant group hover:border-secondary transition-colors animate-in fade-in">
                   <div className="flex items-center w-full gap-lg">
                     <div className="w-16 h-16 bg-white rounded-lg border border-outline-variant flex-shrink-0 flex items-center justify-center">
                       <span className="material-symbols-outlined text-[32px] text-on-surface-variant">file_present</span>
                     </div>
                     <div className="flex-grow min-w-0">
-                      <p className="font-title-md text-title-md text-on-surface font-semibold truncate">{documentFile.name}</p>
-                      <p className="font-label-md text-label-md text-on-surface-variant">{documentFile.size} • Uploaded on {documentFile.date}</p>
+                      <p className="font-title-md text-title-md text-on-surface font-semibold truncate">
+                        {selectedFile ? selectedFile.name : existingDocumentName}
+                      </p>
+                      <p className="font-label-md text-label-md text-on-surface-variant">
+                        {selectedFile ? `${(selectedFile.size / 1024).toFixed(0)} KB • Selected` : `${existingDocumentSize} • Attached`}
+                      </p>
                     </div>
                     <div className="flex items-center gap-sm">
                       <button
@@ -764,12 +797,7 @@ export default function CreditManagementPage() {
                           fileInput.onchange = (e) => {
                             const files = (e.target as HTMLInputElement).files;
                             if (files && files.length > 0) {
-                              setDocumentFile({
-                                name: files[0].name,
-                                size: `${(files[0].size / (1024 * 1024)).toFixed(1)} MB`,
-                                date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit' }),
-                                url: URL.createObjectURL(files[0])
-                              });
+                              setSelectedFile(files[0]);
                             }
                           };
                           fileInput.click();
@@ -781,7 +809,12 @@ export default function CreditManagementPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setDocumentFile(null)}
+                        onClick={() => {
+                          setSelectedFile(null);
+                          setExistingDocumentUrl(null);
+                          setExistingDocumentName(null);
+                          setExistingDocumentSize(null);
+                        }}
                         className="p-sm text-on-surface-variant hover:bg-error-container/20 hover:text-error rounded-full transition-all cursor-pointer"
                         title="Remove file"
                       >
@@ -800,12 +833,7 @@ export default function CreditManagementPage() {
                     fileInput.onchange = (e) => {
                       const files = (e.target as HTMLInputElement).files;
                       if (files && files.length > 0) {
-                        setDocumentFile({
-                          name: files[0].name,
-                          size: `${(files[0].size / (1024 * 1024)).toFixed(1)} MB`,
-                          date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit' }),
-                          url: URL.createObjectURL(files[0])
-                        });
+                        setSelectedFile(files[0]);
                       }
                     };
                     fileInput.click();
@@ -833,9 +861,19 @@ export default function CreditManagementPage() {
             <button type="button" className="px-xl h-11 rounded-lg border border-outline-variant text-on-surface-variant font-title-md text-title-md hover:bg-surface-container-high transition-colors active:scale-95 duration-150 font-semibold cursor-pointer" onClick={() => setIsEditOpen(false)}>
               Cancel
             </button>
-            <button type="submit" className="px-xl h-11 rounded-lg bg-secondary text-on-secondary font-title-md text-title-md hover:shadow-lg transition-all active:scale-95 duration-150 flex items-center gap-sm font-semibold cursor-pointer">
-              <span>Update Entry</span>
-              <span className="material-symbols-outlined text-[18px]">check_circle</span>
+            <button 
+              type="submit" 
+              disabled={isSubmitting}
+              className="px-xl h-11 rounded-lg bg-secondary text-on-secondary font-title-md text-title-md hover:shadow-lg transition-all active:scale-95 duration-150 flex items-center gap-sm font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting && (
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              )}
+              <span>{isSubmitting ? 'Updating...' : 'Update Entry'}</span>
+              {!isSubmitting && <span className="material-symbols-outlined text-[18px]">check_circle</span>}
             </button>
           </div>
         </form>
@@ -1018,12 +1056,37 @@ export default function CreditManagementPage() {
           <button className="px-xl h-11 flex items-center justify-center rounded-lg border border-outline text-on-surface font-title-md text-title-md hover:bg-surface-container-high transition-colors active:scale-95 duration-150 font-semibold cursor-pointer" onClick={() => setIsDeleteOpen(false)}>
             Keep
           </button>
-          <button className="px-xl h-11 flex items-center justify-center rounded-lg bg-error text-on-error font-title-md text-title-md shadow-md hover:opacity-90 transition-all active:scale-95 duration-150 font-semibold cursor-pointer" onClick={handleConfirmDelete}>
-            Delete
+          <button 
+            disabled={isSubmitting}
+            className="px-xl h-11 flex items-center justify-center rounded-lg bg-error text-on-error font-title-md text-title-md shadow-md hover:opacity-90 transition-all active:scale-95 duration-150 font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" 
+            onClick={handleConfirmDelete}
+          >
+            {isSubmitting && (
+              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            )}
+            {isSubmitting ? 'Deleting...' : 'Delete'}
           </button>
         </div>
       </Modal>
 
     </div>
+  );
+}
+
+export default function CreditManagementPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-[400px]">
+        <svg className="animate-spin h-8 w-8 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+      </div>
+    }>
+      <CreditManagementContent />
+    </Suspense>
   );
 }

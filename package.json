@@ -11,20 +11,32 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "db:format": "prisma format"
+    "db:format": "prisma format",
+    "db:seed": "prisma db seed"
+  },
+  "prisma": {
+    "seed": "npx tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.4.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.1",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.38.0",
+    "@vercel/kv": "^3.0.0",
     "axios": "^1.17.0",
+    "dayjs": "^1.11.21",
+    "jose": "^6.2.3",
     "next": "16.2.7",
     "notistack": "^3.0.2",
     "pg": "^8.21.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-hook-form": "^7.78.0",
+    "resend": "^6.12.4",
+    "zod": "^4.4.3",
     "zustand": "^5.0.14"
   },
   "devDependencies": {

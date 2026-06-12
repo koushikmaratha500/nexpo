@@ -8,6 +8,7 @@ import { useForm } from 'react-hook-form';
 import { useToast } from '@/hooks/useToast';
 import Link from 'next/link';
 import { useAuth } from '@/components/auth/AuthContext';
+import axios from 'axios';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -32,7 +33,7 @@ export default function RegisterPage() {
     },
   });
 
-  const onSubmit = (data: any) => {
+  const onSubmit = async (data: any) => {
     setErrorMsg('');
     setIsSubmitting(true);
 
@@ -43,12 +44,30 @@ export default function RegisterPage() {
       return;
     }
 
-    // Success simulation
-    setSuccess(true);
-    addToast('Registration request sent successfully!', 'success');
-    setTimeout(() => {
-      router.push('/');
-    }, 3000);
+    try {
+      const response = await axios.post('/api/user/auth/register', {
+        firstName: data.firstName,
+        lastName: data.lastName || '',
+        email: data.email,
+        password: data.password,
+        country: data.country,
+      });
+
+      if (response.data.success) {
+        addToast('Registration successful! OTP sent to email.', 'success');
+        localStorage.setItem('nexpo_pending_email', data.email);
+        setSuccess(true);
+        setTimeout(() => {
+          router.push('/auth/activate');
+        }, 1500);
+      }
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || err.message || 'Registration failed';
+      setErrorMsg(errMsg);
+      addToast(errMsg, 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (isLoading) {

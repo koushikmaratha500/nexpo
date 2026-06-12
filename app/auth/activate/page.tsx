@@ -1,31 +1,50 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/components/auth/AuthContext';
+import axios from 'axios';
 
 export default function ActivatePage() {
   const router = useRouter();
   const { isLoading } = useAuth();
+  const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [success, setSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    const pending = localStorage.getItem('nexpo_pending_email') || '';
+    setEmail(pending);
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
-    if (code.trim() !== 'NX-2026') {
-      setErrorMsg('Invalid activation code. Please try "NX-2026".');
+    if (!email) {
+      setErrorMsg('Please specify the email address to verify.');
       return;
     }
 
-    setSuccess(true);
-    setTimeout(() => {
-      router.push('/');
-    }, 2500);
+    try {
+      const response = await axios.post('/api/user/auth/verify', {
+        email: email.trim(),
+        otp: code.trim(),
+      });
+
+      if (response.data.success) {
+        setSuccess(true);
+        localStorage.removeItem('nexpo_pending_email');
+        setTimeout(() => {
+          router.push('/');
+        }, 2000);
+      }
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.error || err.message || 'Verification failed');
+    }
   };
 
   if (isLoading) {
@@ -108,22 +127,37 @@ export default function ActivatePage() {
 
               <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                 <div className="flex flex-col gap-1">
+                  <label htmlFor="email" className="font-label-md text-label-md text-on-surface font-bold uppercase tracking-wide">
+                    Email Address
+                  </label>
+                  <input
+                    id="email"
+                    type="email"
+                    required
+                    placeholder="name@company.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary transition-all text-on-surface font-bold"
+                  />
+                </div>
+                
+                <div className="flex flex-col gap-1">
                   <label htmlFor="code" className="font-label-md text-label-md text-on-surface font-bold uppercase tracking-wide">
-                    Activation Code (Try "NX-2026")
+                    Activation OTP (Try "123456")
                   </label>
                   <input
                     id="code"
                     type="text"
                     required
-                    placeholder="XXXX-XXXX-XXXX"
+                    placeholder="123456"
                     value={code}
                     onChange={(e) => setCode(e.target.value)}
-                    className="px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary transition-all text-on-surface uppercase text-center tracking-widest font-bold"
+                    className="px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary transition-all text-on-surface uppercase text-center tracking-widest font-bold font-mono"
                   />
                 </div>
 
                 <Button type="submit" className="w-full h-11">
-                  Activate License
+                  Activate Profile
                 </Button>
               </form>
             </>

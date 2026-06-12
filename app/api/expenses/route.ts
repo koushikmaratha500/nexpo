@@ -8,6 +8,7 @@ export async function GET() {
       include: {
         category: true,
         currency: true,
+        paymentType: true,
       },
     });
     return NextResponse.json(expenses);
@@ -29,7 +30,11 @@ export async function POST(req: NextRequest) {
 
     if (!category) {
       category = await prisma.category.create({
-        data: { name: categoryName, isActive: true },
+        data: {
+          name: categoryName,
+          code: categoryName.toUpperCase().replace(/\s+/g, '_').trim(),
+          status: 'A'
+        },
       });
     }
 
@@ -40,7 +45,31 @@ export async function POST(req: NextRequest) {
 
     if (!currency) {
       currency = await prisma.currency.create({
-        data: { code: currencyCode, name: currencyCode, symbol: '₹' },
+        data: { code: currencyCode, name: currencyCode, symbol: '₹', status: 'A' },
+      });
+    }
+
+    // Get or create paymentType
+    const paymentTypeName = paymentType || 'Credit Card';
+    let paymentTypeRec = await prisma.paymentType.findFirst({
+      where: { name: { equals: paymentTypeName, mode: 'insensitive' } },
+    });
+
+    if (!paymentTypeRec) {
+      paymentTypeRec = await prisma.paymentType.create({
+        data: {
+          name: paymentTypeName,
+          code: paymentTypeName.toUpperCase().replace(/\s+/g, '_').trim(),
+          status: 'A'
+        },
+      });
+    }
+
+    // Find or create default country
+    let country = await prisma.country.findFirst();
+    if (!country) {
+      country = await prisma.country.create({
+        data: { name: 'India', isoCode: 'IN', status: 'A' }
       });
     }
 
@@ -52,8 +81,9 @@ export async function POST(req: NextRequest) {
           firstName: 'Alex',
           lastName: 'Sterling',
           email: 'user@nexpo.com',
-          role: 'CUSTOMER',
-          status: 'ACTIVE',
+          status: 'A',
+          countryId: country.id,
+          currencyId: currency.id,
         },
       });
     }
@@ -63,14 +93,17 @@ export async function POST(req: NextRequest) {
         userId: user.id,
         categoryId: category.id,
         currencyId: currency.id,
+        paymentTypeId: paymentTypeRec.id,
+        title: merchant || 'Expense Title',
         amount: parseFloat(amount),
         expenseDate: new Date(date),
-        paymentType: paymentType || 'Credit Card',
         notes: notes || null,
+        status: 'A',
       },
       include: {
         category: true,
         currency: true,
+        paymentType: true,
       },
     });
 

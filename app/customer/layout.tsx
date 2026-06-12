@@ -2,15 +2,17 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthContext';
-import { RoleSwitcher } from '@/components/layout/RoleSwitcher';
 import { Header } from '@/components/layout/Header';
+import { Modal } from '@/components/ui/Modal';
 
 export default function CustomerLayout({ children }: { children: React.ReactNode }) {
   const { logout } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
 
   const navLinks = [
     { name: 'Dashboard', path: '/customer', icon: 'dashboard' },
@@ -63,7 +65,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
 
         <div className="border-t border-outline-variant pt-4 flex flex-col gap-1">
           <Link
-            href="#"
+            href="/customer/support"
             className="flex items-center gap-4 px-4 py-2 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded-lg transition-colors"
           >
             <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
@@ -72,7 +74,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
             <span className="font-body-md text-body-md">Help Center</span>
           </Link>
           <button
-            onClick={logout}
+            onClick={() => setIsLogoutConfirmOpen(true)}
             type="button"
             className="flex items-center gap-4 px-4 py-2 text-on-surface-variant hover:text-error hover:bg-error-container/10 rounded-lg text-left transition-colors cursor-pointer"
           >
@@ -134,7 +136,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
 
             <div className="border-t border-outline-variant pt-4 flex flex-col gap-1">
               <button
-                onClick={logout}
+                onClick={() => setIsLogoutConfirmOpen(true)}
                 type="button"
                 className="flex items-center gap-4 px-4 py-2 text-on-surface-variant hover:text-error hover:bg-error-container/10 rounded-lg text-left transition-colors cursor-pointer"
               >
@@ -178,9 +180,54 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
           );
         })}
       </nav>
+      {/* Floating "+" FAB */}
+      <button
+        onClick={() => router.push('/customer/expenses?openAdd=true')}
+        className="fixed right-[50px] bottom-[50px] z-50 w-14 h-14 bg-black hover:bg-neutral-800 text-white rounded-full flex items-center justify-center shadow-xl active:scale-95 hover:scale-105 transition-all duration-200 cursor-pointer"
+        title="Add Expense"
+      >
+        <span className="material-symbols-outlined text-[32px]">add</span>
+      </button>
 
-      {/* Global Role Switcher */}
-      <RoleSwitcher />
+      {/* Logout Confirmation Modal */}
+      <Modal 
+        isOpen={isLogoutConfirmOpen} 
+        onClose={() => setIsLogoutConfirmOpen(false)} 
+        title="Confirm Logout" 
+        customHeader={true} 
+        cardPadding="p-0" 
+        maxWidth="max-w-md"
+      >
+        <div className="pt-xl px-xl flex flex-col items-center text-center">
+          <div className="w-16 h-16 rounded-full bg-error-container flex items-center justify-center mb-md">
+            <span className="material-symbols-outlined text-error text-[32px]">warning</span>
+          </div>
+          <h2 className="font-headline-md text-headline-md text-on-surface mb-sm font-black">Confirm Logout</h2>
+          <p className="font-body-md text-body-md text-on-surface-variant max-w-xs leading-relaxed">
+            Are you sure you want to log out of your session?
+          </p>
+        </div>
+        <div className="p-lg bg-surface-container-low flex flex-col-reverse sm:flex-row gap-md sm:justify-end border-t border-outline-variant mt-lg">
+          <button 
+            type="button"
+            className="px-xl h-11 flex items-center justify-center rounded-lg border border-outline text-on-surface font-title-md text-title-md hover:bg-surface-container-high transition-colors active:scale-95 duration-150 font-semibold cursor-pointer" 
+            onClick={() => setIsLogoutConfirmOpen(false)}
+          >
+            Cancel
+          </button>
+          <button 
+            type="button"
+            className="px-xl h-11 flex items-center justify-center rounded-lg bg-error text-on-error font-title-md text-title-md shadow-md hover:opacity-90 transition-all active:scale-95 duration-150 font-semibold cursor-pointer" 
+            onClick={() => {
+              setIsLogoutConfirmOpen(false);
+              logout();
+            }}
+          >
+            Logout
+          </button>
+        </div>
+      </Modal>
+
     </div>
   );
 }

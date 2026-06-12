@@ -14,11 +14,12 @@ export default function UserManagementPage() {
   const [users, setUsers] = useState<User[]>(MOCK_USERS);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5;
+  const itemsPerPage = 100;
   
   // Modals state
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Forms state
   const [editFirstName, setEditFirstName] = useState('');
@@ -57,32 +58,36 @@ export default function UserManagementPage() {
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUser) return;
+    setIsSubmitting(true);
 
-    const updated = users.map(u => {
-      if (u.id === selectedUser.id) {
-        return {
-          ...u,
-          firstName: editFirstName,
-          lastName: editLastName,
-          role: editRole,
-          status: editStatus
-        };
-      }
-      return u;
-    });
+    setTimeout(() => {
+      const updated = users.map(u => {
+        if (u.id === selectedUser.id) {
+          return {
+            ...u,
+            firstName: editFirstName,
+            lastName: editLastName,
+            role: editRole,
+            status: editStatus
+          };
+        }
+        return u;
+      });
 
-    setUsers(updated);
-    saveUsersToStorage(updated);
+      setUsers(updated);
+      saveUsersToStorage(updated);
 
-    setSelectedUser(prev => prev ? {
-      ...prev,
-      firstName: editFirstName,
-      lastName: editLastName,
-      role: editRole,
-      status: editStatus
-    } : null);
+      setSelectedUser(prev => prev ? {
+        ...prev,
+        firstName: editFirstName,
+        lastName: editLastName,
+        role: editRole,
+        status: editStatus
+      } : null);
 
-    setIsEditOpen(false);
+      setIsSubmitting(false);
+      setIsEditOpen(false);
+    }, 600);
   };
 
   // Toggle user status instantly (Block/Unblock)
@@ -110,11 +115,15 @@ export default function UserManagementPage() {
   // Confirm Delete
   const handleConfirmDelete = () => {
     if (!selectedUser) return;
-    const updated = users.filter(u => u.id !== selectedUser.id);
-    setUsers(updated);
-    saveUsersToStorage(updated);
-    setSelectedUser(null);
-    setIsDeleteOpen(false);
+    setIsSubmitting(true);
+    setTimeout(() => {
+      const updated = users.filter(u => u.id !== selectedUser.id);
+      setUsers(updated);
+      saveUsersToStorage(updated);
+      setSelectedUser(null);
+      setIsSubmitting(false);
+      setIsDeleteOpen(false);
+    }, 600);
   };
 
   const customers = users.filter(u => u.role === 'CUSTOMER');
@@ -331,8 +340,19 @@ export default function UserManagementPage() {
             <Button type="button" variant="secondary" onClick={() => setIsEditOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" variant="primary">
-              Save Alterations
+            <Button 
+              type="submit" 
+              variant="primary" 
+              className="flex items-center gap-2" 
+              disabled={isSubmitting}
+            >
+              {isSubmitting && (
+                <svg className="animate-spin h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              )}
+              <span>{isSubmitting ? 'Saving...' : 'Save Alterations'}</span>
             </Button>
           </div>
         </form>
@@ -366,8 +386,18 @@ export default function UserManagementPage() {
           <button className="px-xl h-11 flex items-center justify-center rounded-lg border border-outline text-on-surface font-title-md text-title-md hover:bg-surface-container-high transition-colors active:scale-95 duration-150 font-semibold" onClick={() => setIsDeleteOpen(false)}>
             Keep
           </button>
-          <button className="px-xl h-11 flex items-center justify-center rounded-lg bg-error text-on-error font-title-md text-title-md shadow-md hover:opacity-90 transition-all active:scale-95 duration-150 font-semibold" onClick={handleConfirmDelete}>
-            Remove Account
+          <button 
+            disabled={isSubmitting}
+            className="px-xl h-11 flex items-center justify-center rounded-lg bg-error text-on-error font-title-md text-title-md shadow-md hover:opacity-90 transition-all active:scale-95 duration-150 font-semibold disabled:opacity-50 disabled:cursor-not-allowed" 
+            onClick={handleConfirmDelete}
+          >
+            {isSubmitting && (
+              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            )}
+            {isSubmitting ? 'Removing...' : 'Remove Account'}
           </button>
         </div>
       </Modal>

@@ -1,55 +1,148 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/components/auth/AuthContext';
+import { useToast } from '@/hooks/useToast';
+import axios from 'axios';
 
 export default function CustomerSettingsPage() {
-  const { user } = useAuth();
-  const [firstName, setFirstName] = useState(user?.firstName || 'Alex');
-  const [lastName, setLastName] = useState(user?.lastName || 'Sterling');
-  const [email, setEmail] = useState(user?.email || 'user@nexpo.com');
-  const [mobile, setMobile] = useState('+91 98765 43210');
-  const [currency, setCurrency] = useState('INR');
-  const [country, setCountry] = useState('India');
-  const [avatar, setAvatar] = useState(user?.avatar || 'https://lh3.googleusercontent.com/aida/AP1WRLskcaT4zEfnc7-RMLGT2ABk-1Fbp2KitI5pDZki9-GZaeRr50garGxd9qaW8lE4QqbGZBSKlEnnlpKhCn3b9GtKcih-2g0MiOrgzmktdJ-3stdf2jb4rfQCAHbODMYI6dpTE4dQLPK_wh_jCbDC1PtehwjtZFZVI7JPuNXTK51Xc_eRfXbYrAHCyiae8NGgN2DjoGX5_99GXUJrrjv0iip0VS7zvTzEYDGZbw4PFoFbj0lACVh3kewYzNY');
+  const { user, updateUser } = useAuth();
+  const { addToast } = useToast();
+
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
+  const [mobile, setMobile] = useState('');
+  const [countryId, setCountryId] = useState('');
+  const [currencyId, setCurrencyId] = useState('');
+  const [avatar, setAvatar] = useState('');
+
+  const [countries, setCountries] = useState<any[]>([]);
+  const [currencies, setCurrencies] = useState<any[]>([]);
+
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [toastMsg, setToastMsg] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const metadataFetchedRef = useRef(false);
+
+  // Bind values from auth context once user loads
+  useEffect(() => {
+    if (user) {
+      setFirstName(user.firstName || '');
+      setLastName(user.lastName || '');
+      setEmail(user.email || '');
+      setMobile(user.mobile || '');
+      setCountryId(user.countryId || '');
+      setCurrencyId(user.currencyId || '');
+      setAvatar(user.avatar || '');
+    }
+  }, [user]);
+
+  // Load countries & currencies on mount
+  useEffect(() => {
+    if (metadataFetchedRef.current) return;
+    metadataFetchedRef.current = true;
+    async function loadMetadata() {
+      try {
+        const res = await axios.get('/api/user/metadata');
+        setCountries(res.data.countries || []);
+        setCurrencies(res.data.currencies || []);
+      } catch (err) {
+        console.error('Failed to load country/currency metadata:', err);
+        metadataFetchedRef.current = false;
+      }
+    }
+    loadMetadata();
+  }, []);
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      setAvatar(URL.createObjectURL(files[0]));
+      const file = files[0];
+      setIsUploading(true);
+      addToast('Uploading profile image...', 'info');
+
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('bucket', 'nexpo');
+
+        const res = await axios.post('/api/upload', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+
+        setAvatar(res.data.url);
+        addToast('Profile image uploaded successfully!', 'success');
+      } catch (err: any) {
+        console.warn('Failed to upload avatar to backend:', err);
+        addToast('Failed to upload image.', 'error');
+      } finally {
+        setIsUploading(false);
+      }
     }
   };
 
-  const handleUpdate = (e: React.FormEvent) => {
+  const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (user) {
-      const updatedUser = {
-        ...user,
+    setIsSubmitting(true);
+
+    try {
+      const payload = {
         firstName,
-        lastName,
-        avatar
+        lastName: lastName || null,
+        profileImageUrl: avatar || null,
+        countryId: countryId || null,
+        currencyId: currencyId || null,
       };
-      localStorage.setItem('nexpo_user', JSON.stringify(updatedUser));
+
+      const response = await axios.patch('/api/user/auth/profile', payload);
+
+      if (response.data) {
+        // Sync context state
+        updateUser({
+          firstName,
+          lastName,
+          avatar,
+          countryId,
+          currencyId,
+        });
+        addToast('Profile details updated successfully!', 'success');
+      }
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || 'Failed to update profile';
+      addToast(msg, 'error');
+    } finally {
+      setIsSubmitting(false);
     }
-    setToastMsg('Profile details updated successfully!');
-    setTimeout(() => setToastMsg(''), 4000);
   };
 
-  const handlePasswordReset = (e: React.FormEvent) => {
+  const handlePasswordReset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword.length <= 6) {
-      setToastMsg('Error: Password must be more than 6 characters long.');
-    } else {
-      setToastMsg('Security credentials updated successfully!');
+      addToast('Error: Password must be more than 6 characters long.', 'error');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await axios.patch('/api/user/auth/profile', {
+        oldPassword,
+        newPassword,
+      });
+      addToast('Security credentials updated successfully!', 'success');
       setOldPassword('');
       setNewPassword('');
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message || 'Failed to update password';
+      addToast(msg, 'error');
+    } finally {
+      setIsSubmitting(false);
     }
-    setTimeout(() => setToastMsg(''), 4000);
   };
 
   return (
@@ -63,19 +156,6 @@ export default function CustomerSettingsPage() {
         </div>
       </div>
 
-      {toastMsg && (
-        <div className={`p-4 border rounded-lg text-body-md font-bold flex items-center gap-2 shadow-sm animate-in fade-in slide-in-from-top-2 ${
-          toastMsg.startsWith('Error') 
-            ? 'bg-error-container/20 border-error/20 text-error' 
-            : 'bg-secondary-container/20 border-secondary/20 text-on-secondary-container'
-        }`}>
-          <span className="material-symbols-outlined text-md">
-            {toastMsg.startsWith('Error') ? 'error' : 'done'}
-          </span>
-          <span>{toastMsg}</span>
-        </div>
-      )}
-
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Profile Details Form */}
         <div className="lg:col-span-8">
@@ -83,11 +163,17 @@ export default function CustomerSettingsPage() {
             <form onSubmit={handleUpdate} className="flex flex-col gap-6">
               <div className="flex flex-col sm:flex-row items-center gap-lg border-b border-outline-variant/30 pb-lg">
                 <div className="relative group w-20 h-20 rounded-full overflow-hidden bg-surface-container-high border border-outline-variant flex-shrink-0 cursor-pointer">
-                  <img src={avatar} alt="Profile Avatar" className="w-full h-full object-cover" />
+                  {avatar ? (
+                    <img src={avatar} alt="Profile Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-primary/10 text-primary font-black text-xl">
+                      {firstName.substring(0, 2).toUpperCase()}
+                    </div>
+                  )}
                   <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-[10px] font-bold cursor-pointer transition-opacity">
                     <span className="material-symbols-outlined text-md">photo_camera</span>
                     <span>Upload</span>
-                    <input type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
+                    <input type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" disabled={isUploading} />
                   </label>
                 </div>
                 <div className="text-center sm:text-left">
@@ -134,41 +220,53 @@ export default function CustomerSettingsPage() {
                   <input
                     type="tel"
                     required
-                    value={mobile}
-                    onChange={(e) => setMobile(e.target.value)}
-                    className="px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary text-on-surface w-full font-mono-data"
+                    disabled
+                    value={mobile || 'No Mobile Linked'}
+                    className="px-4 py-2 bg-surface-container-low/50 border border-outline-variant rounded-lg text-body-md text-on-surface-variant/80 w-full cursor-not-allowed font-mono-data"
                   />
-                </div>
-
-                <div className="flex flex-col gap-1">
-                  <label className="font-label-md text-label-md text-on-surface font-bold uppercase">Preferred Currency</label>
-                  <div className="relative">
-                    <select
-                      value={currency}
-                      onChange={(e) => setCurrency(e.target.value)}
-                      className="px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary text-on-surface w-full appearance-none font-bold"
-                    >
-                      <option value="INR">INR (₹) - Indian Rupee</option>
-                    </select>
-                    <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-outline">expand_more</span>
-                  </div>
                 </div>
 
                 <div className="flex flex-col gap-1">
                   <label className="font-label-md text-label-md text-on-surface font-bold uppercase">Country</label>
                   <div className="relative">
                     <select
-                      value={country}
-                      onChange={(e) => setCountry(e.target.value)}
+                      value={countryId}
+                      onChange={(e) => {
+                        const selectedId = e.target.value;
+                        setCountryId(selectedId);
+                        // Auto-select the linked currency of this country
+                        const matchedCountry = countries.find(c => c.id === selectedId);
+                        if (matchedCountry?.currencyId) {
+                          setCurrencyId(matchedCountry.currencyId);
+                        }
+                      }}
                       className="px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary text-on-surface w-full appearance-none font-bold"
                     >
-                      <option value="India">India</option>
-                      <option value="United States">United States</option>
-                      <option value="United Kingdom">United Kingdom</option>
-                      <option value="Germany">Germany</option>
-                      <option value="Japan">Japan</option>
-                      <option value="Singapore">Singapore</option>
-                      <option value="Canada">Canada</option>
+                      <option value="">Select Country</option>
+                      {countries.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} ({c.isoCode})
+                        </option>
+                      ))}
+                    </select>
+                    <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-outline">expand_more</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="font-label-md text-label-md text-on-surface font-bold uppercase">Preferred Currency</label>
+                  <div className="relative">
+                    <select
+                      value={currencyId}
+                      onChange={(e) => setCurrencyId(e.target.value)}
+                      className="px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary text-on-surface w-full appearance-none font-bold"
+                    >
+                      <option value="">Select Currency</option>
+                      {currencies.map((curr) => (
+                        <option key={curr.id} value={curr.id}>
+                          {curr.code} ({curr.symbol}) - {curr.name}
+                        </option>
+                      ))}
                     </select>
                     <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-outline">expand_more</span>
                   </div>
@@ -176,8 +274,19 @@ export default function CustomerSettingsPage() {
               </div>
 
               <div className="flex justify-end border-t border-outline-variant/30 pt-4 mt-2">
-                <Button type="submit" variant="primary" className="w-36">
-                  Save Changes
+                <Button 
+                  type="submit" 
+                  variant="primary" 
+                  className="w-40 flex items-center justify-center gap-2" 
+                  disabled={isSubmitting || isUploading}
+                >
+                  {(isSubmitting || isUploading) && (
+                    <svg className="animate-spin h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  )}
+                  <span>{isSubmitting ? 'Saving...' : isUploading ? 'Uploading...' : 'Save Changes'}</span>
                 </Button>
               </div>
             </form>
@@ -217,8 +326,19 @@ export default function CustomerSettingsPage() {
                 />
               </div>
 
-              <Button type="submit" variant="secondary" className="w-full mt-2">
-                Update Password
+              <Button 
+                type="submit" 
+                variant="secondary" 
+                className="w-full mt-2 flex items-center justify-center gap-2" 
+                disabled={isSubmitting}
+              >
+                {isSubmitting && (
+                  <svg className="animate-spin h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                )}
+                <span>{isSubmitting ? 'Updating...' : 'Update Password'}</span>
               </Button>
             </form>
           </Card>

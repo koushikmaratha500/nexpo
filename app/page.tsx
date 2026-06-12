@@ -21,7 +21,6 @@ export default function LoginPage() {
     register,
     handleSubmit,
     setValue,
-    watch,
     formState: { errors },
   } = useForm({
     defaultValues: {
@@ -30,8 +29,6 @@ export default function LoginPage() {
       rememberMe: false,
     },
   });
-
-  const rememberMe = watch('rememberMe');
 
   // Load remembered credentials if present
   useEffect(() => {
@@ -56,17 +53,6 @@ export default function LoginPage() {
     }
   }, [user, isLoading, router]);
 
-  const handlePreFill = (role: 'ADMIN' | 'CUSTOMER') => {
-    if (role === 'ADMIN') {
-      setValue('email', 'admin@nexpo.com');
-      setValue('password', 'admin1234');
-    } else {
-      setValue('email', 'user@nexpo.com');
-      setValue('password', 'user1234');
-    }
-    setErrorMsg('');
-  };
-
   const onSubmit = async (data: any) => {
     setErrorMsg('');
     setIsSubmitting(true);
@@ -86,8 +72,13 @@ export default function LoginPage() {
         }
       } else {
         const errMsg = result.error || 'Authentication failed.';
-        setErrorMsg(errMsg);
-        addToast(errMsg, 'error');
+        if (result.pendingVerification) {
+          addToast('Account pending verification. Redirecting to OTP activation page...', 'warning');
+          router.push('/auth/activate');
+        } else {
+          setErrorMsg(errMsg);
+          addToast(errMsg, 'error');
+        }
       }
     } catch (err) {
       setErrorMsg('An unexpected error occurred. Please try again.');
@@ -145,15 +136,6 @@ export default function LoginPage() {
 
               {/* Button skeleton */}
               <div className="h-11 w-full bg-surface-container-highest rounded-lg"></div>
-            </div>
-
-            {/* Test accounts preset skeleton */}
-            <div className="bg-surface-container-low/50 rounded-xl p-4 border border-outline-variant/30 flex flex-col gap-3">
-              <div className="h-3 w-40 bg-surface-container-high rounded"></div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="h-9 bg-surface-container-highest rounded-lg"></div>
-                <div className="h-9 bg-surface-container-highest rounded-lg"></div>
-              </div>
             </div>
 
             {/* Footer link skeleton */}
@@ -257,7 +239,7 @@ export default function LoginPage() {
                 className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary accent-primary cursor-pointer"
               />
               <label
-                htmlFor="remember-me"
+                		htmlFor="remember-me"
                 className="font-label-md text-label-md text-on-surface-variant font-bold cursor-pointer select-none"
               >
                 Remember me
@@ -276,31 +258,6 @@ export default function LoginPage() {
               )}
             </Button>
           </form>
-
-          {/* Preset testing fills */}
-          <div className="bg-surface-container-low/50 rounded-xl p-4 border border-outline-variant/30 flex flex-col gap-2">
-            <p className="font-label-md text-[10px] text-on-surface-variant uppercase tracking-wider font-bold">
-              Simulated Testing Accounts
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => handlePreFill('ADMIN')}
-                className="flex items-center justify-center gap-1 py-2 px-4 rounded-lg border border-outline-variant bg-surface-container-lowest text-label-md font-medium text-on-surface hover:bg-surface-container-low transition-all cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-xs">admin_panel_settings</span>
-                Admin Auto-Fill
-              </button>
-              <button
-                type="button"
-                onClick={() => handlePreFill('CUSTOMER')}
-                className="flex items-center justify-center gap-1 py-2 px-4 rounded-lg border border-outline-variant bg-surface-container-lowest text-label-md font-medium text-on-surface hover:bg-surface-container-low transition-all cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-xs">person</span>
-                User Auto-Fill
-              </button>
-            </div>
-          </div>
 
           <div className="text-center text-label-md text-on-surface-variant">
             Need an account?{' '}

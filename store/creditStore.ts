@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import axios from 'axios';
+import { formatDate } from '@/lib/date';
 
 export interface CreditTransaction {
   id: string;
@@ -76,11 +77,26 @@ interface CreditState {
   credits: CreditTransaction[];
   isLoading: boolean;
   error: string | null;
-  fetchCredits: () => Promise<void>;
-  addCredit: (credit: Omit<CreditTransaction, 'id' | 'status' | 'currency'>) => Promise<void>;
-  updateCredit: (id: string, credit: Partial<CreditTransaction>) => Promise<void>;
+  fetchCredits: (filters?: { category?: string; startDate?: string; endDate?: string }) => Promise<void>;
+  addCredit: (credit: Omit<CreditTransaction, 'id' | 'status' | 'currency'>, file?: File | null) => Promise<void>;
+  updateCredit: (id: string, credit: Partial<CreditTransaction>, file?: File | null) => Promise<void>;
   deleteCredit: (id: string) => Promise<void>;
 }
+
+const mapDbBudgetToCredit = (dbBud: any): CreditTransaction => ({
+  id: dbBud.id,
+  title: dbBud.title || 'Credit Transaction',
+  amount: typeof dbBud.amount === 'string' ? parseFloat(dbBud.amount) : dbBud.amount,
+  currency: dbBud.currency?.code || 'INR',
+  category: (dbBud.budgetDepositType?.name || 'Other') as any,
+  notes: dbBud.notes || undefined,
+  type: (dbBud.paymentType?.name || 'Account') as any,
+  documentName: dbBud.documentFileName || undefined,
+  documentSize: dbBud.documentSize ? `${(dbBud.documentSize / 1024).toFixed(0)} KB` : undefined,
+  documentUrl: dbBud.documentUrl || undefined,
+  date: formatDate(dbBud.date),
+  status: 'VERIFIED',
+});
 
 const LOCAL_STORAGE_KEY = 'nexpo_credits_local';
 
@@ -106,12 +122,22 @@ export const useCreditStore = create<CreditState>((set, get) => ({
   isLoading: false,
   error: null,
 
-  fetchCredits: async () => {
+  fetchCredits: async (filters?: { category?: string; startDate?: string; endDate?: string }) => {
+    if (get().isLoading) return;
     set({ isLoading: true, error: null });
     try {
-      const response = await axios.get('/api/credits');
-      set({ credits: response.data, isLoading: false });
-      setLocalStorageCredits(response.data);
+      const { category, startDate, endDate } = filters || {};
+      const params = new URLSearchParams();
+      params.set('pageSize', '1000');
+      if (category) params.set('category', category);
+      if (startDate) params.set('startDate', startDate);
+      if (endDate) params.set('endDate', endDate);
+
+      const response = await axios.get(`/api/user/deposits?${params.toString()}`);
+      const items = response.data.items || response.data || [];
+      const mapped = items.map(mapDbBudgetToCredit);
+      set({ credits: mapped, isLoading: false });
+      setLocalStorageCredits(mapped);
     } catch (err: any) {
       console.warn('API fetchCredits failed, falling back to local storage:', err);
       const local = getLocalStorageCredits();
@@ -119,88 +145,74 @@ export const useCreditStore = create<CreditState>((set, get) => ({
     }
   },
 
-  addCredit: async (newCreditData) => {
+  addCredit: async (newCreditData, file?: File | null) => {
     set({ isLoading: true, error: null });
     try {
-      const payload = {
-        ...newCreditData,
-        currency: 'INR',
-      };
-      const response = await axios.post('/api/credits', payload);
-      set((state) => {
-        const updated = [response.data, ...state.credits];
-        setLocalStorageCredits(updated);
-        return { credits: updated, isLoading: false };
+      const formData = new FormData();
+      formData.append('title', newCreditData.title || '');
+      formData.append('amount', String(Number(newCreditData.amount)));
+      formData.append('currency', 'INR');
+      formData.append('category', newCreditData.category || '');
+      formData.append('type', newCreditData.type || '');
+      formData.append('date', newCreditData.date || '');
+      if (newCreditData.notes) formData.append('notes', newCreditData.notes);
+
+      if (file) {
+        formData.append('file', file);
+      }
+
+      await axios.post('/api/user/deposit', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
+
+      // Reset isLoading before refetch so the guard allows it
+      set({ isLoading: false });
+      await get().fetchCredits();
     } catch (err: any) {
-      console.warn('API addCredit failed, writing locally:', err);
-      set((state) => {
-        const localNew: CreditTransaction = {
-          ...newCreditData,
-          id: `local-cr-${Date.now()}`,
-          currency: 'INR',
-          status: 'VERIFIED',
-          // Format date nicely if input is YYYY-MM-DD
-          date: newCreditData.date.includes(',') 
-            ? newCreditData.date 
-            : new Date(newCreditData.date).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-        };
-        const updated = [localNew, ...state.credits];
-        setLocalStorageCredits(updated);
-        return { credits: updated, isLoading: false };
-      });
+      set({ isLoading: false, error: err.message || 'Failed to add credit' });
+      throw err;
     }
   },
 
-  updateCredit: async (id, updatedCreditData) => {
+  updateCredit: async (id, updatedCreditData, file?: File | null) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await axios.put(`/api/credits/${id}`, updatedCreditData);
-      set((state) => {
-        const updated = state.credits.map((c) => (c.id === id ? response.data : c));
-        setLocalStorageCredits(updated);
-        return { credits: updated, isLoading: false };
+      const formData = new FormData();
+      if (updatedCreditData.title) formData.append('title', updatedCreditData.title);
+      if (updatedCreditData.amount !== undefined) formData.append('amount', String(Number(updatedCreditData.amount)));
+      formData.append('currency', 'INR');
+      if (updatedCreditData.category) formData.append('category', updatedCreditData.category);
+      if (updatedCreditData.type) formData.append('type', updatedCreditData.type);
+      if (updatedCreditData.date) formData.append('date', updatedCreditData.date);
+      if (updatedCreditData.notes !== undefined) formData.append('notes', updatedCreditData.notes || '');
+
+      if (file) {
+        formData.append('file', file);
+      }
+
+      await axios.patch(`/api/user/deposit/${id}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
+
+      // Reset isLoading before refetch so the guard allows it
+      set({ isLoading: false });
+      await get().fetchCredits();
     } catch (err: any) {
-      console.warn('API updateCredit failed, updating locally:', err);
-      set((state) => {
-        const updated = state.credits.map((c) => {
-          if (c.id === id) {
-            return {
-              ...c,
-              ...updatedCreditData,
-              // Format date nicely if date changed
-              date: updatedCreditData.date
-                ? (updatedCreditData.date.includes(',') 
-                    ? updatedCreditData.date 
-                    : new Date(updatedCreditData.date).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }))
-                : c.date,
-            };
-          }
-          return c;
-        });
-        setLocalStorageCredits(updated);
-        return { credits: updated, isLoading: false };
-      });
+      set({ isLoading: false, error: err.message || 'Failed to update credit' });
+      throw err;
     }
   },
 
   deleteCredit: async (id) => {
     set({ isLoading: true, error: null });
     try {
-      await axios.delete(`/api/credits/${id}`);
-      set((state) => {
-        const updated = state.credits.filter((c) => c.id !== id);
-        setLocalStorageCredits(updated);
-        return { credits: updated, isLoading: false };
-      });
+      await axios.delete(`/api/user/deposit/${id}`);
+      // Reset isLoading before refetch so the guard allows it
+      set({ isLoading: false });
+      await get().fetchCredits();
     } catch (err: any) {
-      console.warn('API deleteCredit failed, removing locally:', err);
-      set((state) => {
-        const updated = state.credits.filter((c) => c.id !== id);
-        setLocalStorageCredits(updated);
-        return { credits: updated, isLoading: false };
-      });
+      set({ isLoading: false, error: err.message || 'Failed to delete credit' });
+      throw err;
     }
   },
 }));

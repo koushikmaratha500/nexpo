@@ -14,7 +14,11 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
 
     if (!category) {
       category = await prisma.category.create({
-        data: { name: categoryName, isActive: true },
+        data: {
+          name: categoryName,
+          code: categoryName.toUpperCase().replace(/\s+/g, '_').trim(),
+          status: 'A'
+        },
       });
     }
 
@@ -25,7 +29,23 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
 
     if (!currency) {
       currency = await prisma.currency.create({
-        data: { code: currencyCode, name: currencyCode, symbol: '₹' },
+        data: { code: currencyCode, name: currencyCode, symbol: '₹', status: 'A' },
+      });
+    }
+
+    // Get or create paymentType
+    const paymentTypeName = paymentType || 'Credit Card';
+    let paymentTypeRec = await prisma.paymentType.findFirst({
+      where: { name: { equals: paymentTypeName, mode: 'insensitive' } },
+    });
+
+    if (!paymentTypeRec) {
+      paymentTypeRec = await prisma.paymentType.create({
+        data: {
+          name: paymentTypeName,
+          code: paymentTypeName.toUpperCase().replace(/\s+/g, '_').trim(),
+          status: 'A'
+        },
       });
     }
 
@@ -34,14 +54,16 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       data: {
         categoryId: category.id,
         currencyId: currency.id,
+        paymentTypeId: paymentTypeRec.id,
+        title: merchant || 'Expense Title',
         amount: parseFloat(amount),
         expenseDate: new Date(date),
-        paymentType: paymentType || 'Credit Card',
         notes: notes || null,
       },
       include: {
         category: true,
         currency: true,
+        paymentType: true,
       },
     });
 
