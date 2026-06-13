@@ -5,10 +5,13 @@ import { Pool } from 'pg';
 const prismaClientSingleton = () => {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
-    console.error('CRITICAL DATABASE ERROR: DATABASE_URL environment variable is undefined. Falling back to localhost:5432. If you recently updated your .env file, please restart your development server ("npm run dev").');
+    throw new Error(
+      'CRITICAL: DATABASE_URL environment variable is not set. ' +
+      'On Vercel, add it via Settings > Environment Variables. ' +
+      'Locally, ensure your .env file is present and restart the dev server.'
+    );
   }
-  const fallback = 'postgresql://postgres:postgres@localhost:5432/nexpo?schema=public';
-  const pool = new Pool({ connectionString: connectionString || fallback });
+  const pool = new Pool({ connectionString });
   const adapter = new PrismaPg(pool);
   return new PrismaClient({ adapter });
 };
