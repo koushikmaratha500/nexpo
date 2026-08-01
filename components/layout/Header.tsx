@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { useAuth } from '@/components/auth/AuthContext';
+import { useThemeStore } from '@/store/themeStore';
 
 interface HeaderProps {
   onMenuToggle?: () => void;
@@ -15,6 +16,7 @@ export function Header({
   onSearchChange
 }: HeaderProps) {
   const { user } = useAuth();
+  const { isDark, toggleTheme } = useThemeStore();
 
   const fullName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') : '';
   const initials = user ? (user.firstName?.[0] || '') + (user.lastName?.[0] || '') : '';
@@ -46,6 +48,20 @@ export function Header({
 
       {/* Action Items */}
       <div className="flex items-center gap-6">
+        {/* Theme Toggle */}
+        <button
+          onClick={toggleTheme}
+          type="button"
+          aria-label="Toggle dark mode"
+          className="p-2 rounded-full bg-surface-container-low text-on-surface-variant hover:text-primary hover:bg-surface-container transition-all duration-200 cursor-pointer"
+          title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {isDark ? (
+            <span className="material-symbols-outlined text-md">light_mode</span>
+          ) : (
+            <span className="material-symbols-outlined text-md">dark_mode</span>
+          )}
+        </button>
 
         {/* Notifications & Help (Hidden per user request) */}
         <div className="flex items-center gap-4">

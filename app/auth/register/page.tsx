@@ -18,6 +18,7 @@ export default function RegisterPage() {
   const [success, setSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const {
     register,
@@ -227,7 +228,7 @@ export default function RegisterPage() {
                       required: 'Email is required',
                       pattern: { value: /^\S+@\S+$/i, message: 'Invalid email address' },
                     })}
-                    className="px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary transition-all text-on-surface"
+                    className="block w-full px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary transition-all text-on-surface"
                   />
                   {errors.email && (
                     <span className="text-error text-xs font-semibold mt-1 flex items-center gap-1 animate-in slide-in-from-top-1">
@@ -263,16 +264,29 @@ export default function RegisterPage() {
                   <label htmlFor="password" className="font-label-md text-label-md text-on-surface font-bold uppercase tracking-wide">
                     Password (min. 7 chars)
                   </label>
-                  <input
-                    id="password"
-                    type="password"
-                    placeholder="••••••••"
-                    {...register('password', {
-                      required: 'Password is required',
-                      minLength: { value: 7, message: 'Password must be at least 7 characters' },
-                    })}
-                    className="px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary transition-all text-on-surface"
-                  />
+                  <div className="relative w-full">
+                    <input
+                      id="password"
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="••••••••"
+                      {...register('password', {
+                        required: 'Password is required',
+                        minLength: { value: 7, message: 'Password must be at least 7 characters' },
+                      })}
+                      className="block w-full px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary transition-all text-on-surface pr-12"
+                    />
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      <span className="material-symbols-outlined text-xs scale-90">
+                        {showPassword ? 'visibility_off' : 'visibility'}
+                      </span>
+                    </button>
+                  </div>
                   {errors.password && (
                     <span className="text-error text-xs font-semibold mt-1 flex items-center gap-1 animate-in slide-in-from-top-1">
                       <span className="material-symbols-outlined text-xs">error</span>
