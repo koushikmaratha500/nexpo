@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table';
-import { Pagination } from '@/components/ui/Pagination';
+import { TablePagination } from '@/components/ui/TablePagination';
 import { useForm } from 'react-hook-form';
 import { useToast } from '@/hooks/useToast';
 import { dateToInputFormat } from '@/lib/date';
@@ -485,8 +485,8 @@ export default function TransactionsPage() {
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedTransactions = filteredTransactions.slice(startIndex, startIndex + itemsPerPage);
 
-  const handleItemsPerPageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setItemsPerPage(parseInt(e.target.value, 10));
+  const handleItemsPerPageChange = (n: number) => {
+    setItemsPerPage(n);
     setCurrentPage(1);
   };
 
@@ -729,29 +729,13 @@ export default function TransactionsPage() {
           </Table>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center justify-between px-lg py-md border-t border-outline-variant/40 bg-surface-container-lowest gap-4">
-          <div className="flex items-center gap-2">
-            <span className="font-label-md text-label-md text-on-surface-variant font-medium">Show</span>
-            <select
-              value={itemsPerPage}
-              onChange={handleItemsPerPageChange}
-              className="px-2 py-1 bg-surface-container-low border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary cursor-pointer"
-            >
-              <option value={10}>10</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-            <span className="font-label-md text-label-md text-on-surface-variant font-medium">entries</span>
-          </div>
-          {totalItems > itemsPerPage && (
-            <Pagination
-              currentPage={currentPage}
-              totalItems={totalItems}
-              itemsPerPage={itemsPerPage}
-              onPageChange={setCurrentPage}
-            />
-          )}
-        </div>
+        <TablePagination
+          currentPage={currentPage}
+          totalItems={totalItems}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+          onItemsPerPageChange={handleItemsPerPageChange}
+        />
       </Card>
 
       {/* ---------------- ADD TRANSACTION MODAL ---------------- */}

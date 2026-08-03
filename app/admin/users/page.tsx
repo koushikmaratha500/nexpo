@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table';
-import { Pagination } from '@/components/ui/Pagination';
+import { TablePagination } from '@/components/ui/TablePagination';
 import axios from 'axios';
 import { useToast } from '@/hooks/useToast';
 
@@ -48,11 +48,15 @@ export default function UserManagementPage() {
   const router = useRouter();
   const { addToast } = useToast();
   const [users, setUsers] = useState<APIUser[]>([]);
-  const [totalItems, setTotalItems] = useState(0);
   const [selectedUser, setSelectedUser] = useState<APIUser | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
-  const itemsPerPage = 100;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  const handleItemsPerPageChange = (n: number) => {
+    setItemsPerPage(n);
+    setCurrentPage(1);
+  };
   
   // Modals state
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -68,13 +72,11 @@ export default function UserManagementPage() {
   const fetchUsers = useCallback(async (page = 1) => {
     setIsLoading(true);
     try {
-      const response = await axios.get(`/api/admin/users?page=${page}&pageSize=${itemsPerPage}`);
+      const response = await axios.get(`/api/admin/users?page=1&pageSize=1000`);
       if (response.data) {
         // Wrap single item or array
         const items = Array.isArray(response.data) ? response.data : (response.data.items || []);
-        const total = Array.isArray(response.data) ? items.length : (response.data.total || 0);
         setUsers(items);
-        setTotalItems(total);
       }
     } catch (err) {
       console.error('Failed to load users:', err);
@@ -169,6 +171,11 @@ export default function UserManagementPage() {
   // Filter only customers (not admins)
   const customers = users.filter(u => u.email !== 'admin@nexpo.com');
 
+  // Client-side pagination
+  const totalItems = customers.length;
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedCustomers = customers.slice(startIndex, startIndex + itemsPerPage);
+
   return (
     <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-5 duration-300">
       
@@ -208,7 +215,7 @@ export default function UserManagementPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {customers.map((u) => {
+              {paginatedCustomers.map((u) => {
                 const displayStatus = mapStatus(u.status);
                 return (
                   <TableRow 
@@ -292,11 +299,12 @@ export default function UserManagementPage() {
           )}
 
           {/* Pagination Footer */}
-          <Pagination
+          <TablePagination
             currentPage={currentPage}
             totalItems={totalItems}
             itemsPerPage={itemsPerPage}
             onPageChange={setCurrentPage}
+            onItemsPerPageChange={handleItemsPerPageChange}
           />
         </Card>
       </div>

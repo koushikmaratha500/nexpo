@@ -11,9 +11,7 @@ import { formatDate } from '@/lib/date';
 export default function AdminReportsPage() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
   const lastFetchedRef = useRef<string | null>(null);
-  const itemsPerPage = 100;
 
   const [expenses, setExpenses] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -39,7 +37,6 @@ export default function AdminReportsPage() {
       }
     }
     loadReports();
-    setCurrentPage(1);
   }, [startDate, endDate]);
 
   // Compute aggregates dynamically
@@ -63,9 +60,6 @@ export default function AdminReportsPage() {
     }, {} as Record<string, number>);
   }, [expenses]);
 
-  const totalItems = expenses.length;
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedExpenses = expenses.slice(startIndex, startIndex + itemsPerPage);
 
   const handleExportCSV = () => {
     if (expenses.length === 0) return;
@@ -237,83 +231,6 @@ export default function AdminReportsPage() {
         </Card>
       </div>
 
-      {/* Grid details */}
-      <Card className="bg-surface-container-lowest p-0 overflow-hidden" glass={false}>
-        <div className="px-6 py-4 border-b border-outline-variant bg-white/40">
-          <h4 className="font-title-md text-title-md font-bold text-primary">Global Ledger Entries</h4>
-        </div>
-        <div className="w-full overflow-x-auto scrollbar-hide">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>User</TableHead>
-                <TableHead>Title</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead align="right">Amount</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-on-surface-variant">
-                    <div className="flex items-center justify-center gap-2">
-                      <div className="w-5 h-5 border-2 border-primary/20 border-t-primary rounded-full animate-spin"></div>
-                      <span>Loading ledger reports...</span>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : paginatedExpenses.length > 0 ? (
-                paginatedExpenses.map(item => {
-                  const titleVal = item.title || item.merchant || 'Expense';
-                  const userFullName = [item.user?.firstName, item.user?.lastName].filter(Boolean).join(' ') || 'Unknown User';
-                  const categoryName = item.category?.name || 'Other';
-                  const formattedDate = formatDate(item.expenseDate);
-                  const amountVal = typeof item.amount === 'string' ? parseFloat(item.amount) : item.amount;
-                  return (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-bold text-primary">
-                        {userFullName}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-semibold text-on-surface">{titleVal}</span>
-                          <span className="text-[10px] text-on-surface-variant">{item.description || ''}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <span className="px-2 py-0.5 bg-secondary-container/10 text-on-secondary-container rounded-full text-[10px] font-bold">
-                          {categoryName}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-on-surface-variant font-medium">
-                        {formattedDate}
-                      </TableCell>
-                      <TableCell align="right" className="font-mono-data text-mono-data font-bold text-primary">
-                        ₹{amountVal.toFixed(2)}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-on-surface-variant italic">
-                    No ledger entries matched the current filters.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-
-        {/* Pagination Footer */}
-        <Pagination
-          currentPage={currentPage}
-          totalItems={totalItems}
-          itemsPerPage={itemsPerPage}
-          onPageChange={setCurrentPage}
-        />
-      </Card>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table';
-import { Pagination } from '@/components/ui/Pagination';
+import { TablePagination } from '@/components/ui/TablePagination';
 import axios from 'axios';
 import { useToast } from '@/hooks/useToast';
 
@@ -56,11 +56,15 @@ function formatDateTime(iso: string): string {
 export default function AdminManagementPage() {
   const { addToast } = useToast();
   const [admins, setAdmins] = useState<APIAdmin[]>([]);
-  const [totalItems, setTotalItems] = useState(0);
   const [selectedAdmin, setSelectedAdmin] = useState<APIAdmin | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
-  const itemsPerPage = 100;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  const handleItemsPerPageChange = (n: number) => {
+    setItemsPerPage(n);
+    setCurrentPage(1);
+  };
 
   // Modals state
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -90,12 +94,9 @@ export default function AdminManagementPage() {
   const fetchAdmins = useCallback(async (page = 1) => {
     setIsLoading(true);
     try {
-      const response = await axios.get(`/api/admin/adminstrators?page=${page}&pageSize=${itemsPerPage}`);
+      const response = await axios.get(`/api/admin/adminstrators?page=1&pageSize=1000`);
       if (response.data) {
-        const items = response.data.items || [];
-        const total = response.data.total || 0;
-        setAdmins(items);
-        setTotalItems(total);
+        setAdmins(response.data.items || []);
       }
     } catch (err) {
       console.error('Failed to load admins:', err);
@@ -241,7 +242,10 @@ export default function AdminManagementPage() {
     fetchAdminOverview(admin.id);
   };
 
-  const totalPages = Math.max(Math.ceil(totalItems / itemsPerPage), 1);
+  // Client-side pagination
+  const totalItems = admins.length;
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedAdmins = admins.slice(startIndex, startIndex + itemsPerPage);
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-5 duration-300">
@@ -291,7 +295,7 @@ export default function AdminManagementPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {admins.map((u) => {
+              {paginatedAdmins.map((u) => {
                 const displayStatus = mapStatus(u.status);
                 return (
                   <TableRow 
@@ -358,7 +362,7 @@ export default function AdminManagementPage() {
                   </TableRow>
                 );
               })}
-              {admins.length === 0 && (
+              {paginatedAdmins.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={4} className="text-center py-8 text-on-surface-variant italic">
                     No administrators found.
@@ -371,11 +375,12 @@ export default function AdminManagementPage() {
           )}
 
           {/* Pagination Footer */}
-          <Pagination
+          <TablePagination
             currentPage={currentPage}
             totalItems={totalItems}
             itemsPerPage={itemsPerPage}
             onPageChange={setCurrentPage}
+            onItemsPerPageChange={handleItemsPerPageChange}
           />
         </Card>
       </div>
