@@ -3,6 +3,7 @@ import { AdminRepository } from '../repositories/admin.repository';
 import { SessionRepository } from '../repositories/session.repository';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
+import { EmailService } from './email.service';
 import * as jose from 'jose';
 
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'nexpo-ultra-secure-secret-key-123456');
@@ -157,6 +158,86 @@ export class AuthService {
 
   static async logout(jwt: string) {
     await SessionRepository.invalidate(jwt);
+    return { success: true };
+  }
+
+  static async forgotAdminPassword(email: string) {
+    const admin = await AdminRepository.findByEmail(email);
+    if (!admin) {
+      // Always return success to avoid email enumeration
+      return { success: true, simulated: true };
+    }
+
+    // Invalidate any existing active reset tokens for this email
+    await prisma.passwordResetToken.updateMany({
+      where: { email, status: 'A', adminId: admin.id },
+      data: { status: 'I' },
+    });
+
+    // Generate a secure random token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    // Store token in database
+    await prisma.passwordResetToken.create({
+      data: {
+        token: resetToken,
+        email: admin.email,
+        adminId: admin.id,
+        expiresAt,
+        status: 'A',
+      },
+    });
+
+    // Build reset link (simulate since we can't use absolute URLs in dev easily)
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const resetLink = `${baseUrl}/admin/reset-password?token=${resetToken}`;
+
+    await EmailService.sendPasswordResetEmail(admin.email, resetLink, true);
+
+    return { success: true, resetToken };
+  }
+
+  static async resetAdminPassword(token: string, newPassword: string) {
+    const resetRecord = await prisma.passwordResetToken.findUnique({
+      where: { token },
+    });
+
+    if (!resetRecord || !resetRecord.adminId) {
+      throw new Error('Invalid or expired reset token');
+    }
+
+    if (resetRecord.status !== 'A' || resetRecord.usedAt) {
+      throw new Error('Reset token has already been used');
+    }
+
+    if (resetRecord.expiresAt < new Date()) {
+      // Mark token as expired
+      await prisma.passwordResetToken.update({
+        where: { id: resetRecord.id },
+        data: { status: 'I' },
+      });
+      throw new Error('Reset token has expired. Please request a new one.');
+    }
+
+    // Update admin password
+    const hashedPassword = hashPassword(newPassword);
+    await AdminRepository.update(resetRecord.adminId, {
+      passwordHash: hashedPassword,
+    });
+
+    // Mark token as used
+    await prisma.passwordResetToken.update({
+      where: { id: resetRecord.id },
+      data: {
+        status: 'I',
+        usedAt: new Date(),
+      },
+    });
+
+    // Invalidate all existing sessions for this admin
+    await SessionRepository.invalidateAllForAdmin(resetRecord.adminId);
+
     return { success: true };
   }
 }

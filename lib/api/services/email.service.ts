@@ -23,6 +23,37 @@ export class EmailService {
     }
   }
 
+  static async sendPasswordResetEmail(to: string, resetLink: string, isAdmin = false) {
+    const subject = isAdmin
+      ? 'Reset your Admin password - Nexpo Ledger'
+      : 'Reset your Nexpo Ledger password';
+
+    if (!resend) {
+      console.log(`[Email Simulation] Password Reset To: ${to}, Link: ${resetLink}`);
+      return { success: true, simulated: true };
+    }
+
+    try {
+      await resend.emails.send({
+        from: 'Nexpo Ledger <noreply@nexpo.com>',
+        to,
+        subject,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 12px;">
+            <h2 style="color: #111827; margin-bottom: 16px;">Password Reset Request</h2>
+            <p style="color: #374151; font-size: 14px; line-height: 1.6;">We received a request to reset your password. Click the button below to set a new password:</p>
+            <a href="${resetLink}" style="display: inline-block; background: #4f46e5; color: #ffffff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 16px 0;">Reset Password</a>
+            <p style="color: #6b7280; font-size: 12px; line-height: 1.6;">This link will expire in 1 hour. If you didn't request this, you can safely ignore this email.</p>
+          </div>
+        `,
+      });
+      return { success: true };
+    } catch (error) {
+      console.error('Failed to send password reset email:', error);
+      return { success: false, error };
+    }
+  }
+
   static async sendSupportConfirmation(to: string, ticketId: string, name: string) {
     if (!resend) {
       console.log(`[Email Simulation] Support Confirmation To: ${to}, Ticket ID: ${ticketId}`);

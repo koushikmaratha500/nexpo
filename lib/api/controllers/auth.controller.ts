@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { AuthService } from '../services/auth.service';
 import { UserRepository } from '../repositories/user.repository';
 import { AdminRepository } from '../repositories/admin.repository';
-import { registerSchema, loginSchema, verifyOtpSchema, updateProfileSchema } from '../dtos/auth.dto';
+import { registerSchema, loginSchema, verifyOtpSchema, updateProfileSchema, forgotPasswordSchema, resetPasswordSchema } from '../dtos/auth.dto';
 import { EmailService } from '../services/email.service';
 
 export class AuthController {
@@ -196,6 +196,48 @@ export class AuthController {
         return NextResponse.json({ error: message }, { status: 400 });
       }
       return NextResponse.json({ error: error.message || 'Failed to update profile' }, { status: 400 });
+    }
+  }
+
+  static async forgotAdminPassword(req: NextRequest) {
+    try {
+      const body = await req.json();
+      const validated = forgotPasswordSchema.parse(body);
+
+      const result = await AuthService.forgotAdminPassword(validated.email);
+
+      // Always return success to prevent email enumeration
+      return NextResponse.json({
+        success: true,
+        message: 'If the account exists, a password reset link has been sent to your email.',
+        ...(result.resetToken ? { devToken: result.resetToken } : {}),
+      });
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        const message = error.errors?.[0]?.message || error.issues?.[0]?.message || error.message || 'Validation error';
+        return NextResponse.json({ error: message }, { status: 400 });
+      }
+      return NextResponse.json({ error: error.message || 'Failed to request password reset' }, { status: 400 });
+    }
+  }
+
+  static async resetAdminPassword(req: NextRequest) {
+    try {
+      const body = await req.json();
+      const validated = resetPasswordSchema.parse(body);
+
+      await AuthService.resetAdminPassword(validated.token, validated.password);
+
+      return NextResponse.json({
+        success: true,
+        message: 'Password has been reset successfully. You can now sign in with your new password.',
+      });
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        const message = error.errors?.[0]?.message || error.issues?.[0]?.message || error.message || 'Validation error';
+        return NextResponse.json({ error: message }, { status: 400 });
+      }
+      return NextResponse.json({ error: error.message || 'Failed to reset password' }, { status: 400 });
     }
   }
 

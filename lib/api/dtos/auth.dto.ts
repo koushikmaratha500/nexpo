@@ -18,6 +18,15 @@ export const verifyOtpSchema = z.object({
   otp: z.string().min(4, 'OTP must be at least 4 digits').max(8, 'OTP is too long'),
 });
 
+export const forgotPasswordSchema = z.object({
+  email: z.string().email('Provide a valid email address'),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(10, 'Reset token is invalid'),
+  password: z.string().min(7, 'Password must be at least 7 characters long'),
+});
+
 export const updateProfileSchema = z.object({
   firstName: z.string().min(1, 'First name is required').max(50, 'First name is too long').optional(),
   lastName: z.string().optional(),

@@ -35,20 +35,20 @@ const updateAdminSchema = createAdminSchema.partial().extend({
 export class AdminController {
   static async getDashboard(req: NextRequest) {
     try {
-      const [userCount, expenseSum, budgetSum, ticketCount, recentExpenses, recentBudgets] = await Promise.all([
+       const [userCount, expenseSum, budgetSum, ticketCount, recentExpenses, recentBudgets] = await Promise.all([
         prisma.user.count({ where: { status: { not: 'D' } } }),
-        prisma.expense.aggregate({ where: { status: { not: 'D' } }, _sum: { amount: true } }),
-        prisma.budget.aggregate({ where: { status: { not: 'D' } }, _sum: { amount: true } }),
-        prisma.supportTicket.count({ where: { status: 'A' } }), // Open tickets
-        prisma.expense.findMany({
-          where: { status: { not: 'D' } },
-          orderBy: { expenseDate: 'desc' },
+        prisma.transaction.aggregate({ where: { status: { not: 'D' }, type: 'DEBIT' }, _sum: { amount: true } }),
+        prisma.transaction.aggregate({ where: { status: { not: 'D' }, type: 'CREDIT' }, _sum: { amount: true } }),
+        prisma.supportTicket.count({ where: { status: 'A' } }),
+        prisma.transaction.findMany({
+          where: { status: { not: 'D' }, type: 'DEBIT' },
+          orderBy: { transactionDate: 'desc' },
           take: 5,
           include: { user: true, category: true, currency: true },
         }),
-        prisma.budget.findMany({
-          where: { status: { not: 'D' } },
-          orderBy: { date: 'desc' },
+        prisma.transaction.findMany({
+          where: { status: { not: 'D' }, type: 'CREDIT' },
+          orderBy: { transactionDate: 'desc' },
           take: 5,
           include: { user: true, currency: true },
         }),
@@ -76,45 +76,45 @@ export class AdminController {
       const startDateStr = searchParams.get('startDate');
       const endDateStr = searchParams.get('endDate');
 
-      const whereExpense: any = { status: { not: 'D' } };
-      const whereBudget: any = { status: { not: 'D' } };
+      const whereExpense: any = { status: { not: 'D' }, type: 'DEBIT' };
+      const whereBudget: any = { status: { not: 'D' }, type: 'CREDIT' };
 
       if (startDateStr || endDateStr) {
-        whereExpense.expenseDate = {};
-        whereBudget.date = {};
+        whereExpense.transactionDate = {};
+        whereBudget.transactionDate = {};
         if (startDateStr) {
           const sDate = new Date(startDateStr);
           if (!isNaN(sDate.getTime())) {
-            whereExpense.expenseDate.gte = sDate;
-            whereBudget.date.gte = sDate;
+            whereExpense.transactionDate.gte = sDate;
+            whereBudget.transactionDate.gte = sDate;
           }
         }
         if (endDateStr) {
           const eDate = new Date(endDateStr);
           if (!isNaN(eDate.getTime())) {
-            whereExpense.expenseDate.lte = eDate;
-            whereBudget.date.lte = eDate;
+            whereExpense.transactionDate.lte = eDate;
+            whereBudget.transactionDate.lte = eDate;
           }
         }
       }
 
       const [expenses, budgets, totalExpensesCount, totalBudgetsCount] = await Promise.all([
-        prisma.expense.findMany({
+        prisma.transaction.findMany({
           where: whereExpense,
-          orderBy: { expenseDate: 'desc' },
+          orderBy: { transactionDate: 'desc' },
           skip,
           take: pageSize,
           include: { user: true, category: true, currency: true },
         }),
-        prisma.budget.findMany({
+        prisma.transaction.findMany({
           where: whereBudget,
-          orderBy: { date: 'desc' },
+          orderBy: { transactionDate: 'desc' },
           skip,
           take: pageSize,
           include: { user: true, currency: true },
         }),
-        prisma.expense.count({ where: whereExpense }),
-        prisma.budget.count({ where: whereBudget }),
+        prisma.transaction.count({ where: whereExpense }),
+        prisma.transaction.count({ where: whereBudget }),
       ]);
 
       return NextResponse.json({
@@ -220,10 +220,10 @@ export class AdminController {
   static async getUserOverview(req: NextRequest, userId: string) {
     try {
       const [expenseSum, budgetSum, expenseCount, budgetCount] = await Promise.all([
-        prisma.expense.aggregate({ where: { userId, status: { not: 'D' } }, _sum: { amount: true } }),
-        prisma.budget.aggregate({ where: { userId, status: { not: 'D' } }, _sum: { amount: true } }),
-        prisma.expense.count({ where: { userId, status: { not: 'D' } } }),
-        prisma.budget.count({ where: { userId, status: { not: 'D' } } }),
+        prisma.transaction.aggregate({ where: { userId, status: { not: 'D' }, type: 'DEBIT' }, _sum: { amount: true } }),
+        prisma.transaction.aggregate({ where: { userId, status: { not: 'D' }, type: 'CREDIT' }, _sum: { amount: true } }),
+        prisma.transaction.count({ where: { userId, status: { not: 'D' }, type: 'DEBIT' } }),
+        prisma.transaction.count({ where: { userId, status: { not: 'D' }, type: 'CREDIT' } }),
       ]);
 
       return NextResponse.json({

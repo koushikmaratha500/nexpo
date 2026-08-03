@@ -104,9 +104,9 @@ export class DepositService {
     });
 
     // Write audit log
-    await prisma.budgetAudit.create({
+    await prisma.transactionAudit.create({
       data: {
-        budgetId: deposit.id,
+        transactionId: deposit.id,
         action: AuditAction.CREATE,
         newValue: JSON.parse(JSON.stringify(deposit)),
         ipAddress: meta.ip || null,
@@ -161,9 +161,9 @@ export class DepositService {
     const updated = await DepositRepository.update(id, updateData);
 
     // Write audit log
-    await prisma.budgetAudit.create({
+    await prisma.transactionAudit.create({
       data: {
-        budgetId: id,
+        transactionId: id,
         action: AuditAction.UPDATE,
         oldValue: JSON.parse(JSON.stringify(original)),
         newValue: JSON.parse(JSON.stringify(updated)),
@@ -184,9 +184,9 @@ export class DepositService {
     await DepositRepository.softDelete(id);
 
     // Write audit log
-    await prisma.budgetAudit.create({
+    await prisma.transactionAudit.create({
       data: {
-        budgetId: id,
+        transactionId: id,
         action: AuditAction.DELETE,
         oldValue: JSON.parse(JSON.stringify(original)),
         ipAddress: meta.ip || null,

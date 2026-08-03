@@ -16,8 +16,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
 
   const navLinks = [
     { name: 'Dashboard', path: '/customer', icon: 'dashboard' },
-    { name: 'Expenses', path: '/customer/expenses', icon: 'list_alt' },
-    { name: 'Budget', path: '/customer/credit', icon: 'account_balance_wallet' },
+    { name: 'Transactions', path: '/customer/transactions', icon: 'receipt_long' },
     { name: 'Reports', path: '/customer/reports', icon: 'bar_chart' },
     { name: 'Settings', path: '/customer/settings', icon: 'settings' },
   ];
@@ -182,9 +181,9 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
       </nav>
       {/* Floating "+" FAB */}
       <button
-        onClick={() => router.push('/customer/expenses?openAdd=true')}
-        className="fixed right-[50px] bottom-[50px] z-50 w-14 h-14 bg-black hover:bg-neutral-800 text-white rounded-full flex items-center justify-center shadow-xl active:scale-95 hover:scale-105 transition-all duration-200 cursor-pointer"
-        title="Add Expense"
+         onClick={() => router.push('/customer/transactions?openAdd=true')}
+         className="fixed right-[50px] bottom-[50px] z-50 w-14 h-14 bg-black hover:bg-neutral-800 text-white rounded-full flex items-center justify-center shadow-xl active:scale-95 hover:scale-105 transition-all duration-200 cursor-pointer"
+         title="Add Transaction"
       >
         <span className="material-symbols-outlined text-[32px]">add</span>
       </button>

@@ -33,6 +33,11 @@ enum AuditAction {
   ACTIVATE
 }
 
+enum TransactionType {
+  DEBIT
+  CREDIT
+}
+
 model Country {
   id         String    @id @default(uuid())
   name       String    @unique
@@ -53,10 +58,9 @@ model Currency {
   status    Status    @default(A)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
-  users     User[]
-  expenses  Expense[]
-  budgets   Budget[]
-  countries Country[]
+  users      User[]
+  transactions Transaction[]
+  countries   Country[]
 }
 
 model User {
@@ -77,10 +81,10 @@ model User {
   status          Status       @default(A)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
-  expenses        Expense[]
-  budgets         Budget[]
+  transactions    Transaction[]
   sessions        Session[]
   userAudits      UserAudit[]
+  passwordResetTokens PasswordResetToken[]
 }
 
 model Admin {
@@ -94,113 +98,101 @@ model Admin {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   sessions        Session[]
+  passwordResetTokens PasswordResetToken[]
 }
 
 model Category {
-  id        String    @id @default(uuid())
-  name      String    @unique
-  code      String    @unique
-  color     String?
-  icon      String?
-  status    Status    @default(A)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  expenses  Expense[]
+  id            String        @id @default(uuid())
+  name          String        @unique
+  code          String        @unique
+  type          TransactionType       @default(CREDIT)
+  color         String?
+  icon          String?
+  status        Status        @default(A)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  transactions  Transaction[]
 }
 
 model PaymentType {
-  id        String    @id @default(uuid())
-  name      String    @unique
-  code      String    @unique
-  status    Status    @default(A)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  expenses  Expense[]
-  budgets   Budget[]
-}
-
-model Expense {
-  id              String          @id @default(uuid())
-  userId          String
-  categoryId      String
-  currencyId      String
-  paymentTypeId   String
-  user            User            @relation(fields: [userId], references: [id])
-  category        Category        @relation(fields: [categoryId], references: [id])
-  currency        Currency        @relation(fields: [currencyId], references: [id])
-  paymentType     PaymentType     @relation(fields: [paymentTypeId], references: [id])
-  title           String
-  description     String?
-  amount          Decimal         @db.Decimal(18, 2)
-  expenseDate     DateTime
-  notes           String?
-  receiptUrl      String?
-  receiptFileName String?
-  receiptMimeType String?
-  receiptSize     Int?
-  status          Status          @default(A)
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  expensesAudits  ExpensesAudit[]
-
-  @@index([userId])
-  @@index([categoryId])
-  @@index([currencyId])
-  @@index([paymentTypeId])
-  @@index([expenseDate])
+  id            String        @id @default(uuid())
+  name          String        @unique
+  code          String        @unique
+  status        Status        @default(A)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  transactions  Transaction[]
 }
 
 model BudgetType {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  code      String   @unique
-  status    Status   @default(A)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  budgets   Budget[]
+  id            String        @id @default(uuid())
+  name          String        @unique
+  code          String        @unique
+  status        Status        @default(A)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  transactions  Transaction[]
 }
 
 model BudgetDepositType {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  code      String   @unique
-  status    Status   @default(A)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  budgets   Budget[]
+  id            String        @id @default(uuid())
+  name          String        @unique
+  code          String        @unique
+  status        Status        @default(A)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  transactions  Transaction[]
 }
 
-model Budget {
-  id                  String            @id @default(uuid())
+model Transaction {
+  id                  String           @id @default(uuid())
   userId              String
-  currencyId          String
-  budgetDepositTypeId String
-  paymentTypeId       String
-  budgetTypeId        String
-  user                User              @relation(fields: [userId], references: [id])
-  currency            Currency          @relation(fields: [currencyId], references: [id])
-  budgetDepositType   BudgetDepositType @relation(fields: [budgetDepositTypeId], references: [id])
-  paymentType         PaymentType       @relation(fields: [paymentTypeId], references: [id])
-  budgetType          BudgetType        @relation(fields: [budgetTypeId], references: [id])
+  type                TransactionType
+  currencyId          String?
+  categoryId          String?
+  paymentTypeId       String?
+  budgetDepositTypeId String?
+  budgetTypeId        String?
+  user                User             @relation(fields: [userId], references: [id])
+  currency            Currency?        @relation(fields: [currencyId], references: [id])
+  category            Category?        @relation(fields: [categoryId], references: [id])
+  paymentType         PaymentType?     @relation(fields: [paymentTypeId], references: [id])
+  budgetDepositType   BudgetDepositType? @relation(fields: [budgetDepositTypeId], references: [id])
+  budgetType          BudgetType?      @relation(fields: [budgetTypeId], references: [id])
   title               String
-  amount              Decimal           @db.Decimal(18, 2)
-  date                DateTime
+  description         String?
+  amount              Decimal          @db.Decimal(18, 2)
+  transactionDate     DateTime
   notes               String?
   documentUrl         String?
   documentFileName    String?
   documentMimeType    String?
   documentSize        Int?
-  status              Status            @default(A)
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
-  budgetAudits        BudgetAudit[]
+  merchant            String?
+  status              String           @default("A")
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  transactionAudits   TransactionAudit[]
 
   @@index([userId])
-  @@index([currencyId])
-  @@index([budgetDepositTypeId])
-  @@index([paymentTypeId])
-  @@index([budgetTypeId])
-  @@index([date])
+  @@index([type])
+  @@index([transactionDate])
+}
+
+model TransactionAudit {
+  id            String        @id @default(uuid())
+  transactionId String
+  transaction   Transaction   @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  action        AuditAction
+  oldValue      Json?
+  newValue      Json?
+  ipAddress     String?
+  userAgent     String?
+  status        String        @default("A")
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([transactionId])
 }
 
 model Session {
@@ -221,6 +213,25 @@ model Session {
   @@index([adminId])
 }
 
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  token     String    @unique
+  email     String
+  adminId   String?
+  userId    String?
+  user      User?     @relation(fields: [userId], references: [id])
+  admin     Admin?    @relation(fields: [adminId], references: [id])
+  expiresAt DateTime
+  usedAt    DateTime?
+  status    Status    @default(A)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([email])
+  @@index([adminId])
+  @@index([userId])
+}
+
 model UserAudit {
   id        String      @id @default(uuid())
   userId    String
@@ -235,38 +246,6 @@ model UserAudit {
   updatedAt DateTime    @updatedAt
 
   @@index([userId])
-}
-
-model ExpensesAudit {
-  id        String      @id @default(uuid())
-  expenseId String
-  expense   Expense     @relation(fields: [expenseId], references: [id], onDelete: Cascade)
-  action    AuditAction
-  oldValue  Json?
-  newValue  Json?
-  ipAddress String?
-  userAgent String?
-  status    Status      @default(A)
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
-
-  @@index([expenseId])
-}
-
-model BudgetAudit {
-  id        String      @id @default(uuid())
-  budgetId  String
-  budget    Budget      @relation(fields: [budgetId], references: [id], onDelete: Cascade)
-  action    AuditAction
-  oldValue  Json?
-  newValue  Json?
-  ipAddress String?
-  userAgent String?
-  status    Status      @default(A)
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
-
-  @@index([budgetId])
 }
 
 model SupportTicket {

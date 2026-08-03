@@ -5,45 +5,21 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthContext';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { useForm } from 'react-hook-form';
 import { useToast } from '@/hooks/useToast';
 import Link from 'next/link';
 
-export default function LoginPage() {
+export default function AdminLoginPage() {
   const { login, user, isLoading } = useAuth();
   const router = useRouter();
   const { addToast } = useToast();
 
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
 
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    formState: { errors },
-  } = useForm({
-    defaultValues: {
-      email: '',
-      password: '',
-      rememberMe: false,
-    },
-  });
-
-  // Load remembered credentials if present
-  useEffect(() => {
-    const savedRememberMe = localStorage.getItem('nexpo_remember_me');
-    if (savedRememberMe === 'true') {
-      setValue('rememberMe', true);
-      const savedEmail = localStorage.getItem('nexpo_saved_email');
-      const savedPassword = localStorage.getItem('nexpo_saved_password');
-      if (savedEmail) setValue('email', savedEmail);
-      if (savedPassword) setValue('password', savedPassword);
-    }
-  }, [setValue]);
-
-  // If already logged in, redirect
+  // If already logged in as admin, redirect
   useEffect(() => {
     if (!isLoading && user) {
       if (user.role === 'ADMIN') {
@@ -54,32 +30,19 @@ export default function LoginPage() {
     }
   }, [user, isLoading, router]);
 
-  const onSubmit = async (data: any) => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setErrorMsg('');
     setIsSubmitting(true);
 
     try {
-      const result = await login(data.email, data.password);
+      const result = await login(email, password, true);
       if (result.success) {
         addToast('Welcome back! Signed in successfully.', 'success');
-        if (data.rememberMe) {
-          localStorage.setItem('nexpo_remember_me', 'true');
-          localStorage.setItem('nexpo_saved_email', data.email);
-          localStorage.setItem('nexpo_saved_password', data.password);
-        } else {
-          localStorage.removeItem('nexpo_remember_me');
-          localStorage.removeItem('nexpo_saved_email');
-          localStorage.removeItem('nexpo_saved_password');
-        }
       } else {
         const errMsg = result.error || 'Authentication failed.';
-        if (result.pendingVerification) {
-          addToast('Account pending verification. Redirecting to OTP activation page...', 'warning');
-          router.push('/auth/activate');
-        } else {
-          setErrorMsg(errMsg);
-          addToast(errMsg, 'error');
-        }
+        setErrorMsg(errMsg);
+        addToast(errMsg, 'error');
       }
     } catch (err) {
       setErrorMsg('An unexpected error occurred. Please try again.');
@@ -129,12 +92,6 @@ export default function LoginPage() {
                 <div className="h-10 w-full bg-surface-container-low rounded-lg border border-outline-variant/30"></div>
               </div>
 
-              {/* Remember me checkbox skeleton */}
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-surface-container-high"></div>
-                <div className="h-4 w-24 bg-surface-container-high rounded"></div>
-              </div>
-
               {/* Button skeleton */}
               <div className="h-11 w-full bg-surface-container-highest rounded-lg"></div>
             </div>
@@ -160,16 +117,16 @@ export default function LoginPage() {
       <div className="w-full max-w-md z-10">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary text-on-primary mb-4 shadow-sm">
-            <span className="material-symbols-outlined text-lg">corporate_fare</span>
+            <span className="material-symbols-outlined text-lg">shield_person</span>
           </div>
           <h1 className="font-headline-lg text-headline-lg font-black tracking-tight text-primary">Corporate Pro Ledger</h1>
-          <p className="font-body-md text-body-md text-on-surface-variant mt-1">Enterprise Expense Governance</p>
+          <p className="font-body-md text-body-md text-on-surface-variant mt-1">Administrative Access Portal</p>
         </div>
 
         <Card className="flex flex-col gap-6 bg-surface-container-lowest" glass={false}>
           <div>
-            <h2 className="font-title-md text-title-md font-bold text-primary">Sign in to account</h2>
-            <p className="font-label-md text-label-md text-on-surface-variant mt-1">Enter your details to access reports & dashboards.</p>
+            <h2 className="font-title-md text-title-md font-bold text-primary">Admin Sign In</h2>
+            <p className="font-label-md text-label-md text-on-surface-variant mt-1">Enter your credentials to access the governance dashboard.</p>
           </div>
 
           {errorMsg && (
@@ -179,27 +136,20 @@ export default function LoginPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div className="flex flex-col gap-1">
               <label htmlFor="email" className="font-label-md text-label-md text-on-surface font-bold uppercase tracking-wide">
-                Email Address
+                Admin Email
               </label>
               <input
                 id="email"
                 type="email"
-                placeholder="name@company.com"
-                {...register('email', {
-                  required: 'Email is required',
-                  pattern: { value: /^\S+@\S+$/i, message: 'Invalid email address' },
-                })}
+                required
+                placeholder="admin@company.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="block w-full px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary transition-all text-on-surface"
               />
-              {errors.email && (
-                <span className="text-error text-xs font-semibold mt-1 flex items-center gap-1 animate-in slide-in-from-top-1">
-                  <span className="material-symbols-outlined text-xs">error</span>
-                  {errors.email.message}
-                </span>
-              )}
             </div>
 
             <div className="flex flex-col gap-1">
@@ -208,7 +158,7 @@ export default function LoginPage() {
                   Password
                 </label>
                 <Link
-                  href="/auth/forgot-password"
+                  href="/admin/forgot-password"
                   className="font-label-md text-label-md text-on-primary-container hover:underline"
                 >
                   Forgot password?
@@ -218,11 +168,10 @@ export default function LoginPage() {
                 <input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
+                  required
                   placeholder="••••••••"
-                  {...register('password', {
-                    required: 'Password is required',
-                    minLength: { value: 6, message: 'Password must be at least 6 characters' },
-                  })}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   className="block w-full px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary transition-all text-on-surface pr-12"
                 />
                 <button
@@ -237,27 +186,6 @@ export default function LoginPage() {
                   </span>
                 </button>
               </div>
-              {errors.password && (
-                <span className="text-error text-xs font-semibold mt-1 flex items-center gap-1 animate-in slide-in-from-top-1">
-                  <span className="material-symbols-outlined text-xs">error</span>
-                  {errors.password.message}
-                </span>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                id="remember-me"
-                type="checkbox"
-                {...register('rememberMe')}
-                className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary accent-primary cursor-pointer"
-              />
-              <label
-                		htmlFor="remember-me"
-                className="font-label-md text-label-md text-on-surface-variant font-bold cursor-pointer select-none"
-              >
-                Remember me
-              </label>
             </div>
 
             <Button
@@ -268,31 +196,15 @@ export default function LoginPage() {
               {isSubmitting ? (
                 <span className="material-symbols-outlined animate-spin text-sm">sync</span>
               ) : (
-                'Sign In'
+                'Sign In to Admin'
               )}
             </Button>
           </form>
 
           <div className="text-center text-label-md text-on-surface-variant">
-            Need an account?{' '}
-            <Link href="/auth/register" className="text-primary font-bold hover:underline">
-              Register here
-            </Link>
-          </div>
-
-          <div className="relative flex items-center gap-3 my-1">
-            <div className="flex-1 h-px bg-outline-variant/50"></div>
-            <span className="text-label-sm text-on-surface-variant font-bold uppercase tracking-wider">or</span>
-            <div className="flex-1 h-px bg-outline-variant/50"></div>
-          </div>
-
-          <div className="text-center">
-            <Link 
-              href="/admin/login" 
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-outline-variant bg-surface-container-low text-on-surface font-title-md text-title-md hover:bg-surface-container-high transition-all duration-200 w-full justify-center"
-            >
-              <span className="material-symbols-outlined text-sm scale-90">shield_person</span>
-              Admin Portal Login
+            Return to{' '}
+            <Link href="/" className="text-primary font-bold hover:underline">
+              Customer Login
             </Link>
           </div>
         </Card>

@@ -1,42 +1,39 @@
 import { prisma } from '@/lib/prisma';
 
-export class DepositRepository {
+export class TransactionRepository {
   static async findById(id: string, userId?: string) {
     return prisma.transaction.findFirst({
       where: {
         id,
-        type: 'CREDIT',
         status: { not: 'D' },
         ...(userId && { userId }),
       },
-      include: {
-        currency: true,
-        budgetDepositType: true,
-        paymentType: true,
-        budgetType: true,
-      },
+      include: { category: true, currency: true, paymentType: true, budgetDepositType: true, budgetType: true },
     });
   }
 
   static async findAll(params: {
     userId?: string;
+    type?: 'DEBIT' | 'CREDIT';
+    categoryId?: string;
     category?: string;
     startDate?: Date;
     endDate?: Date;
     page?: number;
     pageSize?: number;
   }) {
-    const { userId, category, startDate, endDate, page = 1, pageSize = 5 } = params;
+    const { userId, type, categoryId, category, startDate, endDate, page = 1, pageSize = 5 } = params;
     const skip = (page - 1) * pageSize;
 
     const where: any = {
-      type: 'CREDIT',
       status: { not: 'D' },
       ...(userId && { userId }),
+      ...(type && { type }),
+      ...(categoryId && { categoryId }),
     };
 
     if (category) {
-      where.budgetDepositTypeId = {
+      where.budgetDepositType = {
         name: { equals: category, mode: 'insensitive' }
       };
     }
@@ -57,12 +54,7 @@ export class DepositRepository {
         skip,
         take: pageSize,
         orderBy: { transactionDate: 'desc' },
-        include: {
-          currency: true,
-          budgetDepositType: true,
-          paymentType: true,
-          budgetType: true,
-        },
+        include: { category: true, currency: true, paymentType: true, budgetDepositType: true, budgetType: true },
       }),
       prisma.transaction.count({ where }),
     ]);
@@ -74,15 +66,9 @@ export class DepositRepository {
     return prisma.transaction.create({
       data: {
         ...data,
-        type: 'CREDIT',
         status: 'A',
       },
-      include: {
-        currency: true,
-        budgetDepositType: true,
-        paymentType: true,
-        budgetType: true,
-      },
+      include: { category: true, currency: true, paymentType: true, budgetDepositType: true, budgetType: true },
     });
   }
 
@@ -90,12 +76,7 @@ export class DepositRepository {
     return prisma.transaction.update({
       where: { id },
       data,
-      include: {
-        currency: true,
-        budgetDepositType: true,
-        paymentType: true,
-        budgetType: true,
-      },
+      include: { category: true, currency: true, paymentType: true, budgetDepositType: true, budgetType: true },
     });
   }
 

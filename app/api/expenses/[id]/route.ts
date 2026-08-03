@@ -49,15 +49,16 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       });
     }
 
-    const updatedExpense = await prisma.expense.update({
+    const updatedExpense = await prisma.transaction.update({
       where: { id },
       data: {
         categoryId: category.id,
         currencyId: currency.id,
         paymentTypeId: paymentTypeRec.id,
         title: merchant || 'Expense Title',
+        type: 'DEBIT',
         amount: parseFloat(amount),
-        expenseDate: new Date(date),
+        transactionDate: new Date(date),
         notes: notes || null,
       },
       include: {
@@ -77,7 +78,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
 export async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await props.params;
-    await prisma.expense.delete({
+    await prisma.transaction.delete({
       where: { id },
     });
     return NextResponse.json({ success: true });

@@ -1,8 +1,8 @@
-import { ExpenseRepository } from '../repositories/expense.repository';
+import { TransactionRepository } from '../repositories/transaction.repository';
 import { prisma } from '@/lib/prisma';
 import { AuditAction } from '@prisma/client';
 
-async function resolveIdsForExpense(data: any) {
+async function resolveIdsForTransaction(data: any) {
   let categoryId = data.categoryId || null;
   const categoryName = data.category || data.categoryName;
   if (!categoryId && categoryName) {
@@ -20,8 +20,6 @@ async function resolveIdsForExpense(data: any) {
     }
     categoryId = category.id;
   }
-
-  // Fallback to first active category if still null
   if (!categoryId) {
     const defaultCat = await prisma.category.findFirst({ where: { status: 'A' } });
     categoryId = defaultCat ? defaultCat.id : null;
@@ -64,94 +62,133 @@ async function resolveIdsForExpense(data: any) {
     paymentTypeId = paymentType.id;
   }
 
-  return { categoryId, currencyId, paymentTypeId };
+  let budgetDepositTypeId = data.budgetDepositTypeId || null;
+  const depositTypeName = data.budgetDepositType || data.category;
+  if (!budgetDepositTypeId && depositTypeName) {
+    let depType = await prisma.budgetDepositType.findFirst({
+      where: { name: { equals: depositTypeName, mode: 'insensitive' } },
+    });
+    if (!depType) {
+      depType = await prisma.budgetDepositType.create({
+        data: {
+          name: depositTypeName,
+          code: depositTypeName.toUpperCase().replace(/\s+/g, '_').trim(),
+          status: 'A',
+        },
+      });
+    }
+    budgetDepositTypeId = depType.id;
+  }
+
+  let budgetTypeId = data.budgetTypeId || null;
+  const budgetTypeName = data.budgetType || 'Regular';
+  if (!budgetTypeId && budgetTypeName) {
+    let budType = await prisma.budgetType.findFirst({
+      where: { name: { equals: budgetTypeName, mode: 'insensitive' } },
+    });
+    if (!budType) {
+      budType = await prisma.budgetType.create({
+        data: {
+          name: budgetTypeName,
+          code: budgetTypeName.toUpperCase().replace(/\s+/g, '_').trim(),
+          status: 'A',
+        },
+      });
+    }
+    budgetTypeId = budType.id;
+  }
+
+  return { categoryId, currencyId, paymentTypeId, budgetDepositTypeId, budgetTypeId };
 }
 
-export class ExpenseService {
-  static async createExpense(userId: string, data: any, meta = { ip: '', ua: '' }) {
-    const resolved = await resolveIdsForExpense(data);
+export class TransactionService {
+  static async createTransaction(userId: string, data: any, meta = { ip: '', ua: '' }) {
+    const resolved = await resolveIdsForTransaction(data);
 
-    if (!resolved.categoryId || !resolved.currencyId || !resolved.paymentTypeId) {
-      throw new Error('Missing or invalid category, currency, or payment type configurations');
-    }
-
-    const titleVal = data.title || data.merchant || 'Expense Title';
-    const expense = await ExpenseRepository.create({
+    const transaction = await TransactionRepository.create({
       userId,
+      type: data.type,
       categoryId: resolved.categoryId,
       currencyId: resolved.currencyId,
       paymentTypeId: resolved.paymentTypeId,
-      title: titleVal,
-      description: data.description || titleVal,
+      budgetDepositTypeId: resolved.budgetDepositTypeId,
+      budgetTypeId: resolved.budgetTypeId,
+      title: data.title || data.merchant || 'Transaction Title',
+      description: data.description || data.merchant,
       amount: data.amount,
-      expenseDate: data.expenseDate,
+      transactionDate: data.transactionDate || data.expenseDate || data.date,
       notes: data.notes || null,
-      receiptUrl: data.receiptUrl || null,
-      receiptFileName: data.receiptFileName || null,
-      receiptMimeType: data.receiptMimeType || null,
-      receiptSize: data.receiptSize || null,
+      documentUrl: data.documentUrl || data.receiptUrl || null,
+      documentFileName: data.documentFileName || data.receiptFileName || null,
+      documentMimeType: data.documentMimeType || data.receiptMimeType || null,
+      documentSize: data.documentSize || data.receiptSize || null,
+      merchant: data.merchant || null,
     });
 
-    // Write audit log
     await prisma.transactionAudit.create({
       data: {
-        transactionId: expense.id,
+        transactionId: transaction.id,
         action: AuditAction.CREATE,
-        newValue: JSON.parse(JSON.stringify(expense)),
+        newValue: JSON.parse(JSON.stringify(transaction)),
         ipAddress: meta.ip || null,
         userAgent: meta.ua || null,
       },
     });
 
-    return expense;
+    return transaction;
   }
 
-  static async getExpenses(params: {
+  static async getTransactions(params: {
     userId?: string;
+    type?: 'DEBIT' | 'CREDIT';
     categoryId?: string;
+    category?: string;
     startDate?: Date;
     endDate?: Date;
     page?: number;
     pageSize?: number;
   }) {
-    return ExpenseRepository.findAll(params);
+    return TransactionRepository.findAll(params);
   }
 
-  static async getExpenseById(id: string, userId?: string) {
-    const expense = await ExpenseRepository.findById(id, userId);
-    if (!expense) {
-      throw new Error('Expense not found');
+  static async getTransactionById(id: string, userId?: string) {
+    const transaction = await TransactionRepository.findById(id, userId);
+    if (!transaction) {
+      throw new Error('Transaction not found');
     }
-    return expense;
+    return transaction;
   }
 
-  static async updateExpense(id: string, userId: string, data: any, meta = { ip: '', ua: '' }) {
-    const original = await ExpenseRepository.findById(id, userId);
+  static async updateTransaction(id: string, userId: string, data: any, meta = { ip: '', ua: '' }) {
+    const original = await TransactionRepository.findById(id, userId);
     if (!original) {
-      throw new Error('Expense not found or unauthorized');
+      throw new Error('Transaction not found or unauthorized');
     }
 
-    const resolved = await resolveIdsForExpense(data);
+    const resolved = await resolveIdsForTransaction(data);
     const updateData = {
       ...data,
       ...(resolved.categoryId && { categoryId: resolved.categoryId }),
       ...(resolved.currencyId && { currencyId: resolved.currencyId }),
       ...(resolved.paymentTypeId && { paymentTypeId: resolved.paymentTypeId }),
+      ...(resolved.budgetDepositTypeId && { budgetDepositTypeId: resolved.budgetDepositTypeId }),
+      ...(resolved.budgetTypeId && { budgetTypeId: resolved.budgetTypeId }),
     };
 
     if (data.title || data.merchant) {
       updateData.title = data.title || data.merchant;
     }
 
-    // Clean resolved helpers out of data payload to match Prisma input
     delete updateData.category;
     delete updateData.currency;
     delete updateData.paymentType;
     delete updateData.merchant;
+    delete updateData.budgetDepositType;
+    delete updateData.budgetType;
+    delete updateData.categoryName;
 
-    const updated = await ExpenseRepository.update(id, updateData);
+    const updated = await TransactionRepository.update(id, updateData);
 
-    // Write audit log
     await prisma.transactionAudit.create({
       data: {
         transactionId: id,
@@ -166,15 +203,14 @@ export class ExpenseService {
     return updated;
   }
 
-  static async deleteExpense(id: string, userId: string, meta = { ip: '', ua: '' }) {
-    const original = await ExpenseRepository.findById(id, userId);
+  static async deleteTransaction(id: string, userId: string, meta = { ip: '', ua: '' }) {
+    const original = await TransactionRepository.findById(id, userId);
     if (!original) {
-      throw new Error('Expense not found or unauthorized');
+      throw new Error('Transaction not found or unauthorized');
     }
 
-    await ExpenseRepository.softDelete(id);
+    await TransactionRepository.softDelete(id);
 
-    // Write audit log
     await prisma.transactionAudit.create({
       data: {
         transactionId: id,

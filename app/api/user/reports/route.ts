@@ -14,22 +14,23 @@ export async function GET(req: NextRequest) {
     const where: any = {
       userId: user.id,
       status: { not: 'D' },
+      type: 'DEBIT',
       ...(categoryId && { categoryId }),
     };
 
     if (startDateStr || endDateStr) {
-      where.expenseDate = {};
-      if (startDateStr) where.expenseDate.gte = new Date(startDateStr);
-      if (endDateStr) where.expenseDate.lte = new Date(endDateStr);
+      where.transactionDate = {};
+      if (startDateStr) where.transactionDate.gte = new Date(startDateStr);
+      if (endDateStr) where.transactionDate.lte = new Date(endDateStr);
     }
 
     const [expenses, categoryGroup] = await Promise.all([
-      prisma.expense.findMany({
+      prisma.transaction.findMany({
         where,
-        orderBy: { expenseDate: 'desc' },
+        orderBy: { transactionDate: 'desc' },
         include: { category: true, currency: true },
       }),
-      prisma.expense.groupBy({
+      prisma.transaction.groupBy({
         by: ['categoryId'],
         where,
         _sum: { amount: true },
@@ -39,7 +40,7 @@ export async function GET(req: NextRequest) {
 
     // Fetch category names for the group by result
     const categories = await prisma.category.findMany({
-      where: { id: { in: categoryGroup.map(g => g.categoryId) } },
+      where: { id: { in: categoryGroup.filter(g => g.categoryId !== null).map(g => g.categoryId!) } },
     });
 
     const categoryBreakdown = categoryGroup.map(g => {

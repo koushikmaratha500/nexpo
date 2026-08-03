@@ -100,6 +100,47 @@ async function main() {
         });
     }
 
+    console.log('🌱 Seeding payment types...');
+
+    const paymentTypes = [
+        'Credit Card',
+        'Debit Card',
+        'Cash',
+        'Bank Transfer',
+        'Net Banking',
+        'UPI',
+        'Wallet',
+        'Cheque',
+    ];
+
+    for (const name of paymentTypes) {
+        await prisma.paymentType.upsert({
+            where: { name },
+            update: {},
+            create: {
+                name,
+                code: name.toUpperCase().replace(/\s+/g, '_').trim(),
+                status: 'A',
+            },
+        });
+    }
+
+    console.log('🌱 Seeding budget deposit types...');
+
+    const budgetDepositTypes = ['Cash', 'Account'];
+
+    for (const name of budgetDepositTypes) {
+        await prisma.budgetDepositType.upsert({
+            where: { name },
+            update: {},
+            create: {
+                name,
+                code: name.toUpperCase().trim(),
+                status: 'A',
+            },
+        });
+    }
+
     console.log('🌱 Seeding admin user...');
     const adminEmail = 'admin@nexpo.com';
     const passwordHash = '77257610b3c9ca33bccc9e7fbd8f7509:a9a9acaeb65c6a25f100f040f9ad06cb626df013bf53e86de16f696a30f3c519c8e61c57ad7ff303eb6410ca363dbb6fad50a591aebfffee272c2dbbe7a550c7'; // nexpo-ultra-secure-secret-key-1230456

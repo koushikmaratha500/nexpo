@@ -2,26 +2,25 @@
 
 import React, { useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { Card } from '@/components/ui/Card';
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table';
-import { useExpenseStore } from '@/store/expenseStore';
-import { useCreditStore } from '@/store/creditStore';
-import { useAuth } from '@/components/auth/AuthContext';
-import { parseDate } from '@/lib/date';
+  import { Card } from '@/components/ui/Card';
+  import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table';
+  import { useTransactionStore } from '@/store/transactionStore';
+  import { useAuth } from '@/components/auth/AuthContext';
+  import { parseDate } from '@/lib/date';
 
 export default function CustomerDashboard() {
   const { user } = useAuth();
-  const { expenses, fetchExpenses, isLoading: isExpensesLoading } = useExpenseStore();
-  const { credits, fetchCredits, isLoading: isCreditsLoading } = useCreditStore();
+  const { transactions, fetchTransactions, isLoading } = useTransactionStore();
   const hasFetchedRef = useRef(false);
 
-  // Fetch data on mount
   useEffect(() => {
     if (hasFetchedRef.current) return;
     hasFetchedRef.current = true;
-    fetchExpenses();
-    fetchCredits();
-  }, [fetchExpenses, fetchCredits]);
+    fetchTransactions();
+  }, [fetchTransactions]);
+
+  const expenses = transactions.filter((t) => t.type === 'DEBIT');
+  const credits = transactions.filter((t) => t.type === 'CREDIT');
 
   const totalSpend = React.useMemo(() => {
     return expenses.reduce((sum, item) => sum + item.amount, 0);
@@ -139,7 +138,10 @@ export default function CustomerDashboard() {
       .slice(0, 3);
   }, [expenses]);
 
-  const recentExpenses = expenses.slice(0, 3);
+  // Last 3 transactions of any type, sorted by date descending
+  const recentTransactions = [...transactions]
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, 3);
   const userFirstName = user?.firstName || 'User';
 
   return (
@@ -372,9 +374,9 @@ export default function CustomerDashboard() {
           <Card className="bg-surface-container-lowest p-0 overflow-hidden" glass={false}>
             <div className="p-6 flex items-center justify-between border-b border-outline-variant bg-white/40">
               <h4 className="font-title-md text-title-md font-bold text-primary">Recent Transactions</h4>
-              <Link
-                href="/customer/expenses"
-                className="text-primary font-label-md hover:underline decoration-2 underline-offset-4"
+                <Link
+                  href="/customer/transactions"
+                  className="text-primary font-label-md hover:underline decoration-2 underline-offset-4"
               >
                 View All Activity
               </Link>
@@ -391,39 +393,56 @@ export default function CustomerDashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {recentExpenses.map((item) => {
+                  {recentTransactions.map((item) => {
                     const iconName =
                       item.category === 'FOOD'
                         ? 'restaurant'
                         : item.category === 'TRAVEL'
                         ? 'flight'
+                        : item.type === 'CREDIT'
+                        ? 'account_balance_wallet'
                         : 'payments';
                     return (
                       <TableRow key={item.id}>
                         <TableCell>
                           <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary border border-outline-variant/30">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center border border-outline-variant/30 ${
+                              item.type === 'CREDIT'
+                                ? 'bg-secondary-container/20 text-secondary'
+                                : 'bg-error-container/20 text-error'
+                            }`}>
                               <span className="material-symbols-outlined text-sm">{iconName}</span>
                             </div>
                             <div>
-                              <p className="font-body-md text-body-md font-bold text-primary">{item.merchant}</p>
-                              <p className="font-label-md text-on-surface-variant">{item.description}</p>
+                              <p className="font-body-md text-body-md font-bold text-primary">{item.title || item.merchant}</p>
+                              <p className="font-label-md text-on-surface-variant">{item.description || item.merchant}</p>
                             </div>
                           </div>
                         </TableCell>
                         <TableCell>
-                          <span className="px-2 py-1 bg-secondary-container/10 text-on-secondary-container rounded-full text-[10px] font-bold">
-                            {item.category}
-                          </span>
+                          <div className="flex flex-col gap-1">
+                            <span className="px-2 py-1 bg-secondary-container/10 text-on-secondary-container rounded-full text-[10px] font-bold inline-block w-fit">
+                              {item.category}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold inline-block w-fit ${
+                              item.type === 'CREDIT'
+                                ? 'bg-secondary-container/20 text-secondary'
+                                : 'bg-error-container/30 text-error'
+                            }`}>
+                              {item.type}
+                            </span>
+                          </div>
                         </TableCell>
                         <TableCell className="font-label-md text-on-surface-variant">{item.date}</TableCell>
-                        <TableCell align="right" className="font-mono-data text-mono-data text-right font-bold text-primary">
-                          -₹{item.amount.toFixed(2)}
+                        <TableCell align="right" className={`font-mono-data text-mono-data text-right font-bold ${
+                          item.type === 'CREDIT' ? 'text-secondary' : 'text-primary'
+                        }`}>
+                          {item.type === 'CREDIT' ? '+' : '-'}{item.currency} {item.amount.toFixed(2)}
                         </TableCell>
                       </TableRow>
                     );
                   })}
-                  {recentExpenses.length === 0 && (
+                  {recentTransactions.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={4} className="text-center py-8 text-on-surface-variant italic">
                         No transactions recorded.

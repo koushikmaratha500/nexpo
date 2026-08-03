@@ -2,9 +2,10 @@ import { prisma } from '@/lib/prisma';
 
 export class ExpenseRepository {
   static async findById(id: string, userId?: string) {
-    return prisma.expense.findFirst({
+    return prisma.transaction.findFirst({
       where: {
         id,
+        type: 'DEBIT',
         status: { not: 'D' },
         ...(userId && { userId }),
       },
@@ -24,39 +25,41 @@ export class ExpenseRepository {
     const skip = (page - 1) * pageSize;
 
     const where: any = {
+      type: 'DEBIT',
       status: { not: 'D' },
       ...(userId && { userId }),
       ...(categoryId && { categoryId }),
     };
 
     if (startDate || endDate) {
-      where.expenseDate = {};
+      where.transactionDate = {};
       if (startDate) {
-        where.expenseDate.gte = startDate;
+        where.transactionDate.gte = startDate;
       }
       if (endDate) {
-        where.expenseDate.lte = endDate;
+        where.transactionDate.lte = endDate;
       }
     }
 
     const [items, total] = await Promise.all([
-      prisma.expense.findMany({
+      prisma.transaction.findMany({
         where,
         skip,
         take: pageSize,
-        orderBy: { expenseDate: 'desc' },
+        orderBy: { transactionDate: 'desc' },
         include: { category: true, currency: true, paymentType: true },
       }),
-      prisma.expense.count({ where }),
+      prisma.transaction.count({ where }),
     ]);
 
     return { items, total };
   }
 
   static async create(data: any) {
-    return prisma.expense.create({
+    return prisma.transaction.create({
       data: {
         ...data,
+        type: 'DEBIT',
         status: 'A',
       },
       include: { category: true, currency: true, paymentType: true },
@@ -64,7 +67,7 @@ export class ExpenseRepository {
   }
 
   static async update(id: string, data: any) {
-    return prisma.expense.update({
+    return prisma.transaction.update({
       where: { id },
       data,
       include: { category: true, currency: true, paymentType: true },
@@ -72,7 +75,7 @@ export class ExpenseRepository {
   }
 
   static async softDelete(id: string) {
-    return prisma.expense.update({
+    return prisma.transaction.update({
       where: { id },
       data: { status: 'D' },
     });

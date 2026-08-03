@@ -8,10 +8,34 @@ import { Header } from '@/components/layout/Header';
 import { Modal } from '@/components/ui/Modal';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { logout } = useAuth();
+  const { user, isLoading, logout } = useAuth();
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
+
+  // Public admin auth pages (login, forgot/reset password) render without the admin shell
+  const isPublicAuthPage =
+    pathname.startsWith('/admin/login') ||
+    pathname.startsWith('/admin/forgot-password') ||
+    pathname.startsWith('/admin/reset-password');
+
+  if (isPublicAuthPage) {
+    return <>{children}</>;
+  }
+
+  // Gate admin pages: show loading while checking session, render null (redirect handled by AuthContext) if not an admin.
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4 text-primary">
+        <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+        <p className="font-label-md font-bold uppercase tracking-wider animate-pulse">Checking Admin Session...</p>
+      </div>
+    );
+  }
+
+  if (!user || user.role !== 'ADMIN') {
+    return null; // useEffect in AuthContext will redirect to /admin/login
+  }
 
   const navLinks = [
     { name: 'Dashboard', path: '/admin', icon: 'dashboard' },

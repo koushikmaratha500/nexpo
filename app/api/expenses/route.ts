@@ -3,8 +3,8 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET() {
   try {
-    const expenses = await prisma.expense.findMany({
-      orderBy: { expenseDate: 'desc' },
+    const expenses = await prisma.transaction.findMany({
+      orderBy: { transactionDate: 'desc' },
       include: {
         category: true,
         currency: true,
@@ -88,15 +88,16 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const newExpense = await prisma.expense.create({
+    const newExpense = await prisma.transaction.create({
       data: {
         userId: user.id,
         categoryId: category.id,
         currencyId: currency.id,
         paymentTypeId: paymentTypeRec.id,
         title: merchant || 'Expense Title',
+        type: 'DEBIT',
         amount: parseFloat(amount),
-        expenseDate: new Date(date),
+        transactionDate: new Date(date),
         notes: notes || null,
         status: 'A',
       },

@@ -21,7 +21,7 @@ export interface User {
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string; pendingVerification?: boolean }>;
+  login: (email: string, password: string, isAdmin?: boolean) => Promise<{ success: boolean; error?: string; pendingVerification?: boolean }>;
   logout: () => void;
   isLoading: boolean;
   updateUser: (updatedFields: Partial<User>) => void;
@@ -91,10 +91,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (isLoading) return;
 
     const isAuthPage = pathname.startsWith('/auth') || pathname === '/';
+    const isAdminAuthPage = pathname.startsWith('/admin/login') ||
+      pathname.startsWith('/admin/forgot-password') ||
+      pathname.startsWith('/admin/reset-password');
     
     if (!user) {
-      if (!isAuthPage) {
-        router.push('/');
+      if (!isAuthPage && !isAdminAuthPage) {
+        if (pathname.startsWith('/admin')) {
+          router.push('/admin/login');
+        } else if (!isAuthPage) {
+          router.push('/');
+        }
       }
     } else {
       if (pathname === '/') {
@@ -103,6 +110,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else {
           router.push('/customer');
         }
+      } else if (isAdminAuthPage && user.role === 'ADMIN') {
+        router.push('/admin');
       } else if (pathname.startsWith('/admin') && user.role !== 'ADMIN') {
         router.push('/customer');
       } else if (pathname.startsWith('/customer') && user.role !== 'CUSTOMER') {
@@ -153,8 +162,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const forceLogout = () => {
     clearAuth();
     delete axios.defaults.headers.common['Authorization'];
-    router.push('/');
-    
+
+    // Redirect to the appropriate login based on current path
+    if (pathname.startsWith('/admin')) {
+      router.push('/admin/login');
+    } else {
+      router.push('/');
+    }
+
     // De-duplicate toast warnings if triggered concurrently
     if (!toastShownRef.current) {
       toastShownRef.current = true;
@@ -166,14 +181,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string; pendingVerification?: boolean }> => {
+  const login = async (email: string, password: string, isAdmin = false): Promise<{ success: boolean; error?: string; pendingVerification?: boolean }> => {
     if (!password || password.length <= 6) {
       return { success: false, error: 'Password must be more than 6 characters long.' };
     }
 
     const lowerEmail = email.toLowerCase().trim();
-    const isAdmin = lowerEmail.includes('admin') || lowerEmail === 'admin@nexpo.com';
-    const loginUrl = isAdmin ? '/api/admin/auth/login' : '/api/user/auth/login';
+    const isAdminLogin = isAdmin || lowerEmail.includes('admin') || lowerEmail === 'admin@nexpo.com';
+    const loginUrl = isAdminLogin ? '/api/admin/auth/login' : '/api/user/auth/login';
 
     try {
       const response = await axios.post(loginUrl, { email, password });
@@ -182,7 +197,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const rawUser = response.data.user || response.data.admin;
 
         let loggedInUser: User;
-        if (isAdmin) {
+        if (isAdminLogin) {
           loggedInUser = {
             firstName: rawUser.firstName,
             lastName: rawUser.lastName || '',
