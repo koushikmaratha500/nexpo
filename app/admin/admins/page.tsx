@@ -1,140 +1,247 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table';
-import { MOCK_USERS, User } from '@/mock/data';
 import { Pagination } from '@/components/ui/Pagination';
+import axios from 'axios';
+import { useToast } from '@/hooks/useToast';
+
+interface APIAdmin {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string | null;
+  status: string; // Prisma: A, D, B, I, P
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface SessionInfo {
+  id: string;
+  jwt: string;
+  loginTime: string;
+  logoutTime: string | null;
+  expiryTime: string;
+  status: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+}
+
+function mapStatus(status: string): 'ACTIVE' | 'BLOCKED' | 'PENDING' {
+  switch (status) {
+    case 'A': return 'ACTIVE';
+    case 'B': return 'BLOCKED';
+    case 'P': return 'PENDING';
+    default: return 'PENDING';
+  }
+}
+
+function mapStatusToPrisma(status: string): string {
+  switch (status) {
+    case 'ACTIVE': return 'A';
+    case 'BLOCKED': return 'B';
+    case 'PENDING': return 'P';
+    default: return 'A';
+  }
+}
+
+function formatDateTime(iso: string): string {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
 
 export default function AdminManagementPage() {
-  const router = useRouter();
-  const [users, setUsers] = useState<User[]>(MOCK_USERS);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const { addToast } = useToast();
+  const [admins, setAdmins] = useState<APIAdmin[]>([]);
+  const [totalItems, setTotalItems] = useState(0);
+  const [selectedAdmin, setSelectedAdmin] = useState<APIAdmin | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [isLoading, setIsLoading] = useState(true);
   const itemsPerPage = 100;
-  
+
   // Modals state
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isAdminDetailsOpen, setIsAdminDetailsOpen] = useState(false);
   const [adminModalTab, setAdminModalTab] = useState<'basic' | 'session'>('basic');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+  const [isCreating, setIsCreating] = useState(false);
+  const [isOverviewLoading, setIsOverviewLoading] = useState(false);
+
   // Forms state
   const [editFirstName, setEditFirstName] = useState('');
   const [editLastName, setEditLastName] = useState('');
-  const [editRole, setEditRole] = useState<'ADMIN' | 'CUSTOMER'>('ADMIN');
   const [editStatus, setEditStatus] = useState<'ACTIVE' | 'BLOCKED' | 'PENDING'>('ACTIVE');
 
-  // Load from LocalStorage
-  useEffect(() => {
-    const saved = localStorage.getItem('nexpo_all_users');
-    if (saved) {
-      try {
-        setUsers(JSON.parse(saved));
-      } catch (e) {}
-    } else {
-      localStorage.setItem('nexpo_all_users', JSON.stringify(MOCK_USERS));
-    }
-  }, []);
+  // Create Admin form state
+  const [createFirstName, setCreateFirstName] = useState('');
+  const [createLastName, setCreateLastName] = useState('');
+  const [createEmail, setCreateEmail] = useState('');
+  const [createPassword, setCreatePassword] = useState('');
 
-  // Save to LocalStorage helper
-  const saveUsersToStorage = (updatedUsers: User[]) => {
-    localStorage.setItem('nexpo_all_users', JSON.stringify(updatedUsers));
-  };
+  // Overview data
+  const [adminSessions, setAdminSessions] = useState<SessionInfo[]>([]);
+  const [activeSessions, setActiveSessions] = useState(0);
+
+  // Fetch admins from API
+  const fetchAdmins = useCallback(async (page = 1) => {
+    setIsLoading(true);
+    try {
+      const response = await axios.get(`/api/admin/adminstrators?page=${page}&pageSize=${itemsPerPage}`);
+      if (response.data) {
+        const items = response.data.items || [];
+        const total = response.data.total || 0;
+        setAdmins(items);
+        setTotalItems(total);
+      }
+    } catch (err) {
+      console.error('Failed to load admins:', err);
+      addToast('Failed to load administrators', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [addToast]);
+
+  useEffect(() => {
+    fetchAdmins(currentPage);
+  }, [currentPage, fetchAdmins]);
+
+  // Fetch admin overview (sessions)
+  const fetchAdminOverview = useCallback(async (adminId: string) => {
+    setIsOverviewLoading(true);
+    try {
+      const response = await axios.get(`/api/admin/administrator/${adminId}/overview`);
+      if (response.data) {
+        setAdminSessions(response.data.recentSessions || []);
+        setActiveSessions(response.data.activeSessions || 0);
+      }
+    } catch (err) {
+      console.error('Failed to load admin overview:', err);
+      addToast('Failed to load session history', 'error');
+    } finally {
+      setIsOverviewLoading(false);
+    }
+  }, [addToast]);
 
   // Open Edit Dialog
-  const handleOpenEdit = (user: User) => {
-    setSelectedUser(user);
-    setEditFirstName(user.firstName);
-    setEditLastName(user.lastName || '');
-    setEditRole(user.role);
-    setEditStatus(user.status);
+  const handleOpenEdit = (admin: APIAdmin) => {
+    setSelectedAdmin(admin);
+    setEditFirstName(admin.firstName);
+    setEditLastName(admin.lastName || '');
+    setEditStatus(mapStatus(admin.status));
     setIsEditOpen(true);
   };
 
-  // Save Edit Dialog
-  const handleSaveEdit = (e: React.FormEvent) => {
+  // Save Edit Dialog via API
+  const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedUser) return;
+    if (!selectedAdmin) return;
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      const updated = users.map(u => {
-        if (u.id === selectedUser.id) {
-          return {
-            ...u,
-            firstName: editFirstName,
-            lastName: editLastName,
-            role: editRole,
-            status: editStatus
-          };
-        }
-        return u;
-      });
-
-      setUsers(updated);
-      saveUsersToStorage(updated);
-
-      setSelectedUser(prev => prev ? {
-        ...prev,
+    try {
+      await axios.patch(`/api/admin/administrator/${selectedAdmin.id}`, {
         firstName: editFirstName,
         lastName: editLastName,
-        role: editRole,
-        status: editStatus
-      } : null);
+        status: mapStatusToPrisma(editStatus),
+      });
 
-      setIsSubmitting(false);
+      addToast('Administrator updated successfully', 'success');
       setIsEditOpen(false);
-    }, 600);
+      fetchAdmins(currentPage);
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to update administrator';
+      addToast(errMsg, 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  // Toggle user status instantly (Block/Unblock)
-  const toggleStatus = (user: User) => {
-    const nextStatus: 'ACTIVE' | 'BLOCKED' = user.status === 'BLOCKED' ? 'ACTIVE' : 'BLOCKED';
-    const updated = users.map(u => {
-      if (u.id === user.id) {
-        return { ...u, status: nextStatus };
-      }
-      return u;
-    });
-    setUsers(updated);
-    saveUsersToStorage(updated);
-    if (selectedUser?.id === user.id) {
-      setSelectedUser(prev => prev ? { ...prev, status: nextStatus } : null);
+  // Toggle admin status via API (Block/Unblock)
+  const toggleStatus = async (admin: APIAdmin) => {
+    const nextStatus = admin.status === 'B' ? 'A' : 'B';
+    const displayStatus = admin.status === 'B' ? 'ACTIVE' : 'BLOCKED';
+
+    try {
+      await axios.patch(`/api/admin/administrator/${admin.id}`, {
+        status: nextStatus,
+      });
+
+      addToast(`Administrator ${displayStatus === 'BLOCKED' ? 'blocked' : 'unblocked'}`, 'success');
+      fetchAdmins(currentPage);
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to update administrator status';
+      addToast(errMsg, 'error');
     }
   };
 
   // Open Delete Confirmation
-  const handleOpenDelete = (user: User) => {
-    setSelectedUser(user);
+  const handleOpenDelete = (admin: APIAdmin) => {
+    setSelectedAdmin(admin);
     setIsDeleteOpen(true);
   };
 
-  // Confirm Delete
-  const handleConfirmDelete = () => {
-    if (!selectedUser) return;
+  // Confirm Delete via API
+  const handleConfirmDelete = async () => {
+    if (!selectedAdmin) return;
     setIsSubmitting(true);
-    setTimeout(() => {
-      const updated = users.filter(u => u.id !== selectedUser.id);
-      setUsers(updated);
-      saveUsersToStorage(updated);
-      setSelectedUser(null);
+
+    try {
+      const response = await axios.delete(`/api/admin/administrator/${selectedAdmin.id}`);
+      if (response.data?.success) {
+        addToast('Administrator deleted successfully', 'success');
+        setSelectedAdmin(null);
+        setIsDeleteOpen(false);
+        fetchAdmins(currentPage);
+      }
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to delete administrator';
+      addToast(errMsg, 'error');
+    } finally {
       setIsSubmitting(false);
-      setIsDeleteOpen(false);
-    }, 600);
+    }
   };
 
-  const admins = users.filter(u => u.role === 'ADMIN');
-  const totalItems = admins.length;
+  // Create new admin via API
+  const handleCreateAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsCreating(true);
+
+    try {
+      const response = await axios.post('/api/admin/adminstrators', {
+        firstName: createFirstName,
+        lastName: createLastName || null,
+        email: createEmail,
+        password: createPassword,
+      });
+
+      if (response.data) {
+        addToast('Administrator created successfully', 'success');
+        setCreateFirstName('');
+        setCreateLastName('');
+        setCreateEmail('');
+        setCreatePassword('');
+        fetchAdmins(currentPage);
+      }
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to create administrator';
+      addToast(errMsg, 'error');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  // Open Admin Details Modal
+  const handleOpenAdminDetails = (admin: APIAdmin) => {
+    setSelectedAdmin(admin);
+    setAdminModalTab('basic');
+    setIsAdminDetailsOpen(true);
+    fetchAdminOverview(admin.id);
+  };
+
   const totalPages = Math.max(Math.ceil(totalItems / itemsPerPage), 1);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedAdmins = admins.slice(startIndex, startIndex + itemsPerPage);
-
-
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-5 duration-300">
@@ -151,22 +258,13 @@ export default function AdminManagementPage() {
             variant="primary" 
             className="px-4 py-2"
             onClick={() => {
-              const newId = `u${users.length + 1}`;
-              const newUser: User = {
-                id: newId,
-                firstName: 'New',
-                lastName: 'Admin',
-                email: `newadmin${newId}@nexpo.com`,
-                role: 'ADMIN',
-                status: 'ACTIVE',
-                lastLogin: 'Never'
-              };
-              const updated = [newUser, ...users];
-              setUsers(updated);
-              saveUsersToStorage(updated);
-              setSelectedUser(newUser);
-              setAdminModalTab('basic');
-              setIsAdminDetailsOpen(true);
+              setCreateFirstName('');
+              setCreateLastName('');
+              setCreateEmail('');
+              setCreatePassword('');
+              setIsEditOpen(true);
+              // Switch to create mode by using a special flag
+              setSelectedAdmin(null);
             }}
           >
             <span className="material-symbols-outlined text-sm">shield_person</span>
@@ -176,6 +274,12 @@ export default function AdminManagementPage() {
 
         {/* Table Card */}
         <Card className="bg-surface-container-lowest p-0 overflow-hidden" glass={false}>
+          {isLoading ? (
+            <div className="w-full py-xl flex flex-col items-center justify-center gap-md">
+              <div className="w-12 h-12 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+              <span className="font-label-md text-label-md text-on-surface-variant font-bold">Loading Administrators...</span>
+            </div>
+          ) : (
           <div className="w-full overflow-x-auto scrollbar-hide">
             <Table>
             <TableHeader>
@@ -187,26 +291,19 @@ export default function AdminManagementPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedAdmins.map((u) => {
+              {admins.map((u) => {
+                const displayStatus = mapStatus(u.status);
                 return (
                   <TableRow 
                     key={u.id} 
-                    onClick={() => {
-                      setSelectedUser(u);
-                      setAdminModalTab('basic');
-                      setIsAdminDetailsOpen(true);
-                    }}
+                    onClick={() => handleOpenAdminDetails(u)}
                     className="cursor-pointer hover:bg-surface-container-low transition-colors"
                   >
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        {u.avatar ? (
-                          <img src={u.avatar} alt={`${u.firstName} ${u.lastName || ''}`} className="w-8 h-8 rounded-full border border-outline-variant object-cover" />
-                        ) : (
-                          <div className="w-8 h-8 rounded-full bg-primary-container text-on-primary-container font-bold flex items-center justify-center text-xs">
-                            {(u.firstName?.[0] || '') + (u.lastName?.[0] || '')}
-                          </div>
-                        )}
+                        <div className="w-8 h-8 rounded-full bg-primary-container text-on-primary-container font-bold flex items-center justify-center text-xs">
+                          {(u.firstName?.[0] || '') + (u.lastName?.[0] || '')}
+                        </div>
                         <div className="flex flex-col">
                           <span className="text-primary font-bold">{u.firstName} {u.lastName || ''}</span>
                           <span className="text-[11px] text-on-surface-variant font-mono-data">{u.email}</span>
@@ -215,18 +312,18 @@ export default function AdminManagementPage() {
                     </TableCell>
                     <TableCell>
                       <span className="px-2 py-0.5 rounded-md font-label-md text-[10px] font-bold bg-primary text-on-primary">
-                        {u.role}
+                        ADMIN
                       </span>
                     </TableCell>
                     <TableCell>
                       <span className={`px-2 py-1 rounded-full font-label-md text-[10px] font-bold ${
-                        u.status === 'ACTIVE' 
+                        displayStatus === 'ACTIVE' 
                           ? 'bg-secondary-container/20 text-on-secondary-container'
-                          : u.status === 'PENDING'
+                          : displayStatus === 'PENDING'
                           ? 'bg-tertiary-fixed-dim/20 text-on-tertiary-container'
                           : 'bg-error-container/20 text-error'
                       }`}>
-                        {u.status}
+                        {displayStatus}
                       </span>
                     </TableCell>
                     <TableCell align="right" onClick={(e) => e.stopPropagation()}>
@@ -241,12 +338,12 @@ export default function AdminManagementPage() {
                         <button 
                           onClick={() => toggleStatus(u)}
                           className={`p-1 hover:bg-surface-container rounded-full transition-all ${
-                            u.status === 'BLOCKED' ? 'text-secondary hover:text-secondary' : 'text-on-surface-variant hover:text-error'
+                            u.status === 'B' ? 'text-secondary hover:text-secondary' : 'text-on-surface-variant hover:text-error'
                           }`}
-                          title={u.status === 'BLOCKED' ? 'Unblock Admin' : 'Block Admin'}
+                          title={u.status === 'B' ? 'Unblock Admin' : 'Block Admin'}
                         >
                           <span className="material-symbols-outlined text-sm">
-                            {u.status === 'BLOCKED' ? 'lock_open' : 'lock'}
+                            {u.status === 'B' ? 'lock_open' : 'lock'}
                           </span>
                         </button>
                         <button 
@@ -261,40 +358,48 @@ export default function AdminManagementPage() {
                   </TableRow>
                 );
               })}
+              {admins.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center py-8 text-on-surface-variant italic">
+                    No administrators found.
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
-          </Table>
-        </div>
+            </Table>
+          </div>
+          )}
 
-        {/* Pagination Footer */}
-        <Pagination
-          currentPage={currentPage}
-          totalItems={totalItems}
-          itemsPerPage={itemsPerPage}
-          onPageChange={setCurrentPage}
-        />
-      </Card>
+          {/* Pagination Footer */}
+          <Pagination
+            currentPage={currentPage}
+            totalItems={totalItems}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+          />
+        </Card>
       </div>
 
-      {/* Edit User Modal */}
-      <Modal isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} title="Modify Admin Account" customHeader={true} cardPadding="p-0" maxWidth="max-w-[540px]">
+      {/* Edit/Create Admin Modal */}
+      <Modal isOpen={isEditOpen} onClose={() => { setIsEditOpen(false); setSelectedAdmin(null); }} title={selectedAdmin ? "Modify Admin Account" : "Create New Administrator"} customHeader={true} cardPadding="p-0" maxWidth="max-w-[540px]">
         <div className="px-lg py-md border-b border-outline-variant flex items-center justify-between bg-surface-container-low">
           <div className="flex items-center gap-sm">
             <span className="material-symbols-outlined text-secondary" style={{ fontVariationSettings: "'FILL' 1" }}>edit_note</span>
-            <h2 className="font-headline-sm text-headline-sm text-on-surface">Modify Admin Account</h2>
+            <h2 className="font-headline-sm text-headline-sm text-on-surface">{selectedAdmin ? 'Modify Admin Account' : 'Create New Administrator'}</h2>
           </div>
-          <button type="button" className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container-high transition-colors active:scale-90" onClick={() => setIsEditOpen(false)}>
+          <button type="button" className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container-high transition-colors active:scale-90" onClick={() => { setIsEditOpen(false); setSelectedAdmin(null); }}>
             <span className="material-symbols-outlined text-on-surface-variant">close</span>
           </button>
         </div>
-        <form onSubmit={handleSaveEdit} className="p-lg flex flex-col gap-4">
+        <form onSubmit={selectedAdmin ? handleSaveEdit : handleCreateAdmin} className="p-lg flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1">
               <label className="font-label-md text-label-md text-on-surface-variant font-bold uppercase ml-1">First Name</label>
               <input
                 type="text"
                 required
-                value={editFirstName}
-                onChange={(e) => setEditFirstName(e.target.value)}
+                value={selectedAdmin ? editFirstName : createFirstName}
+                onChange={(e) => selectedAdmin ? setEditFirstName(e.target.value) : setCreateFirstName(e.target.value)}
                 className="w-full h-12 px-md bg-white border border-outline-variant rounded-lg font-body-md text-body-md focus:ring-2 focus:ring-secondary/20 focus:border-secondary outline-none transition-all"
               />
             </div>
@@ -303,61 +408,78 @@ export default function AdminManagementPage() {
               <label className="font-label-md text-label-md text-on-surface-variant font-bold uppercase ml-1">Last Name</label>
               <input
                 type="text"
-                value={editLastName}
-                onChange={(e) => setEditLastName(e.target.value)}
+                value={selectedAdmin ? editLastName : createLastName}
+                onChange={(e) => selectedAdmin ? setEditLastName(e.target.value) : setCreateLastName(e.target.value)}
                 className="w-full h-12 px-md bg-white border border-outline-variant rounded-lg font-body-md text-body-md focus:ring-2 focus:ring-secondary/20 focus:border-secondary outline-none transition-all"
               />
             </div>
           </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="font-label-md text-label-md text-on-surface-variant font-bold uppercase ml-1">Access Level</label>
-            <div className="relative">
-              <select
-                value={editRole}
-                onChange={(e) => setEditRole(e.target.value as any)}
-                className="w-full h-12 px-md bg-white border border-outline-variant rounded-lg font-body-md text-body-md focus:ring-2 focus:ring-secondary/20 focus:border-secondary outline-none transition-all appearance-none"
-              >
-                <option value="ADMIN">ADMIN (System Administrator)</option>
-                <option value="CUSTOMER">CUSTOMER (Standard User)</option>
-              </select>
-              <span className="material-symbols-outlined absolute right-md top-1/2 -translate-y-1/2 pointer-events-none text-outline">expand_more</span>
-            </div>
-          </div>
+          {/* Only show email/password for create mode */}
+          {!selectedAdmin && (
+            <>
+              <div className="flex flex-col gap-1">
+                <label className="font-label-md text-label-md text-on-surface-variant font-bold uppercase ml-1">Email Address</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="admin@company.com"
+                  value={createEmail}
+                  onChange={(e) => setCreateEmail(e.target.value)}
+                  className="w-full h-12 px-md bg-white border border-outline-variant rounded-lg font-body-md text-body-md focus:ring-2 focus:ring-secondary/20 focus:border-secondary outline-none transition-all"
+                />
+              </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="font-label-md text-label-md text-on-surface-variant font-bold uppercase ml-1">Verification Status</label>
-            <div className="relative">
-              <select
-                value={editStatus}
-                onChange={(e) => setEditStatus(e.target.value as any)}
-                className="w-full h-12 px-md bg-white border border-outline-variant rounded-lg font-body-md text-body-md focus:ring-2 focus:ring-secondary/20 focus:border-secondary outline-none transition-all appearance-none"
-              >
-                <option value="ACTIVE">ACTIVE</option>
-                <option value="PENDING">PENDING</option>
-                <option value="BLOCKED">BLOCKED</option>
-              </select>
-              <span className="material-symbols-outlined absolute right-md top-1/2 -translate-y-1/2 pointer-events-none text-outline">expand_more</span>
+              <div className="flex flex-col gap-1">
+                <label className="font-label-md text-label-md text-on-surface-variant font-bold uppercase ml-1">Password</label>
+                <input
+                  type="password"
+                  required
+                  placeholder="••••••••"
+                  value={createPassword}
+                  onChange={(e) => setCreatePassword(e.target.value)}
+                  className="w-full h-12 px-md bg-white border border-outline-variant rounded-lg font-body-md text-body-md focus:ring-2 focus:ring-secondary/20 focus:border-secondary outline-none transition-all"
+                />
+              </div>
+            </>
+          )}
+
+          {/* Only show status for edit mode */}
+          {selectedAdmin && (
+            <div className="flex flex-col gap-1">
+              <label className="font-label-md text-label-md text-on-surface-variant font-bold uppercase ml-1">Verification Status</label>
+              <div className="relative">
+                <select
+                  value={editStatus}
+                  onChange={(e) => setEditStatus(e.target.value as any)}
+                  className="w-full h-12 px-md bg-white border border-outline-variant rounded-lg font-body-md text-body-md focus:ring-2 focus:ring-secondary/20 focus:border-secondary outline-none transition-all appearance-none"
+                >
+                  <option value="ACTIVE">ACTIVE</option>
+                  <option value="PENDING">PENDING</option>
+                  <option value="BLOCKED">BLOCKED</option>
+                </select>
+                <span className="material-symbols-outlined absolute right-md top-1/2 -translate-y-1/2 pointer-events-none text-outline">expand_more</span>
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="flex gap-2 justify-end border-t border-outline-variant/30 pt-4 mt-4">
-            <Button type="button" variant="secondary" onClick={() => setIsEditOpen(false)}>
+            <Button type="button" variant="secondary" onClick={() => { setIsEditOpen(false); setSelectedAdmin(null); }}>
               Cancel
             </Button>
             <Button 
               type="submit" 
               variant="primary" 
               className="flex items-center gap-2" 
-              disabled={isSubmitting}
+              disabled={isSubmitting || isCreating}
             >
-              {isSubmitting && (
+              {(isSubmitting || isCreating) && (
                 <svg className="animate-spin h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
               )}
-              <span>{isSubmitting ? 'Saving...' : 'Save Alterations'}</span>
+              <span>{isSubmitting || isCreating ? 'Saving...' : (selectedAdmin ? 'Save Alterations' : 'Create Administrator')}</span>
             </Button>
           </div>
         </form>
@@ -378,12 +500,12 @@ export default function AdminManagementPage() {
         <div className="mx-xl my-lg p-md bg-surface-container rounded-lg border border-outline-variant flex items-center gap-md">
           <div className="flex-grow min-w-0">
             <p className="font-label-md text-label-md text-on-surface-variant uppercase font-bold text-left">Selected Account</p>
-            <p className="font-body-md text-body-md font-semibold text-on-surface truncate text-left">{selectedUser?.firstName} {selectedUser?.lastName || ''}</p>
-            <p className="font-label-md text-[10px] text-on-surface-variant font-mono-data text-left">{selectedUser?.email}</p>
+            <p className="font-body-md text-body-md font-semibold text-on-surface truncate text-left">{selectedAdmin?.firstName} {selectedAdmin?.lastName || ''}</p>
+            <p className="font-label-md text-[10px] text-on-surface-variant font-mono-data text-left">{selectedAdmin?.email}</p>
           </div>
           <div className="text-right flex-shrink-0">
             <p className="font-label-md text-label-md text-on-surface-variant uppercase font-bold">Role</p>
-            <p className="font-body-md text-body-md text-error font-bold">{selectedUser?.role}</p>
+            <p className="font-body-md text-body-md text-error font-bold">ADMIN</p>
           </div>
         </div>
 
@@ -409,7 +531,7 @@ export default function AdminManagementPage() {
 
       {/* Admin Details Modal */}
       <Modal isOpen={isAdminDetailsOpen} onClose={() => setIsAdminDetailsOpen(false)} title="Admin Profile Details" customHeader={true} cardPadding="p-0" maxWidth="max-w-[540px]">
-        {selectedUser && (
+        {selectedAdmin && (
           <>
             <div className="px-lg py-md border-b border-outline-variant flex items-center justify-between bg-surface-container-low">
               <div className="flex items-center gap-sm">
@@ -422,18 +544,14 @@ export default function AdminManagementPage() {
             </div>
 
             <div className="p-lg bg-surface-container/30 border-b border-outline-variant/30 flex items-center gap-md">
-              {selectedUser.avatar ? (
-                <img src={selectedUser.avatar} alt={`${selectedUser.firstName} ${selectedUser.lastName || ''}`} className="w-16 h-16 rounded-full border border-outline-variant object-cover shadow-sm" />
-              ) : (
-                <div className="w-16 h-16 rounded-full bg-primary-container text-on-primary-container font-black flex items-center justify-center text-xl shadow-sm">
-                  {(selectedUser.firstName?.[0] || '') + (selectedUser.lastName?.[0] || '')}
-                </div>
-              )}
+              <div className="w-16 h-16 rounded-full bg-primary-container text-on-primary-container font-black flex items-center justify-center text-xl shadow-sm">
+                {(selectedAdmin.firstName?.[0] || '') + (selectedAdmin.lastName?.[0] || '')}
+              </div>
               <div className="flex flex-col gap-xs">
                 <h3 className="font-headline-sm text-headline-sm text-primary font-black">
-                  {selectedUser.firstName} {selectedUser.lastName || ''}
+                  {selectedAdmin.firstName} {selectedAdmin.lastName || ''}
                 </h3>
-                <span className="text-xs text-on-surface-variant font-mono-data">{selectedUser.email}</span>
+                <span className="text-xs text-on-surface-variant font-mono-data">{selectedAdmin.email}</span>
               </div>
             </div>
 
@@ -465,19 +583,19 @@ export default function AdminManagementPage() {
                 <div className="grid grid-cols-2 gap-md">
                   <div className="flex flex-col gap-1">
                     <span className="text-on-surface-variant font-bold text-xs uppercase tracking-wider">System ID</span>
-                    <span className="font-mono-data text-primary text-sm font-semibold">{selectedUser.id}</span>
+                    <span className="font-mono-data text-primary text-sm font-semibold">{selectedAdmin.id}</span>
                   </div>
                   <div className="flex flex-col gap-1">
                     <span className="text-on-surface-variant font-bold text-xs uppercase tracking-wider">Verification State</span>
                     <div>
                       <span className={`px-2 py-0.5 rounded-full font-label-md text-[10px] font-bold ${
-                        selectedUser.status === 'ACTIVE'
+                        mapStatus(selectedAdmin.status) === 'ACTIVE'
                           ? 'bg-secondary-container/20 text-on-secondary-container'
-                          : selectedUser.status === 'PENDING'
+                          : mapStatus(selectedAdmin.status) === 'PENDING'
                           ? 'bg-tertiary-fixed-dim/20 text-on-tertiary-container'
                           : 'bg-error-container/20 text-error'
                       }`}>
-                        {selectedUser.status}
+                        {mapStatus(selectedAdmin.status)}
                       </span>
                     </div>
                   </div>
@@ -486,28 +604,65 @@ export default function AdminManagementPage() {
                     <span className="text-primary text-sm font-medium">ADMIN (System Administrator)</span>
                   </div>
                   <div className="flex flex-col gap-1 col-span-2 border-t border-outline-variant/20 pt-md mt-sm">
-                    <span className="text-on-surface-variant font-bold text-xs uppercase tracking-wider">Country/Region</span>
-                    <span className="text-primary text-sm font-medium">India</span>
+                    <span className="text-on-surface-variant font-bold text-xs uppercase tracking-wider">Account Created</span>
+                    <span className="text-primary text-sm font-medium">{formatDateTime(selectedAdmin.createdAt)}</span>
+                  </div>
+                  <div className="flex flex-col gap-1 col-span-2 border-t border-outline-variant/20 pt-md mt-sm">
+                    <span className="text-on-surface-variant font-bold text-xs uppercase tracking-wider">Last Updated</span>
+                    <span className="text-primary text-sm font-medium">{formatDateTime(selectedAdmin.updatedAt)}</span>
                   </div>
                 </div>
               )}
 
               {adminModalTab === 'session' && (
-                <div className="flex flex-col gap-lg pl-md border-l border-outline-variant/60">
-                  <div className="relative flex flex-col gap-1">
-                    <div className="absolute -left-[23px] top-1 w-3.5 h-3.5 rounded-full bg-white border-4 border-primary shadow-sm" />
-                    <span className="text-primary font-bold text-sm">Last Account Authentication</span>
-                    <span className="text-xs text-on-surface-variant">Logged in successfully via Admin Dashboard Console</span>
-                    <span className="text-[10px] text-on-surface-variant/70 font-mono-data mt-0.5">
-                      {selectedUser.lastLogin || 'Today, 11:24 AM'}
-                    </span>
-                  </div>
-                  <div className="relative flex flex-col gap-1 border-t border-outline-variant/20 pt-md">
-                    <div className="absolute -left-[23px] top-5 w-3.5 h-3.5 rounded-full bg-white border-4 border-outline-variant shadow-sm" />
-                    <span className="text-primary font-medium text-sm">Client Session Device</span>
-                    <span className="text-xs text-on-surface-variant">Chrome Web Browser • Windows OS (103.24.88.10)</span>
-                    <span className="text-[10px] text-on-surface-variant/70 font-mono-data mt-0.5">Yesterday, 04:52 PM</span>
-                  </div>
+                <div className="flex flex-col gap-lg">
+                  {isOverviewLoading ? (
+                    <div className="flex items-center justify-center py-xl gap-md">
+                      <div className="w-8 h-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+                      <span className="font-label-md text-label-md text-on-surface-variant font-bold">Loading Sessions...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-sm p-sm bg-surface-container rounded-lg border border-outline-variant">
+                        <span className="material-symbols-outlined text-secondary">circle</span>
+                        <div>
+                          <span className="font-label-md text-label-md text-on-surface-variant font-bold">Active Sessions</span>
+                          <span className="font-body-md text-body-md text-primary font-black">{activeSessions}</span>
+                        </div>
+                      </div>
+
+                      {adminSessions.length === 0 ? (
+                        <div className="py-md text-center text-on-surface-variant italic">
+                          No login sessions recorded.
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-sm">
+                          {adminSessions.map((session) => (
+                            <div key={session.id} className="p-sm bg-surface-container-low rounded-lg border border-outline-variant flex flex-col gap-xs">
+                              <div className="flex justify-between items-center">
+                                <span className={`px-2 py-0.5 rounded-full font-label-md text-[10px] font-bold ${
+                                  session.status === 'A' ? 'bg-secondary-container/20 text-on-secondary-container' : 'bg-error-container/20 text-error'
+                                }`}>
+                                  {session.status === 'A' ? 'ACTIVE' : 'ENDED'}
+                                </span>
+                                <span className="font-label-md text-[10px] text-on-surface-variant/70 font-mono-data">
+                                  {formatDateTime(session.loginTime)}
+                                </span>
+                              </div>
+                              <span className="font-label-md text-label-md text-on-surface-variant/80 truncate">
+                                {session.userAgent || 'Unknown device'}
+                              </span>
+                              {session.ipAddress && (
+                                <span className="font-mono-data text-[10px] text-on-surface-variant/60">
+                                  IP: {session.ipAddress}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -520,7 +675,7 @@ export default function AdminManagementPage() {
                 variant="primary"
                 onClick={() => {
                   setIsAdminDetailsOpen(false);
-                  handleOpenEdit(selectedUser);
+                  if (selectedAdmin) handleOpenEdit(selectedAdmin);
                 }}
               >
                 <span className="material-symbols-outlined text-sm">edit</span>

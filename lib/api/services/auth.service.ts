@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 import { EmailService } from './email.service';
 import * as jose from 'jose';
+import { AuditAction } from '@prisma/client';
 
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'nexpo-ultra-secure-secret-key-123456');
 
@@ -42,7 +43,7 @@ export async function verifyJwt(token: string): Promise<any | null> {
 }
 
 export class AuthService {
-  static async registerUser(data: any) {
+  static async registerUser(data: any, meta = { ip: '', ua: '' }) {
     const existing = await UserRepository.findByEmail(data.email);
     if (existing) {
       throw new Error('Email is already registered');
@@ -72,12 +73,24 @@ export class AuthService {
       currencyId: countryRecord ? countryRecord.currencyId : null,
     });
 
+    // Write audit log
+    await prisma.userAudit.create({
+      data: {
+        userId: user.id,
+        action: AuditAction.CREATE,
+        newValue: { email: user.email, firstName: user.firstName, status: user.status },
+        ipAddress: meta.ip || null,
+        userAgent: meta.ua || null,
+        status: 'A',
+      },
+    });
+
     // In a real environment, we'd also seed OTP to verification table
     // For now we just return the newly created user and simulate OTP sending
     return { user, otp };
   }
 
-  static async verifyUserOtp(email: string, otp: string) {
+  static async verifyUserOtp(email: string, otp: string, meta = { ip: '', ua: '' }) {
     const user = await UserRepository.findByEmail(email);
     if (!user) {
       throw new Error('User not found');
@@ -88,15 +101,30 @@ export class AuthService {
       throw new Error('Invalid verification OTP code');
     }
 
+    const oldStatus = user.status;
+
     await UserRepository.update(user.id, {
       status: 'A', // Activate user
       emailVerified: true,
     });
 
+    // Write audit log
+    await prisma.userAudit.create({
+      data: {
+        userId: user.id,
+        action: AuditAction.ACTIVATE,
+        oldValue: { status: oldStatus, emailVerified: false },
+        newValue: { status: 'A', emailVerified: true },
+        ipAddress: meta.ip || null,
+        userAgent: meta.ua || null,
+        status: 'A',
+      },
+    });
+
     return { success: true };
   }
 
-  static async loginUser(email: string, password: string) {
+  static async loginUser(email: string, password: string, meta = { ip: '', ua: '' }) {
     const user = await UserRepository.findByEmail(email);
     if (!user) {
       throw new Error('Invalid credentials');
@@ -125,10 +153,22 @@ export class AuthService {
       expiryTime,
     });
 
+    // Write audit log
+    await prisma.userAudit.create({
+      data: {
+        userId: user.id,
+        action: AuditAction.LOGIN,
+        newValue: { email: user.email, sessionJwt: jwt.slice(0, 20) + '...' },
+        ipAddress: meta.ip || null,
+        userAgent: meta.ua || null,
+        status: 'A',
+      },
+    });
+
     return { user, token: jwt };
   }
 
-  static async loginAdmin(email: string, password: string) {
+  static async loginAdmin(email: string, password: string, meta = { ip: '', ua: '' }) {
     const admin = await AdminRepository.findByEmail(email);
     if (!admin) {
       throw new Error('Invalid credentials');

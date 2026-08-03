@@ -11,7 +11,9 @@ export class AuthController {
       const body = await req.json();
       const validated = registerSchema.parse(body);
 
-      const { user, otp } = await AuthService.registerUser(validated);
+      const ip = req.headers.get('x-forwarded-for') || 'anonymous';
+      const ua = req.headers.get('user-agent') || '';
+      const { user, otp } = await AuthService.registerUser(validated, { ip, ua });
 
       // Send OTP
       await EmailService.sendOtpEmail(user.email!, otp);
@@ -35,7 +37,9 @@ export class AuthController {
       const body = await req.json();
       const validated = verifyOtpSchema.parse(body);
 
-      await AuthService.verifyUserOtp(validated.email, validated.otp);
+      const ip = req.headers.get('x-forwarded-for') || 'anonymous';
+      const ua = req.headers.get('user-agent') || '';
+      await AuthService.verifyUserOtp(validated.email, validated.otp, { ip, ua });
 
       return NextResponse.json({
         success: true,
@@ -55,7 +59,9 @@ export class AuthController {
       const body = await req.json();
       const validated = loginSchema.parse(body);
 
-      const { user, token } = await AuthService.loginUser(validated.email, validated.password);
+      const ip = req.headers.get('x-forwarded-for') || 'anonymous';
+      const ua = req.headers.get('user-agent') || '';
+      const { user, token } = await AuthService.loginUser(validated.email, validated.password, { ip, ua });
 
       return NextResponse.json({
         success: true,

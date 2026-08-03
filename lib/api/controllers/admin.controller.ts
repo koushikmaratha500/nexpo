@@ -6,6 +6,7 @@ import { ExpenseRepository } from '../repositories/expense.repository';
 import { DepositRepository } from '../repositories/deposit.repository';
 import { hashPassword } from '../services/auth.service';
 import { z } from 'zod';
+import { AuditAction } from '@prisma/client';
 
 const createUserSchema = z.object({
   firstName: z.string().min(1, 'First name is required').max(50),
@@ -127,6 +128,49 @@ export class AdminController {
   }
 
   // Users Management
+  static async getUser(req: NextRequest, id: string) {
+    try {
+      const user = await UserRepository.findById(id);
+      if (!user) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
+      const [expenseSum, budgetSum, expenseCount, budgetCount, sessionCount] = await Promise.all([
+        prisma.transaction.aggregate({ where: { userId: id, status: { not: 'D' }, type: 'DEBIT' }, _sum: { amount: true } }),
+        prisma.transaction.aggregate({ where: { userId: id, status: { not: 'D' }, type: 'CREDIT' }, _sum: { amount: true } }),
+        prisma.transaction.count({ where: { userId: id, status: { not: 'D' }, type: 'DEBIT' } }),
+        prisma.transaction.count({ where: { userId: id, status: { not: 'D' }, type: 'CREDIT' } }),
+        prisma.session.count({ where: { userId: id } }),
+      ]);
+
+      return NextResponse.json({
+        user: {
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName || '',
+          email: user.email || '',
+          mobile: user.mobile || '',
+          status: user.status,
+          emailVerified: user.emailVerified,
+          mobileVerified: user.mobileVerified,
+          profileImageUrl: user.profileImageUrl || null,
+          country: user.country || null,
+          currency: user.currency || null,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+        },
+        stats: {
+          totalExpenses: Number(expenseSum._sum.amount || 0),
+          totalBudgets: Number(budgetSum._sum.amount || 0),
+          expenseCount,
+          budgetCount,
+          sessionCount,
+        },
+      });
+    } catch (error: any) {
+      return NextResponse.json({ error: error.message || 'Failed to fetch user' }, { status: 500 });
+    }
+  }
+
   static async getUsers(req: NextRequest) {
     try {
       const { searchParams } = new URL(req.url);
@@ -163,6 +207,18 @@ export class AdminController {
         emailVerified: true,
       });
 
+      // Write audit log
+      await prisma.userAudit.create({
+        data: {
+          userId: user.id,
+          action: AuditAction.CREATE,
+          newValue: { email: user.email, firstName: user.firstName, status: user.status },
+          ipAddress: req.headers.get('x-forwarded-for') || null,
+          userAgent: req.headers.get('user-agent') || null,
+          status: 'A',
+        },
+      });
+
       return NextResponse.json(user, { status: 201 });
     } catch (error: any) {
       if (error.name === 'ZodError') {
@@ -184,7 +240,32 @@ export class AdminController {
         delete updateData.password;
       }
 
+      const original = await UserRepository.findById(id);
+      if (!original) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
+
       const updated = await UserRepository.update(id, updateData);
+
+      // Write audit log (block/unblock or general update)
+      const action = updateData.status === 'B'
+        ? AuditAction.BLOCK
+        : (updateData.status && original.status === 'B' && updateData.status === 'A')
+          ? AuditAction.ACTIVATE
+          : AuditAction.UPDATE;
+
+      await prisma.userAudit.create({
+        data: {
+          userId: id,
+          action,
+          oldValue: { firstName: original.firstName, lastName: original.lastName, status: original.status },
+          newValue: { firstName: updated.firstName, lastName: updated.lastName, status: updated.status },
+          ipAddress: req.headers.get('x-forwarded-for') || null,
+          userAgent: req.headers.get('user-agent') || null,
+          status: 'A',
+        },
+      });
+
       return NextResponse.json(updated);
     } catch (error: any) {
       if (error.name === 'ZodError') {
@@ -197,7 +278,25 @@ export class AdminController {
 
   static async deleteUser(req: NextRequest, id: string) {
     try {
+      const original = await UserRepository.findById(id);
+      if (!original) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
+
       await UserRepository.softDelete(id);
+
+      // Write audit log
+      await prisma.userAudit.create({
+        data: {
+          userId: id,
+          action: AuditAction.DELETE,
+          oldValue: { email: original.email, firstName: original.firstName, status: original.status },
+          ipAddress: req.headers.get('x-forwarded-for') || null,
+          userAgent: req.headers.get('user-agent') || null,
+          status: 'A',
+        },
+      });
+
       return NextResponse.json({ success: true, message: 'User soft-deleted successfully' });
     } catch (error: any) {
       return NextResponse.json({ error: error.message || 'Failed to delete user' }, { status: 400 });
@@ -244,17 +343,46 @@ export class AdminController {
       const pageSize = parseInt(searchParams.get('pageSize') || '100', 10);
       const skip = (page - 1) * pageSize;
 
-      const [items, total] = await Promise.all([
+      // Fetch both user audit AND transaction audit entries for this user
+      const [userAudits, transactionAudits, userAuditTotal, transactionAuditTotal] = await Promise.all([
         prisma.userAudit.findMany({
-          where: { userId },
+          where: { userId, status: { not: 'D' } },
           skip,
           take: pageSize,
           orderBy: { createdAt: 'desc' },
         }),
-        prisma.userAudit.count({ where: { userId } }),
+        prisma.transactionAudit.findMany({
+          where: {
+            transaction: { userId, status: { not: 'D' } },
+            status: { not: 'D' },
+          },
+          skip,
+          take: pageSize,
+          orderBy: { createdAt: 'desc' },
+          include: {
+            transaction: {
+              select: { id: true, title: true, merchant: true, amount: true, type: true },
+            },
+          },
+        }),
+        prisma.userAudit.count({ where: { userId, status: { not: 'D' } } }),
+        prisma.transactionAudit.count({
+          where: {
+            transaction: { userId, status: { not: 'D' } },
+            status: { not: 'D' },
+          },
+        }),
       ]);
 
-      return NextResponse.json({ items, total });
+      // Merge both audit types and sort by createdAt descending
+      const combinedItems = [...userAudits, ...transactionAudits]
+        .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, pageSize);
+
+      return NextResponse.json({
+        items: combinedItems,
+        total: userAuditTotal + transactionAuditTotal,
+      });
     } catch (error: any) {
       return NextResponse.json({ error: error.message || 'Failed to fetch user audit logs' }, { status: 500 });
     }
