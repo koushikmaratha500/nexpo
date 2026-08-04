@@ -324,6 +324,7 @@ export default function TransactionsPage() {
     : categories;
 
   const hasFetchedRef = useRef(false);
+  const metadataFetchedRef = useRef(false);
 
   useEffect(() => {
     if (hasFetchedRef.current) return;
@@ -333,6 +334,8 @@ export default function TransactionsPage() {
 
   // Load all metadata (categories, payment types, currencies, deposit types) from DB
   useEffect(() => {
+    if (metadataFetchedRef.current) return;
+    metadataFetchedRef.current = true;
     const loadMetadata = async () => {
       try {
         const res = await axios.get('/api/user/metadata');
@@ -343,6 +346,7 @@ export default function TransactionsPage() {
         if (Array.isArray(data.budgetDepositTypes)) setDepositTypes(data.budgetDepositTypes);
       } catch (err) {
         console.error('Failed to load metadata', err);
+        metadataFetchedRef.current = false;
         // Fallback: load categories from dedicated endpoint
         try {
           const res = await axios.get('/api/user/category');

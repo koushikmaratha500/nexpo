@@ -11,11 +11,13 @@ import { formatDate } from '@/lib/date';
 
 interface ExpenseItem {
   id: string;
+  type?: 'DEBIT' | 'CREDIT';
   title?: string;
   merchant?: string;
   description?: string;
   category?: { name?: string };
-  expenseDate: string | Date;
+  budgetDepositType?: { name?: string };
+  transactionDate: string | Date;
   amount: string | number;
 }
 
@@ -25,16 +27,24 @@ interface CategoryOption {
 }
 
 interface CategoryBreakdownItem {
-  categoryId: string;
+  categoryId: string | null;
   categoryName: string;
   totalAmount: number;
 }
+
+type ReportType = 'ALL' | 'DEBIT' | 'CREDIT';
+
+const getTypeBadge = (type?: 'DEBIT' | 'CREDIT'): string => {
+  if (type === 'CREDIT') return 'bg-secondary-container/10 text-on-secondary-container';
+  return 'bg-error-container/30 text-error';
+};
 
 export default function CustomerReportsPage() {
   const toast = useToast();
   const [showFilters, setShowFilters] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [typeFilter, setTypeFilter] = useState<ReportType>('ALL');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -67,7 +77,7 @@ export default function CustomerReportsPage() {
 
   // Fetch report data when filters change
   useEffect(() => {
-    const cacheKey = `${selectedCategory}-${startDate}-${endDate}`;
+    const cacheKey = `${typeFilter}-${selectedCategory}-${startDate}-${endDate}`;
     if (lastFetchedRef.current === cacheKey) return;
     lastFetchedRef.current = cacheKey;
 
@@ -77,7 +87,8 @@ export default function CustomerReportsPage() {
         const catParam = selectedCategory !== 'ALL' ? `&categoryId=${selectedCategory}` : '';
         const startParam = startDate ? `&startDate=${startDate}` : '';
         const endParam = endDate ? `&endDate=${endDate}` : '';
-        const res = await axios.get(`/api/user/reports?pageSize=1000${catParam}${startParam}${endParam}`);
+        const typeParam = `&type=${typeFilter}`;
+        const res = await axios.get(`/api/user/reports?pageSize=1000${typeParam}${catParam}${startParam}${endParam}`);
         
         setExpenses(res.data.expenses || []);
         setCategoryBreakdown(res.data.categoryBreakdown || []);
@@ -91,7 +102,7 @@ export default function CustomerReportsPage() {
     }
     fetchReportData();
     setCurrentPage(1);
-  }, [selectedCategory, startDate, endDate]);
+  }, [typeFilter, selectedCategory, startDate, endDate]);
 
   // Client-side text search filtering
   const filteredExpenses = expenses.filter(e => {
@@ -110,12 +121,13 @@ export default function CustomerReportsPage() {
       toast.addToast('No data to export', 'warning');
       return;
     }
-    const headers = ['Title', 'Description', 'Category', 'Submission Date', 'Amount'];
+    const headers = ['Title', 'Description', 'Type', 'Category', 'Submission Date', 'Amount'];
     const rows = filteredExpenses.map(item => [
       `"${(item.title || item.merchant || '').replace(/"/g, '""')}"`,
       `"${(item.description || '').replace(/"/g, '""')}"`,
-      `"${(item.category?.name || 'Other').replace(/"/g, '""')}"`,
-      `"${formatDate(item.expenseDate)}"`,
+      `"${(item.type || 'DEBIT')}"`,
+      `"${(item.category?.name || item.budgetDepositType?.name || 'Other').replace(/"/g, '""')}"`,
+      `"${formatDate(item.transactionDate)}"`,
       `"${(typeof item.amount === 'string' ? parseFloat(item.amount) : item.amount).toFixed(2)}"`
     ]);
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -153,6 +165,20 @@ export default function CustomerReportsPage() {
             <span>Export CSV</span>
           </Button>
         </div>
+      </div>
+
+      {/* Type Filter */}
+      <div className="flex items-center gap-2">
+        {(['ALL', 'DEBIT', 'CREDIT'] as const).map((f) => (
+          <Button
+            key={f}
+            variant={typeFilter === f ? 'primary' : 'secondary'}
+            onClick={() => setTypeFilter(f)}
+            className="px-3 py-2"
+          >
+            {f === 'ALL' ? 'All' : f}
+          </Button>
+        ))}
       </div>
 
       {/* Collapsible Filter Block */}
@@ -229,7 +255,7 @@ export default function CustomerReportsPage() {
                 const pct = totalSpend > 0 ? Math.round((cat.totalAmount / totalSpend) * 100) : 0;
                 return (
                   <div 
-                    key={cat.categoryId} 
+                    key={cat.categoryName} 
                     className="flex-1 min-w-[80px] text-center p-2 rounded-lg bg-surface-container-low border border-outline-variant/30"
                   >
                     <p className="font-label-md text-[9px] text-on-surface-variant font-bold uppercase truncate" title={cat.categoryName}>{cat.categoryName}</p>
@@ -255,6 +281,7 @@ export default function CustomerReportsPage() {
               <TableRow>
                 <TableHead>Title</TableHead>
                 <TableHead>Category</TableHead>
+                <TableHead>Type</TableHead>
                 <TableHead>Submission Date</TableHead>
                 <TableHead align="right">Amount</TableHead>
               </TableRow>
@@ -262,7 +289,7 @@ export default function CustomerReportsPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center py-8 text-on-surface-variant">
+                  <TableCell colSpan={5} className="text-center py-8 text-on-surface-variant">
                     <div className="flex items-center justify-center gap-2">
                       <div className="w-5 h-5 border-2 border-primary/20 border-t-primary rounded-full animate-spin"></div>
                       <span>Loading statement records...</span>
@@ -271,9 +298,9 @@ export default function CustomerReportsPage() {
                 </TableRow>
               ) : paginatedExpenses.length > 0 ? (
                 paginatedExpenses.map(item => {
-                  const titleVal = item.title || item.merchant || 'Expense';
-                  const categoryName = item.category?.name || 'Other';
-                  const formattedDate = formatDate(item.expenseDate);
+                  const titleVal = item.title || item.merchant || 'Transaction';
+                  const categoryName = item.category?.name || item.budgetDepositType?.name || 'Other';
+                  const formattedDate = formatDate(item.transactionDate);
                   const amountVal = typeof item.amount === 'string' ? parseFloat(item.amount) : item.amount;
                   return (
                     <TableRow key={item.id}>
@@ -288,18 +315,23 @@ export default function CustomerReportsPage() {
                           {categoryName}
                         </span>
                       </TableCell>
+                      <TableCell>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${getTypeBadge(item.type)}`}>
+                          {item.type || 'DEBIT'}
+                        </span>
+                      </TableCell>
                       <TableCell className="text-on-surface-variant font-medium">
                         {formattedDate}
                       </TableCell>
-                      <TableCell align="right" className="font-mono-data text-mono-data font-bold text-primary">
-                        -₹{amountVal.toFixed(2)}
+                      <TableCell align="right" className={`font-mono-data text-mono-data font-bold ${item.type === 'CREDIT' ? 'text-secondary' : 'text-primary'}`}>
+                        {item.type === 'CREDIT' ? '+' : '-'}₹{amountVal.toFixed(2)}
                       </TableCell>
                     </TableRow>
                   );
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center py-8 text-on-surface-variant italic">
+                  <TableCell colSpan={5} className="text-center py-8 text-on-surface-variant italic">
                     No transactions matched the current filters.
                   </TableCell>
                 </TableRow>

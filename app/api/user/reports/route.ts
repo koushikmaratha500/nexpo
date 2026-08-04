@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { authGuard } from '@/lib/api/middleware/authGuard';
 import { handleApiError } from '@/lib/api/middleware/errorHandler';
 
@@ -10,11 +11,14 @@ export async function GET(req: NextRequest) {
     const categoryId = searchParams.get('categoryId') || undefined;
     const startDateStr = searchParams.get('startDate');
     const endDateStr = searchParams.get('endDate');
+    const typeParam = searchParams.get('type') || 'DEBIT';
+    const types: ('DEBIT' | 'CREDIT')[] =
+      typeParam === 'ALL' ? ['DEBIT', 'CREDIT'] : typeParam === 'CREDIT' ? ['CREDIT'] : ['DEBIT'];
 
-    const where: any = {
+    const where: Prisma.TransactionWhereInput = {
       userId: user.id,
       status: { not: 'D' },
-      type: 'DEBIT',
+      type: { in: types },
       ...(categoryId && { categoryId }),
     };
 
@@ -24,40 +28,35 @@ export async function GET(req: NextRequest) {
       if (endDateStr) where.transactionDate.lte = new Date(endDateStr);
     }
 
-    const [expenses, categoryGroup] = await Promise.all([
-      prisma.transaction.findMany({
-        where,
-        orderBy: { transactionDate: 'desc' },
-        include: { category: true, currency: true },
-      }),
-      prisma.transaction.groupBy({
-        by: ['categoryId'],
-        where,
-        _sum: { amount: true },
-        _count: { id: true },
-      }),
-    ]);
-
-    // Fetch category names for the group by result
-    const categories = await prisma.category.findMany({
-      where: { id: { in: categoryGroup.filter(g => g.categoryId !== null).map(g => g.categoryId!) } },
+    const transactions = await prisma.transaction.findMany({
+      where,
+      orderBy: { transactionDate: 'desc' },
+      include: { category: true, currency: true, budgetDepositType: true },
     });
 
-    const categoryBreakdown = categoryGroup.map(g => {
-      const cat = categories.find(c => c.id === g.categoryId);
-      return {
-        categoryId: g.categoryId,
-        categoryName: cat?.name || 'Unknown',
-        categoryColor: cat?.color || '#000000',
-        totalAmount: Number(g._sum.amount || 0),
-        count: g._count.id,
-      };
-    });
+    const breakdownMap = new Map<string, { totalAmount: number; count: number }>();
+    let totalAmount = 0;
+    for (const txn of transactions) {
+      const label = txn.category?.name || txn.budgetDepositType?.name || 'Other';
+      const amount = Number(txn.amount);
+      totalAmount += amount;
+      const entry = breakdownMap.get(label) || { totalAmount: 0, count: 0 };
+      entry.totalAmount += amount;
+      entry.count += 1;
+      breakdownMap.set(label, entry);
+    }
 
-    const totalAmount = categoryBreakdown.reduce((sum, item) => sum + item.totalAmount, 0);
+    const categoryBreakdown = Array.from(breakdownMap.entries())
+      .map(([categoryName, { totalAmount: amount, count }]) => ({
+        categoryId: null,
+        categoryName,
+        totalAmount: amount,
+        count,
+      }))
+      .sort((a, b) => b.totalAmount - a.totalAmount);
 
     return NextResponse.json({
-      expenses,
+      expenses: transactions,
       categoryBreakdown,
       totalAmount,
     });

@@ -26,13 +26,13 @@ export default function CustomerSettingsPage() {
   const { user, updateUser } = useAuth();
   const { addToast } = useToast();
 
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
-  const [mobile, setMobile] = useState('');
-  const [countryId, setCountryId] = useState('');
-  const [currencyId, setCurrencyId] = useState('');
-  const [avatar, setAvatar] = useState('');
+  const [firstName, setFirstName] = useState(() => user?.firstName || '');
+  const [lastName, setLastName] = useState(() => user?.lastName || '');
+  const email = user?.email || '';
+  const mobile = user?.mobile || user?.phone || '';
+  const [countryId, setCountryId] = useState(() => user?.countryId || '');
+  const [currencyId, setCurrencyId] = useState(() => user?.currencyId || '');
+  const [avatar, setAvatar] = useState(() => user?.avatar || '');
 
   const [countries, setCountries] = useState<CountryOption[]>([]);
   const [currencies, setCurrencies] = useState<CurrencyOption[]>([]);
@@ -43,19 +43,6 @@ export default function CustomerSettingsPage() {
   const [isUploading, setIsUploading] = useState(false);
 
   const metadataFetchedRef = useRef(false);
-
-  // Bind values from auth context once user loads (adjust-state-during-render guard)
-  const [boundUserKey, setBoundUserKey] = useState<string | null>(user?.email ?? null);
-  if (user && user.email !== boundUserKey) {
-    setBoundUserKey(user.email);
-    setFirstName(user.firstName || '');
-    setLastName(user.lastName || '');
-    setEmail(user.email || '');
-    setMobile(user.mobile || '');
-    setCountryId(user.countryId || '');
-    setCurrencyId(user.currencyId || '');
-    setAvatar(user.avatar || '');
-  }
 
   // Load countries & currencies on mount
   useEffect(() => {

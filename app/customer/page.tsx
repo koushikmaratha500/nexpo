@@ -18,8 +18,22 @@ export default function CustomerDashboard() {
     fetchTransactions();
   }, [fetchTransactions]);
 
-  const expenses = transactions.filter((t) => t.type === 'DEBIT');
-  const credits = transactions.filter((t) => t.type === 'CREDIT');
+  // Scope all dashboard metrics to the current month.
+  const monthTransactions = React.useMemo(() => {
+    const now = new Date();
+    return transactions.filter((t) => {
+      const d = parseDate(t.date);
+      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    });
+  }, [transactions]);
+  const expenses = React.useMemo(
+    () => monthTransactions.filter((t) => t.type === 'DEBIT'),
+    [monthTransactions]
+  );
+  const credits = React.useMemo(
+    () => monthTransactions.filter((t) => t.type === 'CREDIT'),
+    [monthTransactions]
+  );
 
   const totalSpend = React.useMemo(() => {
     return expenses.reduce((sum, item) => sum + item.amount, 0);
@@ -32,38 +46,28 @@ export default function CustomerDashboard() {
       .reduce((sum, item) => sum + item.amount, 0);
   }, [expenses]);
 
-  // Compute label and value data dynamically for the last 6 months
+  // Compute daily income/expense for the current month
   const chartData = React.useMemo(() => {
-    const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
     const now = new Date();
-    const resultMonths: string[] = [];
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const labels: string[] = [];
     const expenseAmounts: number[] = [];
     const incomeAmounts: number[] = [];
 
-    // Get last 6 months in chronological order
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      resultMonths.push(months[d.getMonth()]);
-
-      // Filter expenses in this month/year
-      const monthlyExp = expenses.filter((e) => {
-        const date = parseDate(e.date);
-        return date.getMonth() === d.getMonth() && date.getFullYear() === d.getFullYear();
-      });
-      const expSum = monthlyExp.reduce((sum, e) => sum + e.amount, 0);
-      expenseAmounts.push(expSum);
-
-      // Filter credits in this month/year
-      const monthlyCred = credits.filter((c) => {
-        const date = parseDate(c.date);
-        return date.getMonth() === d.getMonth() && date.getFullYear() === d.getFullYear();
-      });
-      const credSum = monthlyCred.reduce((sum, c) => sum + c.amount, 0);
-      incomeAmounts.push(credSum);
+    for (let day = 1; day <= daysInMonth; day++) {
+      labels.push(String(day));
+      const dayExp = expenses
+        .filter((e) => parseDate(e.date).getDate() === day)
+        .reduce((sum, e) => sum + e.amount, 0);
+      expenseAmounts.push(dayExp);
+      const dayCred = credits
+        .filter((c) => parseDate(c.date).getDate() === day)
+        .reduce((sum, c) => sum + c.amount, 0);
+      incomeAmounts.push(dayCred);
     }
 
     return {
-      labels: resultMonths,
+      labels,
       income: incomeAmounts,
       expenses: expenseAmounts,
     };
@@ -137,8 +141,8 @@ export default function CustomerDashboard() {
       .slice(0, 3);
   }, [expenses]);
 
-  // Last 3 transactions of any type, sorted by date descending
-  const recentTransactions = [...transactions]
+  // Last 3 transactions of this month, sorted by date descending
+  const recentTransactions = [...monthTransactions]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .slice(0, 3);
   const totalDeposits = credits.reduce((sum, c) => sum + c.amount, 0);
@@ -169,7 +173,7 @@ export default function CustomerDashboard() {
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
               <h4 className="font-title-md text-title-md font-bold text-primary">Ledger Flow Trend Analysis</h4>
-              <p className="font-label-md text-on-surface-variant">Consolidated monthly income and spending flow</p>
+              <p className="font-label-md text-on-surface-variant">Daily income and spending flow for this month</p>
 
               {/* Legend for Income vs Expenses */}
               <div className="flex items-center gap-4 mt-2">
