@@ -1,16 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useTransactionStore, TransactionType } from '@/store/transactionStore';
+import { useState, useEffect, useRef } from 'react';
+import { useTransactionStore, type TransactionType, type Transaction } from '@/store/transactionStore';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table';
 import { TablePagination } from '@/components/ui/TablePagination';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch, type UseFormRegister, type UseFormWatch, type FieldError, type UseFormRegisterReturn } from 'react-hook-form';
 import { useToast } from '@/hooks/useToast';
 import { dateToInputFormat } from '@/lib/date';
 import axios from 'axios';
+import { DocumentUploader } from '@/components/features/transactions';
 
 interface CategoryOption {
   id: string;
@@ -42,124 +43,14 @@ interface CurrencyOption {
   symbol: string;
 }
 
+interface SelectOption {
+  id: string;
+  name?: string;
+  code?: string;
+}
+
 const inputClassName =
   'w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary transition-all text-on-surface';
-
-/* ---------- Reusable Document Uploader ---------- */
-function DocumentUploader({
-  file,
-  onFileChange,
-  existingDocumentName,
-  onRemoveExisting,
-}: {
-  file: File | null;
-  onFileChange: (file: File | null) => void;
-  existingDocumentName?: string;
-  onRemoveExisting?: () => void;
-}) {
-  const [isDragging, setIsDragging] = useState(false);
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const dropped = e.dataTransfer.files?.[0];
-    if (dropped) onFileChange(dropped);
-  };
-
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = e.target.files?.[0] || null;
-    onFileChange(selected);
-    e.target.value = '';
-  };
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
-  return (
-    <div>
-      <span className="font-label-md text-label-md text-on-surface font-bold uppercase tracking-wide block mb-2">
-        Upload Document
-      </span>
-
-      {existingDocumentName && !file && (
-        <div className="flex items-center justify-between gap-3 mb-2 px-4 py-3 rounded-lg border border-outline-variant bg-surface-container-low">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="material-symbols-outlined text-on-surface-variant text-[18px] shrink-0">description</span>
-            <span className="text-body-md text-on-surface truncate font-medium" title={existingDocumentName}>
-              {existingDocumentName}
-            </span>
-          </div>
-          {onRemoveExisting && (
-            <button
-              type="button"
-              onClick={onRemoveExisting}
-              className="text-on-surface-variant hover:text-error p-1 rounded-full hover:bg-error-container/20 transition-colors cursor-pointer shrink-0"
-              title="Remove document"
-            >
-              <span className="material-symbols-outlined text-[18px]">close</span>
-            </button>
-          )}
-        </div>
-      )}
-
-      {file && (
-        <div className="flex items-center justify-between gap-3 mb-2 px-4 py-3 rounded-lg border border-primary/30 bg-primary-fixed/10">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="material-symbols-outlined text-primary text-[18px] shrink-0">upload_file</span>
-            <div className="min-w-0">
-              <span className="text-body-md text-on-surface truncate font-medium block" title={file.name}>
-                {file.name}
-              </span>
-              <span className="text-[10px] text-on-surface-variant font-medium">{formatFileSize(file.size)}</span>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => onFileChange(null)}
-            className="text-on-surface-variant hover:text-error p-1 rounded-full hover:bg-error-container/20 transition-colors cursor-pointer shrink-0"
-            title="Remove file"
-          >
-            <span className="material-symbols-outlined text-[18px]">close</span>
-          </button>
-        </div>
-      )}
-
-      {!file && !existingDocumentName && (
-        <label
-          onDragOver={(e) => {
-            e.preventDefault();
-            setIsDragging(true);
-          }}
-          onDragLeave={() => setIsDragging(false)}
-          onDrop={handleDrop}
-          className={`flex flex-col items-center justify-center gap-1.5 px-4 py-6 rounded-lg border-2 border-dashed cursor-pointer transition-all duration-200 select-none ${
-            isDragging
-              ? 'border-primary bg-primary-fixed/10'
-              : 'border-outline-variant bg-surface-container-low hover:border-primary/50 hover:bg-surface-container'
-          }`}
-        >
-          <input
-            type="file"
-            onChange={handleFileInput}
-            className="sr-only"
-          />
-          <span className={`material-symbols-outlined text-[28px] ${isDragging ? 'text-primary' : 'text-on-surface-variant'}`}>
-            cloud_upload
-          </span>
-          <span className="font-body-md text-body-md text-on-surface font-medium">
-            Drag & drop or <span className="text-primary font-semibold">browse</span>
-          </span>
-          <span className="font-label-md text-label-md text-on-surface-variant">
-            PDF, JPG, PNG, CSV (Max 10 MB)
-          </span>
-        </label>
-      )}
-    </div>
-  );
-}
 
 /* ---------- Reusable Segmented Type Selector (no default selection) ---------- */
 function TypeSelector({
@@ -167,9 +58,9 @@ function TypeSelector({
   watch,
   error,
 }: {
-  register: any;
-  watch: any;
-  error?: any;
+  register: UseFormRegister<TransactionFormInput>;
+  watch: UseFormWatch<TransactionFormInput>;
+  error?: FieldError;
 }) {
   const selectedType = watch('type');
 
@@ -295,8 +186,8 @@ function DepositTypeSelector({
   watch,
   options,
 }: {
-  register: any;
-  watch: any;
+  register: UseFormRegister<TransactionFormInput>;
+  watch: UseFormWatch<TransactionFormInput>;
   options: PaymentTypeOption[];
 }) {
   const selected = watch('depositType');
@@ -344,14 +235,14 @@ function SelectField({
   labelKey = 'name',
   className = '',
 }: {
-  register: any;
+  register: UseFormRegisterReturn;
   error?: string;
   label: string;
   required?: boolean;
-  options: any[];
+  options: SelectOption[];
   placeholder: string;
-  valueKey?: string;
-  labelKey?: string;
+  valueKey?: keyof SelectOption;
+  labelKey?: keyof SelectOption;
   className?: string;
 }) {
   return (
@@ -379,7 +270,7 @@ export default function TransactionsPage() {
   const [search, setSearch] = useState('');
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [editingTransaction, setEditingTransaction] = useState<any>(null);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -396,6 +287,7 @@ export default function TransactionsPage() {
     handleSubmit: handleSubmitAdd,
     reset: resetAdd,
     watch: watchAdd,
+    control: controlAdd,
     formState: { errors: errorsAdd },
   } = useForm<TransactionFormInput>({
     defaultValues: {
@@ -416,11 +308,12 @@ export default function TransactionsPage() {
     handleSubmit: handleSubmitEdit,
     reset: resetEdit,
     watch: watchEdit,
+    control: controlEdit,
     formState: { errors: errorsEdit },
   } = useForm<TransactionFormInput>();
 
-  const selectedAddType = watchAdd('type');
-  const selectedEditType = watchEdit('type');
+  const selectedAddType = useWatch({ control: controlAdd, name: 'type' });
+  const selectedEditType = useWatch({ control: controlEdit, name: 'type' });
 
   // Filter categories based on selected transaction type
   const filteredAddCategories = selectedAddType
@@ -430,7 +323,11 @@ export default function TransactionsPage() {
     ? categories.filter((c) => !c.type || c.type === selectedEditType)
     : categories;
 
+  const hasFetchedRef = useRef(false);
+
   useEffect(() => {
+    if (hasFetchedRef.current) return;
+    hasFetchedRef.current = true;
     fetchTransactions();
   }, [fetchTransactions]);
 
@@ -458,13 +355,31 @@ export default function TransactionsPage() {
     loadMetadata();
   }, []);
 
+  const handleOpenAdd = () => {
+    resetAdd({
+      type: 'DEBIT',
+      title: '',
+      merchant: '',
+      category: '',
+      amount: '',
+      date: dateToInputFormat(new Date()),
+      currency: 'INR',
+      paymentType: '',
+      notes: '',
+      depositType: 'Account',
+    });
+    setAddFile(null);
+    setIsAddOpen(true);
+  };
+
   // Handle floating FAB ?openAdd=true from customer layout
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       if (params.get('openAdd') === 'true') {
-        handleOpenAdd();
         window.history.replaceState({}, '', window.location.pathname);
+        const timer = setTimeout(() => handleOpenAdd(), 0);
+        return () => clearTimeout(timer);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -493,24 +408,7 @@ export default function TransactionsPage() {
   const totalDebit = filteredTransactions.filter((t) => t.type === 'DEBIT').reduce((sum, t) => sum + t.amount, 0);
   const totalCredit = filteredTransactions.filter((t) => t.type === 'CREDIT').reduce((sum, t) => sum + t.amount, 0);
 
-  const handleOpenAdd = () => {
-    resetAdd({
-      type: 'DEBIT',
-      title: '',
-      merchant: '',
-      category: '',
-      amount: '',
-      date: dateToInputFormat(new Date()),
-      currency: 'INR',
-      paymentType: '',
-      notes: '',
-      depositType: 'Account',
-    });
-    setAddFile(null);
-    setIsAddOpen(true);
-  };
-
-  const handleOpenEdit = (t: any) => {
+  const handleOpenEdit = (t: Transaction) => {
     setEditingTransaction(t);
     setEditFile(null);
     setRemoveExistingDoc(false);
@@ -534,7 +432,7 @@ export default function TransactionsPage() {
       try {
         await deleteTransaction(id);
         addToast('Transaction deleted', 'success');
-      } catch (err: any) {
+      } catch {
         addToast('Failed to delete transaction', 'error');
       }
     }
@@ -553,12 +451,12 @@ export default function TransactionsPage() {
         currency: data.currency,
         paymentType: data.paymentType,
         notes: data.notes,
-        depositType: data.type === 'CREDIT' ? data.depositType : undefined,
-      } as any, addFile);
+        depositType: data.type === 'CREDIT' ? (data.depositType as 'Cash' | 'Account') : undefined,
+      }, addFile);
       addToast('Transaction added successfully!', 'success');
       setIsAddOpen(false);
       setAddFile(null);
-    } catch (err: any) {
+    } catch {
       addToast('Failed to add transaction.', 'error');
     } finally {
       setSubmitting(false);
@@ -569,7 +467,7 @@ export default function TransactionsPage() {
     if (!editingTransaction) return;
     setSubmitting(true);
     try {
-      const txnData: any = {
+      const txnData: Partial<Transaction> = {
         type: data.type || 'DEBIT',
         title: data.title,
         merchant: data.merchant,
@@ -579,7 +477,7 @@ export default function TransactionsPage() {
         currency: data.currency,
         paymentType: data.paymentType,
         notes: data.notes,
-        depositType: data.type === 'CREDIT' ? data.depositType : undefined,
+        depositType: data.type === 'CREDIT' ? (data.depositType as 'Cash' | 'Account') : undefined,
       };
       if (removeExistingDoc && !editFile) {
         txnData.documentName = '';
@@ -590,7 +488,7 @@ export default function TransactionsPage() {
       setIsEditOpen(false);
       setEditFile(null);
       setRemoveExistingDoc(false);
-    } catch (err: any) {
+    } catch {
       addToast('Failed to update transaction.', 'error');
     } finally {
       setSubmitting(false);

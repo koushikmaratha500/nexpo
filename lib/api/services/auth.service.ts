@@ -4,6 +4,7 @@ import { SessionRepository } from '../repositories/session.repository';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 import { EmailService } from './email.service';
+import { OtpService } from './otp.service';
 import * as jose from 'jose';
 import { AuditAction } from '@prisma/client';
 
@@ -50,75 +51,65 @@ export class AuthService {
     }
 
     const hashedPassword = hashPassword(data.password);
-    
-    // Create verification OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
 
-    // Lookup country to associate
     const countryRecord = data.country
       ? await prisma.country.findFirst({
           where: { name: { equals: data.country, mode: 'insensitive' } },
         })
       : null;
 
-    // Insert user
     const user = await UserRepository.create({
       firstName: data.firstName,
       lastName: data.lastName || null,
       email: data.email,
       passwordHash: hashedPassword,
-      status: 'P', // PENDING verification
+      status: 'P',
       countryId: countryRecord ? countryRecord.id : null,
       currencyId: countryRecord ? countryRecord.currencyId : null,
     });
 
-    // Write audit log
-    await prisma.userAudit.create({
-      data: {
-        userId: user.id,
-        action: AuditAction.CREATE,
-        newValue: { email: user.email, firstName: user.firstName, status: user.status },
-        ipAddress: meta.ip || null,
-        userAgent: meta.ua || null,
-        status: 'A',
-      },
+    await UserRepository.createAudit({
+      userId: user.id,
+      action: AuditAction.CREATE,
+      newValue: { email: user.email, firstName: user.firstName, status: user.status },
+      ipAddress: meta.ip || null,
+      userAgent: meta.ua || null,
+      status: 'A',
     });
 
-    // In a real environment, we'd also seed OTP to verification table
-    // For now we just return the newly created user and simulate OTP sending
+    const otpEmail = user.email;
+    if (!otpEmail) {
+      throw new Error('User email is missing');
+    }
+    const otp = await OtpService.createOtp(otpEmail, true);
     return { user, otp };
   }
 
   static async verifyUserOtp(email: string, otp: string, meta = { ip: '', ua: '' }) {
+    if (!OtpService.verifyOtp(email, otp)) {
+      throw new Error('Invalid or expired verification OTP code');
+    }
+
     const user = await UserRepository.findByEmail(email);
     if (!user) {
       throw new Error('User not found');
     }
 
-    // In a real scenario we verify OTP from database, here we accept '123456' or verify it
-    if (otp !== '123456') {
-      throw new Error('Invalid verification OTP code');
-    }
-
     const oldStatus = user.status;
 
     await UserRepository.update(user.id, {
-      status: 'A', // Activate user
+      status: 'A',
       emailVerified: true,
     });
 
-    // Write audit log
-    await prisma.userAudit.create({
-      data: {
-        userId: user.id,
-        action: AuditAction.ACTIVATE,
-        oldValue: { status: oldStatus, emailVerified: false },
-        newValue: { status: 'A', emailVerified: true },
-        ipAddress: meta.ip || null,
-        userAgent: meta.ua || null,
-        status: 'A',
-      },
+    await UserRepository.createAudit({
+      userId: user.id,
+      action: AuditAction.ACTIVATE,
+      oldValue: { status: oldStatus, emailVerified: false },
+      newValue: { status: 'A', emailVerified: true },
+      ipAddress: meta.ip || null,
+      userAgent: meta.ua || null,
+      status: 'A',
     });
 
     return { success: true };
@@ -153,16 +144,13 @@ export class AuthService {
       expiryTime,
     });
 
-    // Write audit log
-    await prisma.userAudit.create({
-      data: {
-        userId: user.id,
-        action: AuditAction.LOGIN,
-        newValue: { email: user.email, sessionJwt: jwt.slice(0, 20) + '...' },
-        ipAddress: meta.ip || null,
-        userAgent: meta.ua || null,
-        status: 'A',
-      },
+     await UserRepository.createAudit({
+      userId: user.id,
+      action: AuditAction.LOGIN,
+      newValue: { email: user.email, sessionJwt: jwt.slice(0, 20) + '...' },
+      ipAddress: meta.ip || null,
+      userAgent: meta.ua || null,
+      status: 'A',
     });
 
     return { user, token: jwt };

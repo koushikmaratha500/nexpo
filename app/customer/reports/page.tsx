@@ -9,6 +9,27 @@ import axios from 'axios';
 import { useToast } from '@/hooks/useToast';
 import { formatDate } from '@/lib/date';
 
+interface ExpenseItem {
+  id: string;
+  title?: string;
+  merchant?: string;
+  description?: string;
+  category?: { name?: string };
+  expenseDate: string | Date;
+  amount: string | number;
+}
+
+interface CategoryOption {
+  id: string;
+  name: string;
+}
+
+interface CategoryBreakdownItem {
+  categoryId: string;
+  categoryName: string;
+  totalAmount: number;
+}
+
 export default function CustomerReportsPage() {
   const toast = useToast();
   const [showFilters, setShowFilters] = useState(false);
@@ -19,9 +40,9 @@ export default function CustomerReportsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 100;
 
-  const [expenses, setExpenses] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [categoryBreakdown, setCategoryBreakdown] = useState<any[]>([]);
+  const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
+  const [categories, setCategories] = useState<CategoryOption[]>([]);
+  const [categoryBreakdown, setCategoryBreakdown] = useState<CategoryBreakdownItem[]>([]);
   const [totalSpend, setTotalSpend] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -81,7 +102,6 @@ export default function CustomerReportsPage() {
   });
 
   const totalItems = filteredExpenses.length;
-  const totalPages = Math.max(Math.ceil(totalItems / itemsPerPage), 1);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedExpenses = filteredExpenses.slice(startIndex, startIndex + itemsPerPage);
 

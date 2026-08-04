@@ -128,15 +128,15 @@ export default function SupportPage() {
       const supabase = createClient();
       const filePath = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
       
-      const { data, error } = await supabase.storage
+      const uploadResult = await supabase.storage
         .from('nexpo')
         .upload(filePath, file, {
           cacheControl: '3600',
           upsert: true,
         });
 
-      if (error) {
-        throw error;
+      if (uploadResult.error) {
+        throw uploadResult.error;
       }
 
       const { data: publicData } = supabase.storage
@@ -150,9 +150,10 @@ export default function SupportPage() {
         mimeType: file.type,
       });
       toast.success('Attachment uploaded successfully');
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const e = err as { message?: string };
       console.error(err);
-      setFileError(err.message || 'Failed to upload attachment. Using mock fallback.');
+      setFileError(e.message || 'Failed to upload attachment. Using mock fallback.');
       // Fallback in case storage bucket is unconfigured
       setUploadedFile({
         url: 'https://example.com/mock-receipt.pdf',
@@ -185,9 +186,10 @@ export default function SupportPage() {
       toast.success('Your support ticket has been submitted!');
       reset();
       setUploadedFile(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } }; message?: string };
       console.error(err);
-      const msg = err.response?.data?.error || err.message || 'Failed to submit support ticket';
+      const msg = e.response?.data?.error || e.message || 'Failed to submit support ticket';
       toast.error(msg);
     } finally {
       setIsSubmitting(false);

@@ -1,16 +1,15 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import Link from 'next/link';
-  import { Card } from '@/components/ui/Card';
-  import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table';
-  import { useTransactionStore } from '@/store/transactionStore';
-  import { useAuth } from '@/components/auth/AuthContext';
-  import { parseDate } from '@/lib/date';
+import { Card } from '@/components/ui/Card';
+import { useTransactionStore } from '@/store/transactionStore';
+import { useAuth } from '@/components/auth/AuthContext';
+import { parseDate } from '@/lib/date';
+import { DashboardMetrics, RecentTransactions } from '@/components/features/dashboard';
 
 export default function CustomerDashboard() {
   const { user } = useAuth();
-  const { transactions, fetchTransactions, isLoading } = useTransactionStore();
+  const { transactions, fetchTransactions } = useTransactionStore();
   const hasFetchedRef = useRef(false);
 
   useEffect(() => {
@@ -142,6 +141,7 @@ export default function CustomerDashboard() {
   const recentTransactions = [...transactions]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .slice(0, 3);
+  const totalDeposits = credits.reduce((sum, c) => sum + c.amount, 0);
   const userFirstName = user?.firstName || 'User';
 
   return (
@@ -157,61 +157,7 @@ export default function CustomerDashboard() {
       </div>
 
       {/* Stats Grid */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="bg-surface-container-lowest" glass={false}>
-          <div className="flex justify-between items-start mb-4">
-            <span className="font-label-md text-on-surface-variant opacity-70 uppercase tracking-wider font-bold">
-              Total Expenses
-            </span>
-            <div className="p-2 bg-primary-fixed text-primary rounded-lg shadow-sm">
-              <span className="material-symbols-outlined text-sm">payments</span>
-            </div>
-          </div>
-          <h3 className="font-headline-md text-headline-md font-black text-primary">
-            ₹{totalSpend.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-          </h3>
-          <p className="font-label-md text-secondary flex items-center gap-1 mt-1 font-bold">
-            <span className="material-symbols-outlined text-xs">trending_flat</span>
-            <span>Matched with ledger records</span>
-          </p>
-        </Card>
-
-        <Card className="bg-surface-container-lowest" glass={false}>
-          <div className="flex justify-between items-start mb-4">
-            <span className="font-label-md text-on-surface-variant opacity-70 uppercase tracking-wider font-bold">
-              Today's Spend
-            </span>
-            <div className="p-2 bg-secondary-container text-on-secondary-container rounded-lg shadow-sm">
-              <span className="material-symbols-outlined text-sm">today</span>
-            </div>
-          </div>
-          <h3 className="font-headline-md text-headline-md font-black text-primary">
-            ₹{todaySpend.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-          </h3>
-          <p className="font-label-md text-on-surface-variant flex items-center gap-1 mt-1">
-            <span className="material-symbols-outlined text-xs">schedule</span>
-            <span>Real-time tracking</span>
-          </p>
-        </Card>
-
-        <Card className="bg-surface-container-lowest" glass={false}>
-          <div className="flex justify-between items-start mb-4">
-            <span className="font-label-md text-on-surface-variant opacity-70 uppercase tracking-wider font-bold">
-              Total Deposits
-            </span>
-            <div className="p-2 bg-surface-container-highest text-on-surface-variant rounded-lg shadow-sm">
-              <span className="material-symbols-outlined text-sm">account_balance_wallet</span>
-            </div>
-          </div>
-          <h3 className="font-headline-md text-headline-md font-black text-primary">
-            ₹{credits.reduce((sum, c) => sum + c.amount, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-          </h3>
-          <p className="font-label-md text-on-surface-variant flex items-center gap-1 mt-1 font-bold">
-            <span className="material-symbols-outlined text-xs">payments</span>
-            <span>Across all funding sources</span>
-          </p>
-        </Card>
-      </section>
+      <DashboardMetrics totalSpend={totalSpend} todaySpend={todaySpend} totalDeposits={totalDeposits} />
 
       {/* Bento Grid Content */}
       <section className="grid grid-cols-12 gap-6">
@@ -370,90 +316,7 @@ export default function CustomerDashboard() {
         </Card>
 
         {/* Recent Transactions Table */}
-        <div className="col-span-12">
-          <Card className="bg-surface-container-lowest p-0 overflow-hidden" glass={false}>
-            <div className="p-6 flex items-center justify-between border-b border-outline-variant bg-white/40">
-              <h4 className="font-title-md text-title-md font-bold text-primary">Recent Transactions</h4>
-                <Link
-                  href="/customer/transactions"
-                  className="text-primary font-label-md hover:underline decoration-2 underline-offset-4"
-              >
-                View All Activity
-              </Link>
-            </div>
-
-            <div className="w-full overflow-x-auto scrollbar-hide">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Transaction</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead align="right">Amount</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {recentTransactions.map((item) => {
-                    const iconName =
-                      item.category === 'FOOD'
-                        ? 'restaurant'
-                        : item.category === 'TRAVEL'
-                        ? 'flight'
-                        : item.type === 'CREDIT'
-                        ? 'account_balance_wallet'
-                        : 'payments';
-                    return (
-                      <TableRow key={item.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-4">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center border border-outline-variant/30 ${
-                              item.type === 'CREDIT'
-                                ? 'bg-secondary-container/20 text-secondary'
-                                : 'bg-error-container/20 text-error'
-                            }`}>
-                              <span className="material-symbols-outlined text-sm">{iconName}</span>
-                            </div>
-                            <div>
-                              <p className="font-body-md text-body-md font-bold text-primary">{item.title || item.merchant}</p>
-                              <p className="font-label-md text-on-surface-variant">{item.description || item.merchant}</p>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col gap-1">
-                            <span className="px-2 py-1 bg-secondary-container/10 text-on-secondary-container rounded-full text-[10px] font-bold inline-block w-fit">
-                              {item.category}
-                            </span>
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold inline-block w-fit ${
-                              item.type === 'CREDIT'
-                                ? 'bg-secondary-container/20 text-secondary'
-                                : 'bg-error-container/30 text-error'
-                            }`}>
-                              {item.type}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-label-md text-on-surface-variant">{item.date}</TableCell>
-                        <TableCell align="right" className={`font-mono-data text-mono-data text-right font-bold ${
-                          item.type === 'CREDIT' ? 'text-secondary' : 'text-primary'
-                        }`}>
-                          {item.type === 'CREDIT' ? '+' : '-'}{item.currency} {item.amount.toFixed(2)}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                  {recentTransactions.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-center py-8 text-on-surface-variant italic">
-                        No transactions recorded.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </Card>
-        </div>
+        <RecentTransactions transactions={recentTransactions} />
       </section>
     </div>
   );

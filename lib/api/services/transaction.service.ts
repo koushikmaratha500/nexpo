@@ -1,10 +1,34 @@
 import { TransactionRepository } from '../repositories/transaction.repository';
 import { prisma } from '@/lib/prisma';
 import { AuditAction } from '@prisma/client';
+import { createTransactionSchema } from '../dtos/transaction.dto';
+import type { z } from 'zod';
 
-async function resolveIdsForTransaction(data: any) {
-  let categoryId = data.categoryId || null;
-  const categoryName = data.category || data.categoryName;
+type CreateTransactionData = z.infer<typeof createTransactionSchema>;
+
+type TransactionData = CreateTransactionData & {
+  expenseDate?: string | Date;
+  date?: string | Date;
+  receiptUrl?: string | null;
+  receiptFileName?: string | null;
+  receiptMimeType?: string | null;
+  receiptSize?: number | null;
+  categoryName?: string | null;
+};
+
+interface TransactionMeta {
+  ip?: string;
+  ua?: string;
+}
+
+async function resolveIdsForTransaction(data: Record<string, unknown>) {
+  const str = (key: string): string | undefined => {
+    const val = data[key];
+    return typeof val === 'string' ? val : undefined;
+  };
+
+  let categoryId = str('categoryId') || null;
+  const categoryName = str('category') || str('categoryName');
   if (!categoryId && categoryName) {
     let category = await prisma.category.findFirst({
       where: { OR: [{ name: { equals: categoryName, mode: 'insensitive' } }, { code: { equals: categoryName.toUpperCase() } }] },
@@ -25,8 +49,8 @@ async function resolveIdsForTransaction(data: any) {
     categoryId = defaultCat ? defaultCat.id : null;
   }
 
-  let currencyId = data.currencyId || null;
-  const currencyCode = data.currency || data.currencyCode || 'INR';
+  let currencyId = str('currencyId') || null;
+  const currencyCode = str('currency') || str('currencyCode') || 'INR';
   if (!currencyId && currencyCode) {
     let currency = await prisma.currency.findUnique({
       where: { code: currencyCode.toUpperCase() },
@@ -44,8 +68,8 @@ async function resolveIdsForTransaction(data: any) {
     currencyId = currency.id;
   }
 
-  let paymentTypeId = data.paymentTypeId || null;
-  const paymentTypeName = data.paymentType || data.paymentTypeName || 'Credit Card';
+  let paymentTypeId = str('paymentTypeId') || null;
+  const paymentTypeName = str('paymentType') || str('paymentTypeName') || 'Credit Card';
   if (!paymentTypeId && paymentTypeName) {
     let paymentType = await prisma.paymentType.findFirst({
       where: { name: { equals: paymentTypeName, mode: 'insensitive' } },
@@ -62,8 +86,8 @@ async function resolveIdsForTransaction(data: any) {
     paymentTypeId = paymentType.id;
   }
 
-  let budgetDepositTypeId = data.budgetDepositTypeId || null;
-  const depositTypeName = data.budgetDepositType || data.category;
+  let budgetDepositTypeId = str('budgetDepositTypeId') || null;
+  const depositTypeName = str('budgetDepositType') || str('category');
   if (!budgetDepositTypeId && depositTypeName) {
     let depType = await prisma.budgetDepositType.findFirst({
       where: { name: { equals: depositTypeName, mode: 'insensitive' } },
@@ -80,8 +104,8 @@ async function resolveIdsForTransaction(data: any) {
     budgetDepositTypeId = depType.id;
   }
 
-  let budgetTypeId = data.budgetTypeId || null;
-  const budgetTypeName = data.budgetType || 'Regular';
+  let budgetTypeId = str('budgetTypeId') || null;
+  const budgetTypeName = str('budgetType') || 'Regular';
   if (!budgetTypeId && budgetTypeName) {
     let budType = await prisma.budgetType.findFirst({
       where: { name: { equals: budgetTypeName, mode: 'insensitive' } },
@@ -102,7 +126,7 @@ async function resolveIdsForTransaction(data: any) {
 }
 
 export class TransactionService {
-  static async createTransaction(userId: string, data: any, meta = { ip: '', ua: '' }) {
+  static async createTransaction(userId: string, data: TransactionData, meta: TransactionMeta = {}) {
     const resolved = await resolveIdsForTransaction(data);
 
     const transaction = await TransactionRepository.create({
@@ -125,14 +149,12 @@ export class TransactionService {
       merchant: data.merchant || null,
     });
 
-    await prisma.transactionAudit.create({
-      data: {
-        transactionId: transaction.id,
-        action: AuditAction.CREATE,
-        newValue: JSON.parse(JSON.stringify(transaction)),
-        ipAddress: meta.ip || null,
-        userAgent: meta.ua || null,
-      },
+    await TransactionRepository.createAudit({
+      transactionId: transaction.id,
+      action: AuditAction.CREATE,
+      newValue: JSON.parse(JSON.stringify(transaction)),
+      ipAddress: meta.ip || null,
+      userAgent: meta.ua || null,
     });
 
     return transaction;
@@ -159,7 +181,7 @@ export class TransactionService {
     return transaction;
   }
 
-  static async updateTransaction(id: string, userId: string, data: any, meta = { ip: '', ua: '' }) {
+  static async updateTransaction(id: string, userId: string, data: Partial<TransactionData>, meta: TransactionMeta = {}) {
     const original = await TransactionRepository.findById(id, userId);
     if (!original) {
       throw new Error('Transaction not found or unauthorized');
@@ -187,23 +209,21 @@ export class TransactionService {
     delete updateData.budgetType;
     delete updateData.categoryName;
 
-    const updated = await TransactionRepository.update(id, updateData);
+    const updated = await TransactionRepository.update(id, updateData as Record<string, unknown>);
 
-    await prisma.transactionAudit.create({
-      data: {
-        transactionId: id,
-        action: AuditAction.UPDATE,
-        oldValue: JSON.parse(JSON.stringify(original)),
-        newValue: JSON.parse(JSON.stringify(updated)),
-        ipAddress: meta.ip || null,
-        userAgent: meta.ua || null,
-      },
+    await TransactionRepository.createAudit({
+      transactionId: id,
+      action: AuditAction.UPDATE,
+      oldValue: JSON.parse(JSON.stringify(original)),
+      newValue: JSON.parse(JSON.stringify(updated)),
+      ipAddress: meta.ip || null,
+      userAgent: meta.ua || null,
     });
 
     return updated;
   }
 
-  static async deleteTransaction(id: string, userId: string, meta = { ip: '', ua: '' }) {
+  static async deleteTransaction(id: string, userId: string, meta: TransactionMeta = {}) {
     const original = await TransactionRepository.findById(id, userId);
     if (!original) {
       throw new Error('Transaction not found or unauthorized');
@@ -211,14 +231,12 @@ export class TransactionService {
 
     await TransactionRepository.softDelete(id);
 
-    await prisma.transactionAudit.create({
-      data: {
-        transactionId: id,
-        action: AuditAction.DELETE,
-        oldValue: JSON.parse(JSON.stringify(original)),
-        ipAddress: meta.ip || null,
-        userAgent: meta.ua || null,
-      },
+    await TransactionRepository.createAudit({
+      transactionId: id,
+      action: AuditAction.DELETE,
+      oldValue: JSON.parse(JSON.stringify(original)),
+      ipAddress: meta.ip || null,
+      userAgent: meta.ua || null,
     });
 
     return { success: true };

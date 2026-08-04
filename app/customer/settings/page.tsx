@@ -5,7 +5,22 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/components/auth/AuthContext';
 import { useToast } from '@/hooks/useToast';
+import Image from 'next/image';
 import axios from 'axios';
+
+interface CountryOption {
+  id: string;
+  name: string;
+  isoCode: string;
+  currencyId?: string;
+}
+
+interface CurrencyOption {
+  id: string;
+  code: string;
+  symbol: string;
+  name: string;
+}
 
 export default function CustomerSettingsPage() {
   const { user, updateUser } = useAuth();
@@ -19,8 +34,8 @@ export default function CustomerSettingsPage() {
   const [currencyId, setCurrencyId] = useState('');
   const [avatar, setAvatar] = useState('');
 
-  const [countries, setCountries] = useState<any[]>([]);
-  const [currencies, setCurrencies] = useState<any[]>([]);
+  const [countries, setCountries] = useState<CountryOption[]>([]);
+  const [currencies, setCurrencies] = useState<CurrencyOption[]>([]);
 
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -29,18 +44,18 @@ export default function CustomerSettingsPage() {
 
   const metadataFetchedRef = useRef(false);
 
-  // Bind values from auth context once user loads
-  useEffect(() => {
-    if (user) {
-      setFirstName(user.firstName || '');
-      setLastName(user.lastName || '');
-      setEmail(user.email || '');
-      setMobile(user.mobile || '');
-      setCountryId(user.countryId || '');
-      setCurrencyId(user.currencyId || '');
-      setAvatar(user.avatar || '');
-    }
-  }, [user]);
+  // Bind values from auth context once user loads (adjust-state-during-render guard)
+  const [boundUserKey, setBoundUserKey] = useState<string | null>(user?.email ?? null);
+  if (user && user.email !== boundUserKey) {
+    setBoundUserKey(user.email);
+    setFirstName(user.firstName || '');
+    setLastName(user.lastName || '');
+    setEmail(user.email || '');
+    setMobile(user.mobile || '');
+    setCountryId(user.countryId || '');
+    setCurrencyId(user.currencyId || '');
+    setAvatar(user.avatar || '');
+  }
 
   // Load countries & currencies on mount
   useEffect(() => {
@@ -79,7 +94,7 @@ export default function CustomerSettingsPage() {
 
         setAvatar(res.data.url);
         addToast('Profile image uploaded successfully!', 'success');
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.warn('Failed to upload avatar to backend:', err);
         addToast('Failed to upload image.', 'error');
       } finally {
@@ -114,8 +129,9 @@ export default function CustomerSettingsPage() {
         });
         addToast('Profile details updated successfully!', 'success');
       }
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || 'Failed to update profile';
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } }; message?: string };
+      const msg = e.response?.data?.error || e.message || 'Failed to update profile';
       addToast(msg, 'error');
     } finally {
       setIsSubmitting(false);
@@ -137,8 +153,9 @@ export default function CustomerSettingsPage() {
       addToast('Security credentials updated successfully!', 'success');
       setOldPassword('');
       setNewPassword('');
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.message || 'Failed to update password';
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } }; message?: string };
+      const msg = e.response?.data?.error || e.message || 'Failed to update password';
       addToast(msg, 'error');
     } finally {
       setIsSubmitting(false);
@@ -164,7 +181,14 @@ export default function CustomerSettingsPage() {
               <div className="flex flex-col sm:flex-row items-center gap-lg border-b border-outline-variant/30 pb-lg">
                 <div className="relative group w-20 h-20 rounded-full overflow-hidden bg-surface-container-high border border-outline-variant flex-shrink-0 cursor-pointer">
                   {avatar ? (
-                    <img src={avatar} alt="Profile Avatar" className="w-full h-full object-cover" />
+                    <Image
+                      src={avatar}
+                      alt="Profile Avatar"
+                      fill
+                      unoptimized
+                      sizes="80px"
+                      className="w-full h-full object-cover"
+                    />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center bg-primary/10 text-primary font-black text-xl">
                       {firstName.substring(0, 2).toUpperCase()}

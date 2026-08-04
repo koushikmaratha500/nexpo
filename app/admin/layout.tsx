@@ -1,19 +1,33 @@
 'use client';
 
-import React, { useState } from 'react';
-import Link from 'next/link';
+import React from 'react';
 import { usePathname } from 'next/navigation';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/components/auth/AuthContext';
-import { Header } from '@/components/layout/Header';
-import { Modal } from '@/components/ui/Modal';
+
+const ADMIN_NAV_LINKS = [
+  { name: 'Dashboard', path: '/admin', icon: 'dashboard' },
+  { name: 'Customers', path: '/admin/users', icon: 'group' },
+  { name: 'Administrators', path: '/admin/admins', icon: 'shield_person' },
+  { name: 'Categories', path: '/admin/categories', icon: 'category' },
+  { name: 'Reports', path: '/admin/reports', icon: 'assessment' },
+  { name: 'Settings', path: '/admin/settings', icon: 'settings' },
+];
+
+function AdminLoadingFallback() {
+  return (
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4 text-primary">
+      <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+      <p className="font-label-md font-bold uppercase tracking-wider animate-pulse">Checking Admin Session...</p>
+    </div>
+  );
+}
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading, logout } = useAuth();
   const pathname = usePathname();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
 
-  // Public admin auth pages (login, forgot/reset password) render without the admin shell
+  // Public admin auth pages render without the admin shell
   const isPublicAuthPage =
     pathname.startsWith('/admin/login') ||
     pathname.startsWith('/admin/forgot-password') ||
@@ -25,216 +39,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   // Gate admin pages: show loading while checking session, render null (redirect handled by AuthContext) if not an admin.
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4 text-primary">
-        <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
-        <p className="font-label-md font-bold uppercase tracking-wider animate-pulse">Checking Admin Session...</p>
-      </div>
-    );
+    return <AdminLoadingFallback />;
   }
 
   if (!user || user.role !== 'ADMIN') {
     return null; // useEffect in AuthContext will redirect to /admin/login
   }
 
-  const navLinks = [
-    { name: 'Dashboard', path: '/admin', icon: 'dashboard' },
-    { name: 'Customers', path: '/admin/users', icon: 'group' },
-    { name: 'Administrators', path: '/admin/admins', icon: 'shield_person' },
-    { name: 'Categories', path: '/admin/categories', icon: 'category' },
-    { name: 'Reports', path: '/admin/reports', icon: 'assessment' },
-    { name: 'Settings', path: '/admin/settings', icon: 'settings' },
-  ];
-
-  const handleLinkClick = () => {
-    setIsMobileMenuOpen(false);
-  };
-
   return (
-    <div className="min-h-screen bg-background text-on-background flex overflow-hidden">
-      {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex flex-col h-screen fixed left-0 top-0 border-r border-outline-variant bg-surface-container-low p-4 gap-2 w-64 z-50">
-        <div className="mb-6 px-2 py-4 border-b border-outline-variant/50">
-          <h1 className="font-headline-sm text-headline-sm font-black text-primary leading-tight">Corporate Pro Ledger</h1>
-          <p className="font-label-md text-[10px] text-on-surface-variant uppercase tracking-wider font-bold opacity-70">
-            Administrative Hub
-          </p>
-        </div>
-
-        <nav className="flex-1 flex flex-col gap-1 mt-4">
-          {navLinks.map((link) => {
-            const isActive = pathname === link.path;
-            return (
-              <Link
-                key={link.path}
-                href={link.path}
-                className={`flex items-center gap-4 px-4 py-2 rounded-lg transition-all duration-200 ${isActive
-                    ? 'bg-surface-container-high text-primary font-bold shadow-sm'
-                    : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
-                  }`}
-              >
-                <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
-                  <span className="material-symbols-outlined text-[20px]">{link.icon}</span>
-                </div>
-                <span className="font-body-md text-body-md">{link.name}</span>
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="border-t border-outline-variant pt-4 flex flex-col gap-1">
-          <Link
-            href="#"
-            className="flex items-center gap-4 px-4 py-2 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded-lg transition-colors"
-          >
-            <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
-              <span className="material-symbols-outlined text-[20px]">help</span>
-            </div>
-            <span className="font-body-md text-body-md">Help Center</span>
-          </Link>
-          <button
-            onClick={() => setIsLogoutConfirmOpen(true)}
-            type="button"
-            className="flex items-center gap-4 px-4 py-2 text-on-surface-variant hover:text-error hover:bg-error-container/10 rounded-lg text-left transition-colors cursor-pointer"
-          >
-            <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
-              <span className="material-symbols-outlined text-[20px]">logout</span>
-            </div>
-            <span className="font-body-md text-body-md">Logout</span>
-          </button>
-        </div>
-      </aside>
-
-      {/* Mobile Slide-Out Menu */}
-      {isMobileMenuOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden flex">
-          {/* Overlay */}
-          <div
-            className="absolute inset-0 bg-inverse-surface/40 backdrop-blur-sm"
-            onClick={() => setIsMobileMenuOpen(false)}
-          />
-          {/* Drawer */}
-          <div className="relative w-64 bg-surface-container-low border-r border-outline-variant h-full flex flex-col p-4 gap-2 animate-in slide-in-from-left duration-200">
-            <div className="mb-6 px-2 py-4 border-b border-outline-variant/50 flex justify-between items-center">
-              <div>
-                <h1 className="font-headline-sm text-headline-sm font-black text-primary leading-tight">Expensify Pro</h1>
-                <p className="font-label-md text-[10px] text-on-surface-variant uppercase tracking-wider font-bold">Admin Hub</p>
-              </div>
-              <button
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="text-on-surface-variant hover:text-primary p-1 hover:bg-surface-container rounded-full"
-              >
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-
-            <nav className="flex-1 flex flex-col gap-1">
-              {navLinks.map((link) => {
-                const isActive = pathname === link.path;
-                return (
-                  <Link
-                    key={link.path}
-                    href={link.path}
-                    onClick={handleLinkClick}
-                    className={`flex items-center gap-4 px-4 py-2 rounded-lg transition-all duration-200 ${isActive
-                        ? 'bg-surface-container-high text-primary font-bold'
-                        : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
-                      }`}
-                  >
-                    <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
-                      <span className="material-symbols-outlined text-[20px]">{link.icon}</span>
-                    </div>
-                    <span className="font-body-md text-body-md">{link.name}</span>
-                  </Link>
-                );
-              })}
-            </nav>
-
-            <div className="border-t border-outline-variant pt-4 flex flex-col gap-1">
-              <button
-                onClick={() => setIsLogoutConfirmOpen(true)}
-                type="button"
-                className="flex items-center gap-4 px-4 py-2 text-on-surface-variant hover:text-error hover:bg-error-container/10 rounded-lg text-left transition-colors cursor-pointer"
-              >
-                <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
-                  <span className="material-symbols-outlined text-[20px]">logout</span>
-                </div>
-                <span className="font-body-md text-body-md">Logout</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Admin Content Area */}
-      <div className="flex-1 lg:ml-64 flex flex-col min-h-screen overflow-y-auto pb-20 lg:pb-0">
-        <Header
-          onMenuToggle={() => setIsMobileMenuOpen(true)}
-          searchPlaceholder="Search governance details..."
-        />
-        <main className="flex-1 p-6 max-w-[1440px] mx-auto w-full">
-          {children}
-        </main>
-      </div>
-
-      {/* Mobile Bottom Navbar (Matches design spec) */}
-      <nav className="lg:hidden fixed bottom-0 left-0 w-full z-40 flex justify-around items-center px-4 py-2 pb-safe bg-surface-container-lowest border-t border-outline-variant shadow-2xl">
-        {navLinks.slice(0, 5).map((link) => {
-          const isActive = pathname === link.path;
-          return (
-            <Link
-              key={link.path}
-              href={link.path}
-              className={`flex flex-col items-center justify-center rounded-xl px-4 py-1 transition-transform active:scale-95 ${isActive
-                  ? 'bg-primary-container text-on-primary-container font-bold shadow-sm'
-                  : 'text-on-surface-variant'
-                }`}
-            >
-              <span className="material-symbols-outlined text-[20px]">{link.icon}</span>
-              <span className="text-[10px] font-label-md mt-1">{link.name.split(' ')[0]}</span>
-            </Link>
-          );
-        })}
-      </nav>
-      {/* Logout Confirmation Modal */}
-      <Modal 
-        isOpen={isLogoutConfirmOpen} 
-        onClose={() => setIsLogoutConfirmOpen(false)} 
-        title="Confirm Logout" 
-        customHeader={true} 
-        cardPadding="p-0" 
-        maxWidth="max-w-md"
-      >
-        <div className="pt-xl px-xl flex flex-col items-center text-center">
-          <div className="w-16 h-16 rounded-full bg-error-container flex items-center justify-center mb-md">
-            <span className="material-symbols-outlined text-error text-[32px]">warning</span>
-          </div>
-          <h2 className="font-headline-md text-headline-md text-on-surface mb-sm font-black">Confirm Logout</h2>
-          <p className="font-body-md text-body-md text-on-surface-variant max-w-xs leading-relaxed">
-            Are you sure you want to log out of your session?
-          </p>
-        </div>
-        <div className="p-lg bg-surface-container-low flex flex-col-reverse sm:flex-row gap-md sm:justify-end border-t border-outline-variant mt-lg">
-          <button 
-            type="button"
-            className="px-xl h-11 flex items-center justify-center rounded-lg border border-outline text-on-surface font-title-md text-title-md hover:bg-surface-container-high transition-colors active:scale-95 duration-150 font-semibold cursor-pointer" 
-            onClick={() => setIsLogoutConfirmOpen(false)}
-          >
-            Cancel
-          </button>
-          <button 
-            type="button"
-            className="px-xl h-11 flex items-center justify-center rounded-lg bg-error text-on-error font-title-md text-title-md shadow-md hover:opacity-90 transition-all active:scale-95 duration-150 font-semibold cursor-pointer" 
-            onClick={() => {
-              setIsLogoutConfirmOpen(false);
-              logout();
-            }}
-          >
-            Logout
-          </button>
-        </div>
-      </Modal>
-
-    </div>
+    <AppLayout
+      navLinks={ADMIN_NAV_LINKS}
+      appTitle="Corporate Pro Ledger"
+      appSubtitle="Administrative Hub"
+      roleLabel="Admin Hub"
+      searchPlaceholder="Search governance details..."
+      bottomNavCount={5}
+      onLogout={logout}
+    >
+      {children}
+    </AppLayout>
   );
 }
