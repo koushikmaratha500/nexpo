@@ -9,37 +9,18 @@ datasource db {
   provider = "postgresql"
 }
 
-enum UserRole {
-  SUPER_ADMIN
-  ADMIN
-  CUSTOMER
-}
-
-enum UserStatus {
-  PENDING
-  ACTIVE
-  BLOCKED
+enum Status {
+  A
+  D
+  B
+  I
+  P
 }
 
 enum AuthProvider {
   EMAIL
   GOOGLE
   MOBILE
-}
-
-enum RecurringFrequency {
-  DAILY
-  WEEKLY
-  MONTHLY
-  QUARTERLY
-  YEARLY
-}
-
-enum InsightType {
-  SUMMARY
-  FORECAST
-  ANOMALY
-  RECOMMENDATION
 }
 
 enum AuditAction {
@@ -52,313 +33,251 @@ enum AuditAction {
   ACTIVATE
 }
 
-model User {
-  id String @id @default(uuid())
-
-  email        String? @unique
-  passwordHash String?
-
-  mobile String? @unique
-
-  firstName String
-  lastName  String?
-
-  profileImageUrl String?
-
-  role   UserRole   @default(CUSTOMER)
-  status UserStatus @default(PENDING)
-
-  emailVerified  Boolean @default(false)
-  mobileVerified Boolean @default(false)
-
-  countryId  String?
-  currencyId String?
-
-  country  Country?  @relation(fields: [countryId], references: [id])
-  currency Currency? @relation(fields: [currencyId], references: [id])
-
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-
-  expenses          Expense[]
-  budgets           Budget[]
-  tags              Tag[]
-  recurringExpenses RecurringExpense[]
-  aiInsights        AIInsight[]
-  auditLogs         AuditLog[]
-  authAccounts      AuthAccount[]
-  otpVerifications  OtpVerification[]
-  notifications     Notification[]
-
-  @@index([email])
-  @@index([mobile])
-  @@index([status])
-}
-
-model AuthAccount {
-  id String @id @default(uuid())
-
-  userId String
-
-  provider AuthProvider
-
-  providerAccountId String
-
-  accessToken  String?
-  refreshToken String?
-
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id])
-
-  @@unique([provider, providerAccountId])
+enum TransactionType {
+  DEBIT
+  CREDIT
 }
 
 model Country {
-  id String @id @default(uuid())
-
-  name    String
-  isoCode String @unique
-
-  defaultCurrencyId String
-  defaultCurrency   Currency @relation("CountryDefaultCurrency", fields: [defaultCurrencyId], references: [id])
-
-  users User[]
+  id         String    @id @default(uuid())
+  name       String    @unique
+  isoCode    String    @unique
+  currencyId String?
+  currency   Currency? @relation(fields: [currencyId], references: [id])
+  status     Status    @default(A)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  users      User[]
 }
 
 model Currency {
-  id String @id @default(uuid())
+  id        String    @id @default(uuid())
+  code      String    @unique
+  name      String
+  symbol    String
+  status    Status    @default(A)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  users      User[]
+  transactions Transaction[]
+  countries   Country[]
+}
 
-  code   String @unique
-  name   String
-  symbol String
+model User {
+  id              String       @id @default(uuid())
+  email           String?      @unique
+  passwordHash    String?
+  mobile          String?      @unique
+  firstName       String
+  lastName        String?
+  profileImageUrl String?
+  emailVerified   Boolean      @default(false)
+  mobileVerified  Boolean      @default(false)
+  provider        AuthProvider @default(EMAIL)
+  countryId       String?
+  currencyId      String?
+  country         Country?     @relation(fields: [countryId], references: [id])
+  currency        Currency?    @relation(fields: [currencyId], references: [id])
+  status          Status       @default(A)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  transactions    Transaction[]
+  sessions        Session[]
+  userAudits      UserAudit[]
+  passwordResetTokens PasswordResetToken[]
+}
 
-  users             User[]
-  expenses          Expense[]
-  budgets           Budget[]
-  recurringExpenses RecurringExpense[]
-
-  defaultCountries Country[] @relation("CountryDefaultCurrency")
+model Admin {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  passwordHash    String
+  firstName       String
+  lastName        String?
+  profileImageUrl String?
+  status          Status    @default(A)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  sessions        Session[]
+  passwordResetTokens PasswordResetToken[]
 }
 
 model Category {
-  id String @id @default(uuid())
-
-  name String @unique
-
-  description String?
-
-  icon String?
-
-  isActive Boolean @default(true)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  expenses          Expense[]
-  budgets           Budget[]
-  recurringExpenses RecurringExpense[]
+  id            String        @id @default(uuid())
+  name          String        @unique
+  code          String        @unique
+  type          TransactionType       @default(CREDIT)
+  color         String?
+  icon          String?
+  status        Status        @default(A)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  transactions  Transaction[]
 }
 
-model Expense {
-  id String @id @default(uuid())
+model PaymentType {
+  id            String        @id @default(uuid())
+  name          String        @unique
+  code          String        @unique
+  status        Status        @default(A)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  transactions  Transaction[]
+}
 
-  userId     String
-  categoryId String
-  currencyId String
+model BudgetType {
+  id            String        @id @default(uuid())
+  name          String        @unique
+  code          String        @unique
+  status        Status        @default(A)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  transactions  Transaction[]
+}
 
-  amount Decimal @db.Decimal(18, 2)
+model BudgetDepositType {
+  id            String        @id @default(uuid())
+  name          String        @unique
+  code          String        @unique
+  status        Status        @default(A)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  transactions  Transaction[]
+}
 
-  expenseDate DateTime
+model Transaction {
+  id                  String           @id @default(uuid())
+  userId              String
+  type                TransactionType
+  currencyId          String?
+  categoryId          String?
+  paymentTypeId       String?
+  budgetDepositTypeId String?
+  budgetTypeId        String?
+  user                User             @relation(fields: [userId], references: [id])
+  currency            Currency?        @relation(fields: [currencyId], references: [id])
+  category            Category?        @relation(fields: [categoryId], references: [id])
+  paymentType         PaymentType?     @relation(fields: [paymentTypeId], references: [id])
+  budgetDepositType   BudgetDepositType? @relation(fields: [budgetDepositTypeId], references: [id])
+  budgetType          BudgetType?      @relation(fields: [budgetTypeId], references: [id])
+  title               String
+  description         String?
+  amount              Decimal          @db.Decimal(18, 2)
+  transactionDate     DateTime
+  notes               String?
+  documentUrl         String?
+  documentFileName    String?
+  documentMimeType    String?
+  documentSize        Int?
+  merchant            String?
+  status              String           @default("A")
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  transactionAudits   TransactionAudit[]
 
-  notes       String?
-  paymentType String
+  @@index([userId])
+  @@index([type])
+  @@index([transactionDate])
+}
 
-  receiptUrl      String?
-  receiptFileName String?
-  receiptMimeType String?
-  receiptSize     Int?
+model TransactionAudit {
+  id            String        @id @default(uuid())
+  transactionId String
+  transaction   Transaction   @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  action        AuditAction
+  oldValue      Json?
+  newValue      Json?
+  ipAddress     String?
+  userAgent     String?
+  status        String        @default("A")
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
+  @@index([transactionId])
+}
+
+model Session {
+  id         String    @id @default(uuid())
+  jwt        String    @db.Text
+  userId     String?
+  adminId    String?
+  user       User?     @relation(fields: [userId], references: [id])
+  admin      Admin?    @relation(fields: [adminId], references: [id])
+  loginTime  DateTime  @default(now())
+  expiryTime DateTime
+  logoutTime DateTime?
+  status     Status    @default(A)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([adminId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  token     String    @unique
+  email     String
+  adminId   String?
+  userId    String?
+  user      User?     @relation(fields: [userId], references: [id])
+  admin     Admin?    @relation(fields: [adminId], references: [id])
+  expiresAt DateTime
+  usedAt    DateTime?
+  status    Status    @default(A)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
 
-  user     User     @relation(fields: [userId], references: [id])
-  category Category @relation(fields: [categoryId], references: [id])
-  currency Currency @relation(fields: [currencyId], references: [id])
-
-  tags ExpenseTag[]
-
-  @@index([userId])
-  @@index([categoryId])
-  @@index([expenseDate])
-  @@index([currencyId])
-}
-
-model Tag {
-  id String @id @default(uuid())
-
-  userId String
-
-  name String
-
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id])
-
-  expenseTags ExpenseTag[]
-
-  @@unique([userId, name])
-}
-
-model ExpenseTag {
-  expenseId String
-  tagId     String
-
-  expense Expense @relation(fields: [expenseId], references: [id])
-  tag     Tag     @relation(fields: [tagId], references: [id])
-
-  @@id([expenseId, tagId])
-}
-
-model Budget {
-  id String @id @default(uuid())
-
-  userId String
-
-  categoryId String?
-
-  currencyId String
-
-  amount Decimal @db.Decimal(18, 2)
-
-  startDate DateTime
-  endDate   DateTime
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id])
-
-  category Category? @relation(fields: [categoryId], references: [id])
-  currency Currency  @relation(fields: [currencyId], references: [id])
-
+  @@index([email])
+  @@index([adminId])
   @@index([userId])
 }
 
-model RecurringExpense {
-  id String @id @default(uuid())
-
-  userId String
-
-  categoryId String
-
-  currencyId String
-
-  title String
-
-  amount Decimal @db.Decimal(18, 2)
-
-  frequency RecurringFrequency
-
-  startDate DateTime
-
-  nextRunDate DateTime
-
-  isActive Boolean @default(true)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id])
-
-  category Category @relation(fields: [categoryId], references: [id])
-  currency Currency @relation(fields: [currencyId], references: [id])
-
-  @@index([userId])
-  @@index([nextRunDate])
-}
-
-model AIInsight {
-  id String @id @default(uuid())
-
-  userId String
-
-  insightType InsightType
-
-  title String
-
-  description String @db.Text
-
-  periodStart DateTime
-
-  periodEnd DateTime
-
-  generatedAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id])
-
-  @@index([userId])
-}
-
-model OtpVerification {
-  id String @id @default(uuid())
-
-  userId String?
-
-  mobile String?
-
-  otp String
-
-  expiresAt DateTime
-
-  verified Boolean @default(false)
-
-  createdAt DateTime @default(now())
-
-  user User? @relation(fields: [userId], references: [id])
-}
-
-model AuditLog {
-  id String @id @default(uuid())
-
-  userId String?
-
-  action AuditAction
-
-  entity String
-
-  entityId String?
-
-  oldValue Json?
-  newValue Json?
-
+model UserAudit {
+  id        String      @id @default(uuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id])
+  action    AuditAction
+  oldValue  Json?
+  newValue  Json?
   ipAddress String?
   userAgent String?
-
-  createdAt DateTime @default(now())
-
-  user User? @relation(fields: [userId], references: [id])
+  status    Status      @default(A)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
 
   @@index([userId])
-  @@index([createdAt])
 }
 
-model Notification {
-  id String @id @default(uuid())
+model SupportTicket {
+  id         String   @id @default(uuid())
+  name       String
+  email      String
+  phone      String?
+  message    String   @db.Text
+  fileUrl    String?
+  fileName   String?
+  fileSize   Int?
+  adminNotes String?  @db.Text
+  status     Status   @default(A) // A=Open, I=Closed, D=Deleted
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  userId String
+  supportAudits SupportTicketAudit[]
+}
 
-  title String
+model SupportTicketAudit {
+  id              String        @id @default(uuid())
+  supportTicketId String
+  supportTicket   SupportTicket @relation(fields: [supportTicketId], references: [id], onDelete: Cascade)
+  adminId         String?
+  action          AuditAction
+  oldValue        Json?
+  newValue        Json?
+  ipAddress       String?
+  userAgent       String?
+  status          Status        @default(A)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
-  message String @db.Text
-
-  isRead Boolean @default(false)
-
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id])
-
-  @@index([userId])
+  @@index([supportTicketId])
 }

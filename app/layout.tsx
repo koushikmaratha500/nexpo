@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Figtree, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/components/auth/AuthContext";
+import { ToastProvider } from "@/components/providers/ToastProvider";
 import "./globals.css";
 
 const figtree = Figtree({
@@ -40,7 +41,9 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col bg-background text-on-background">
         <AuthProvider>
-          {children}
+          <ToastProvider>
+            {children}
+          </ToastProvider>
         </AuthProvider>
       </body>
     </html>

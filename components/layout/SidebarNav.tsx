@@ -1,0 +1,153 @@
+'use client';
+
+import React from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+
+export interface NavLink {
+  name: string;
+  path: string;
+  icon: string;
+}
+
+export interface SidebarNavProps {
+  navLinks: NavLink[];
+  roleLabel: string;
+  appTitle: string;
+  appSubtitle: string;
+  showHelpCenter?: boolean;
+  isMobileMenuOpen: boolean;
+  onMobileMenuClose: () => void;
+  onLogoutClick: () => void;
+  onLinkClick?: () => void;
+}
+
+export function SidebarNav({
+  navLinks,
+  roleLabel,
+  appTitle,
+  appSubtitle,
+  showHelpCenter = true,
+  isMobileMenuOpen,
+  onMobileMenuClose,
+  onLogoutClick,
+  onLinkClick,
+}: SidebarNavProps) {
+  const pathname = usePathname();
+
+  const renderNavLinks = (mobile = false) =>
+    navLinks.map((link) => {
+      const isActive = pathname === link.path;
+      const baseClassName = mobile
+        ? `flex items-center gap-4 px-4 py-2 rounded-lg transition-all duration-200 ${
+            isActive
+              ? 'bg-surface-container-high text-primary font-bold'
+              : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
+          }`
+        : `flex items-center gap-4 px-4 py-2 rounded-lg transition-all duration-200 ${
+            isActive
+              ? 'bg-surface-container-high text-primary font-bold shadow-sm'
+              : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
+          }`;
+
+      return (
+        <Link
+          key={link.path}
+          href={link.path}
+          onClick={mobile ? onLinkClick : undefined}
+          className={baseClassName}
+        >
+          <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
+            <span className="material-symbols-outlined text-[20px]">{link.icon}</span>
+          </div>
+          <span className="font-body-md text-body-md">{link.name}</span>
+        </Link>
+      );
+    });
+
+  const renderFooterLinks = (mobile = false) => (
+    <>
+      {showHelpCenter && (
+        <Link
+          href="/customer/support"
+          className={`flex items-center gap-4 px-4 py-2 transition-colors ${
+            mobile
+              ? 'text-on-surface-variant hover:text-primary hover:bg-surface-container rounded-lg'
+              : 'text-on-surface-variant hover:text-primary hover:bg-surface-container rounded-lg'
+          }`}
+        >
+          <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
+            <span className="material-symbols-outlined text-[20px]">help</span>
+          </div>
+          <span className="font-body-md text-body-md">Help Center</span>
+        </Link>
+      )}
+      <button
+        onClick={onLogoutClick}
+        type="button"
+        className={`flex items-center gap-4 px-4 py-2 text-on-surface-variant hover:text-error hover:bg-error-container/10 rounded-lg text-left transition-colors cursor-pointer ${mobile ? '' : ''}`}
+      >
+        <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
+          <span className="material-symbols-outlined text-[20px]">logout</span>
+        </div>
+        <span className="font-body-md text-body-md">Logout</span>
+      </button>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop Sidebar */}
+      <aside className="hidden lg:flex flex-col h-screen fixed left-0 top-0 border-r border-outline-variant bg-surface-container-low p-4 gap-2 w-64 z-50">
+        <div className="mb-6 px-2 py-4 border-b border-outline-variant/50">
+          <h1 className="font-headline-sm text-headline-sm font-black text-primary leading-tight">{appTitle}</h1>
+          <p className="font-label-md text-[10px] text-on-surface-variant uppercase tracking-wider font-bold opacity-70">
+            {appSubtitle}
+          </p>
+        </div>
+
+        <nav className="flex-1 flex flex-col gap-1 mt-4">
+          {renderNavLinks()}
+        </nav>
+
+        <div className="border-t border-outline-variant pt-4 flex flex-col gap-1">
+          {renderFooterLinks()}
+        </div>
+      </aside>
+
+      {/* Mobile Slide-Out Menu */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden flex">
+          <div
+            className="absolute inset-0 bg-inverse-surface/40 backdrop-blur-sm"
+            onClick={onMobileMenuClose}
+          />
+          <div className="relative w-64 bg-surface-container-low border-r border-outline-variant h-full flex flex-col p-4 gap-2 animate-in slide-in-from-left duration-200">
+            <div className="mb-6 px-2 py-4 border-b border-outline-variant/50 flex justify-between items-center">
+              <div>
+                <h1 className="font-headline-sm text-headline-sm font-black text-primary leading-tight">{appTitle}</h1>
+                <p className="font-label-md text-[10px] text-on-surface-variant uppercase tracking-wider font-bold">
+                  {roleLabel}
+                </p>
+              </div>
+              <button
+                onClick={onMobileMenuClose}
+                className="text-on-surface-variant hover:text-primary p-1 hover:bg-surface-container rounded-full"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <nav className="flex-1 flex flex-col gap-1">
+              {renderNavLinks(true)}
+            </nav>
+
+            <div className="border-t border-outline-variant pt-4 flex flex-col gap-1">
+              {renderFooterLinks(true)}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

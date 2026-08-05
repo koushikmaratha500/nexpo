@@ -3,7 +3,14 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 
 const prismaClientSingleton = () => {
-  const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/nexpo?schema=public';
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error(
+      'CRITICAL: DATABASE_URL environment variable is not set. ' +
+      'On Vercel, add it via Settings > Environment Variables. ' +
+      'Locally, ensure your .env file is present and restart the dev server.'
+    );
+  }
   const pool = new Pool({ connectionString });
   const adapter = new PrismaPg(pool);
   return new PrismaClient({ adapter });

@@ -1,133 +1,180 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table';
-import { MOCK_USERS, User } from '@/mock/data';
+import { TablePagination } from '@/components/ui/TablePagination';
+import axios from 'axios';
+import { useToast } from '@/hooks/useToast';
+
+interface APIUser {
+  id: string;
+  email: string | null;
+  mobile: string | null;
+  firstName: string;
+  lastName: string | null;
+  profileImageUrl: string | null;
+  status: string;
+  country: { name: string } | null;
+  currency: { code: string } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Map Prisma status to display status
+function mapStatus(status: string): 'ACTIVE' | 'BLOCKED' | 'PENDING' {
+  switch (status) {
+    case 'A': return 'ACTIVE';
+    case 'B': return 'BLOCKED';
+    case 'P': return 'PENDING';
+    default: return 'PENDING';
+  }
+}
+
+// Map display status back to Prisma
+function mapStatusToPrisma(status: string): string {
+  switch (status) {
+    case 'ACTIVE': return 'A';
+    case 'BLOCKED': return 'B';
+    case 'PENDING': return 'P';
+    default: return 'A';
+  }
+}
 
 export default function UserManagementPage() {
   const router = useRouter();
-  const [users, setUsers] = useState<User[]>(MOCK_USERS);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const { addToast } = useToast();
+  const [users, setUsers] = useState<APIUser[]>([]);
+  const [selectedUser, setSelectedUser] = useState<APIUser | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5;
+  const [isLoading, setIsLoading] = useState(true);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  const handleItemsPerPageChange = (n: number) => {
+    setItemsPerPage(n);
+    setCurrentPage(1);
+  };
   
   // Modals state
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Forms state
   const [editFirstName, setEditFirstName] = useState('');
   const [editLastName, setEditLastName] = useState('');
-  const [editRole, setEditRole] = useState<'ADMIN' | 'CUSTOMER'>('CUSTOMER');
   const [editStatus, setEditStatus] = useState<'ACTIVE' | 'BLOCKED' | 'PENDING'>('ACTIVE');
 
-  // Load from LocalStorage
-  useEffect(() => {
-    const saved = localStorage.getItem('nexpo_all_users');
-    if (saved) {
-      try {
-        setUsers(JSON.parse(saved));
-      } catch (e) {}
-    } else {
-      localStorage.setItem('nexpo_all_users', JSON.stringify(MOCK_USERS));
+  // Fetch users from API
+  const fetchUsers = useCallback(async (page = 1) => {
+    setIsLoading(true);
+    try {
+      const response = await axios.get(`/api/admin/users?page=1&pageSize=1000`);
+      if (response.data) {
+        // Wrap single item or array
+        const items = Array.isArray(response.data) ? response.data : (response.data.items || []);
+        setUsers(items);
+      }
+    } catch (err) {
+      console.error('Failed to load users:', err);
+      addToast('Failed to load customers', 'error');
+    } finally {
+      setIsLoading(false);
     }
-  }, []);
+  }, [addToast]);
 
-  // Save to LocalStorage helper
-  const saveUsersToStorage = (updatedUsers: User[]) => {
-    localStorage.setItem('nexpo_all_users', JSON.stringify(updatedUsers));
-  };
+  useEffect(() => {
+    fetchUsers(currentPage);
+  }, [currentPage, fetchUsers]);
 
   // Open Edit Dialog
-  const handleOpenEdit = (user: User) => {
+  const handleOpenEdit = (user: APIUser) => {
     setSelectedUser(user);
     setEditFirstName(user.firstName);
     setEditLastName(user.lastName || '');
-    setEditRole(user.role);
-    setEditStatus(user.status);
+    setEditStatus(mapStatus(user.status));
     setIsEditOpen(true);
   };
 
-  // Save Edit Dialog
-  const handleSaveEdit = (e: React.FormEvent) => {
+  // Save Edit Dialog via API
+  const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUser) return;
+    setIsSubmitting(true);
 
-    const updated = users.map(u => {
-      if (u.id === selectedUser.id) {
-        return {
-          ...u,
-          firstName: editFirstName,
-          lastName: editLastName,
-          role: editRole,
-          status: editStatus
-        };
-      }
-      return u;
-    });
+    try {
+      await axios.patch(`/api/admin/user/${selectedUser.id}`, {
+        firstName: editFirstName,
+        lastName: editLastName,
+        status: mapStatusToPrisma(editStatus),
+      });
 
-    setUsers(updated);
-    saveUsersToStorage(updated);
-
-    setSelectedUser(prev => prev ? {
-      ...prev,
-      firstName: editFirstName,
-      lastName: editLastName,
-      role: editRole,
-      status: editStatus
-    } : null);
-
-    setIsEditOpen(false);
+      addToast('Customer updated successfully', 'success');
+      setIsEditOpen(false);
+      fetchUsers(currentPage);
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to update customer';
+      addToast(errMsg, 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  // Toggle user status instantly (Block/Unblock)
-  const toggleStatus = (user: User) => {
-    const nextStatus: 'ACTIVE' | 'BLOCKED' = user.status === 'BLOCKED' ? 'ACTIVE' : 'BLOCKED';
-    const updated = users.map(u => {
-      if (u.id === user.id) {
-        return { ...u, status: nextStatus };
-      }
-      return u;
-    });
-    setUsers(updated);
-    saveUsersToStorage(updated);
-    if (selectedUser?.id === user.id) {
-      setSelectedUser(prev => prev ? { ...prev, status: nextStatus } : null);
+  // Toggle user status via API (Block/Unblock)
+  const toggleStatus = async (user: APIUser) => {
+    const nextStatus = user.status === 'B' ? 'A' : 'B';
+    const displayStatus = user.status === 'B' ? 'ACTIVE' : 'BLOCKED';
+
+    try {
+      await axios.patch(`/api/admin/user/${user.id}`, {
+        status: nextStatus,
+      });
+
+      addToast(`Customer ${displayStatus === 'BLOCKED' ? 'blocked' : 'unblocked'}`, 'success');
+      fetchUsers(currentPage);
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to update customer status';
+      addToast(errMsg, 'error');
     }
   };
 
   // Open Delete Confirmation
-  const handleOpenDelete = (user: User) => {
+  const handleOpenDelete = (user: APIUser) => {
     setSelectedUser(user);
     setIsDeleteOpen(true);
   };
 
-  // Confirm Delete
-  const handleConfirmDelete = () => {
+  // Confirm Delete via API
+  const handleConfirmDelete = async () => {
     if (!selectedUser) return;
-    const updated = users.filter(u => u.id !== selectedUser.id);
-    setUsers(updated);
-    saveUsersToStorage(updated);
-    setSelectedUser(null);
-    setIsDeleteOpen(false);
+    setIsSubmitting(true);
+
+    try {
+      const response = await axios.delete(`/api/admin/user/${selectedUser.id}`);
+      if (response.data?.success) {
+        addToast('Customer deleted successfully', 'success');
+        setSelectedUser(null);
+        setIsDeleteOpen(false);
+        fetchUsers(currentPage);
+      }
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to delete customer';
+      addToast(errMsg, 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const customers = users.filter(u => u.role === 'CUSTOMER');
+  // Filter only customers (not admins)
+  const customers = users.filter(u => u.email !== 'admin@nexpo.com');
+
+  // Client-side pagination
   const totalItems = customers.length;
-  const totalPages = Math.max(Math.ceil(totalItems / itemsPerPage), 1);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedCustomers = customers.slice(startIndex, startIndex + itemsPerPage);
-
-  const pageRange = [];
-  const startPage = Math.max(1, currentPage - 2);
-  const endPage = Math.min(totalPages, currentPage + 2);
-  for (let i = startPage; i <= endPage; i++) {
-    pageRange.push(i);
-  }
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-5 duration-300">
@@ -143,23 +190,6 @@ export default function UserManagementPage() {
           <Button 
             variant="primary" 
             className="px-4 py-2"
-            onClick={() => {
-              const newId = `u${users.length + 1}`;
-              const newUser: User = {
-                id: newId,
-                firstName: 'New',
-                lastName: 'Customer',
-                email: `newcustomer${newId}@nexpo.com`,
-                role: 'CUSTOMER',
-                status: 'PENDING',
-                lastLogin: 'Never'
-              };
-              const updated = [newUser, ...users];
-              setUsers(updated);
-              saveUsersToStorage(updated);
-              setSelectedUser(newUser);
-              router.push(`/admin/users/${newId}`);
-            }}
           >
             <span className="material-symbols-outlined text-sm">person_add</span>
             <span>Add Customer</span>
@@ -168,6 +198,12 @@ export default function UserManagementPage() {
 
         {/* Table Card */}
         <Card className="bg-surface-container-lowest p-0 overflow-hidden" glass={false}>
+          {isLoading ? (
+            <div className="w-full py-xl flex flex-col items-center justify-center gap-md">
+              <div className="w-12 h-12 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+              <span className="font-label-md text-label-md text-on-surface-variant font-bold">Loading Customers...</span>
+            </div>
+          ) : (
           <div className="w-full overflow-x-auto scrollbar-hide">
             <Table>
             <TableHeader>
@@ -180,6 +216,7 @@ export default function UserManagementPage() {
             </TableHeader>
             <TableBody>
               {paginatedCustomers.map((u) => {
+                const displayStatus = mapStatus(u.status);
                 return (
                   <TableRow 
                     key={u.id} 
@@ -188,8 +225,8 @@ export default function UserManagementPage() {
                   >
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        {u.avatar ? (
-                          <img src={u.avatar} alt={`${u.firstName} ${u.lastName || ''}`} className="w-8 h-8 rounded-full border border-outline-variant object-cover" />
+                        {u.profileImageUrl ? (
+                          <img src={u.profileImageUrl} alt={`${u.firstName} ${u.lastName || ''}`} className="w-8 h-8 rounded-full border border-outline-variant object-cover" />
                         ) : (
                           <div className="w-8 h-8 rounded-full bg-primary-container text-on-primary-container font-bold flex items-center justify-center text-xs">
                             {(u.firstName?.[0] || '') + (u.lastName?.[0] || '')}
@@ -202,21 +239,19 @@ export default function UserManagementPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span className={`px-2 py-0.5 rounded-md font-label-md text-[10px] font-bold ${
-                        u.role === 'ADMIN' ? 'bg-primary text-on-primary' : 'bg-surface-variant text-on-surface-variant'
-                      }`}>
-                        {u.role}
+                      <span className="px-2 py-0.5 rounded-md font-label-md text-[10px] font-bold bg-surface-variant text-on-surface-variant">
+                        CUSTOMER
                       </span>
                     </TableCell>
                     <TableCell>
                       <span className={`px-2 py-1 rounded-full font-label-md text-[10px] font-bold ${
-                        u.status === 'ACTIVE' 
+                        displayStatus === 'ACTIVE' 
                           ? 'bg-secondary-container/20 text-on-secondary-container'
-                          : u.status === 'PENDING'
+                          : displayStatus === 'PENDING'
                           ? 'bg-tertiary-fixed-dim/20 text-on-tertiary-container'
                           : 'bg-error-container/20 text-error'
                       }`}>
-                        {u.status}
+                        {displayStatus}
                       </span>
                     </TableCell>
                     <TableCell align="right" onClick={(e) => e.stopPropagation()}>
@@ -231,12 +266,12 @@ export default function UserManagementPage() {
                         <button 
                           onClick={() => toggleStatus(u)}
                           className={`p-1 hover:bg-surface-container rounded-full transition-all ${
-                            u.status === 'BLOCKED' ? 'text-secondary hover:text-secondary' : 'text-on-surface-variant hover:text-error'
+                            u.status === 'B' ? 'text-secondary hover:text-secondary' : 'text-on-surface-variant hover:text-error'
                           }`}
-                          title={u.status === 'BLOCKED' ? 'Unblock User' : 'Block User'}
+                          title={u.status === 'B' ? 'Unblock User' : 'Block User'}
                         >
                           <span className="material-symbols-outlined text-sm">
-                            {u.status === 'BLOCKED' ? 'lock_open' : 'lock'}
+                            {u.status === 'B' ? 'lock_open' : 'lock'}
                           </span>
                         </button>
                         <button 
@@ -251,50 +286,26 @@ export default function UserManagementPage() {
                   </TableRow>
                 );
               })}
+              {customers.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center py-8 text-on-surface-variant italic">
+                    No customers found.
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
             </Table>
           </div>
+          )}
 
           {/* Pagination Footer */}
-          <div className="flex flex-col sm:flex-row items-center justify-between px-lg py-md border-t border-outline-variant/40 bg-surface-container-lowest gap-4">
-            <span className="font-label-md text-label-md text-on-surface-variant font-medium text-center sm:text-left">
-              Showing {totalItems > 0 ? startIndex + 1 : 0} to {Math.min(startIndex + itemsPerPage, totalItems)} of {totalItems} entries
-            </span>
-            <div className="flex items-center gap-sm">
-              {currentPage > 1 && (
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                  className="px-sm py-1 rounded hover:bg-surface-container text-xs font-bold transition-all flex items-center cursor-pointer text-on-surface-variant"
-                >
-                  Back
-                </button>
-              )}
-              {pageRange.map(p => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setCurrentPage(p)}
-                  className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold transition-all cursor-pointer ${
-                    currentPage === p
-                      ? 'bg-primary text-on-primary shadow-sm active:scale-90'
-                      : 'text-on-surface-variant hover:bg-surface-container'
-                  }`}
-                >
-                  {p}
-                </button>
-              ))}
-              {currentPage < totalPages && (
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                  className="px-sm py-1 rounded hover:bg-surface-container text-xs font-bold transition-all flex items-center cursor-pointer text-on-surface-variant"
-                >
-                  Next
-                </button>
-              )}
-            </div>
-          </div>
+          <TablePagination
+            currentPage={currentPage}
+            totalItems={totalItems}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={handleItemsPerPageChange}
+          />
         </Card>
       </div>
 
@@ -334,21 +345,6 @@ export default function UserManagementPage() {
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="font-label-md text-label-md text-on-surface-variant font-bold uppercase ml-1">Access Level</label>
-            <div className="relative">
-              <select
-                value={editRole}
-                onChange={(e) => setEditRole(e.target.value as any)}
-                className="w-full h-12 px-md bg-white border border-outline-variant rounded-lg font-body-md text-body-md focus:ring-2 focus:ring-secondary/20 focus:border-secondary outline-none transition-all appearance-none"
-              >
-                <option value="CUSTOMER">CUSTOMER (Standard User)</option>
-                <option value="ADMIN">ADMIN (System Administrator)</option>
-              </select>
-              <span className="material-symbols-outlined absolute right-md top-1/2 -translate-y-1/2 pointer-events-none text-outline">expand_more</span>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1">
             <label className="font-label-md text-label-md text-on-surface-variant font-bold uppercase ml-1">Verification Status</label>
             <div className="relative">
               <select
@@ -368,8 +364,19 @@ export default function UserManagementPage() {
             <Button type="button" variant="secondary" onClick={() => setIsEditOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" variant="primary">
-              Save Alterations
+            <Button 
+              type="submit" 
+              variant="primary" 
+              className="flex items-center gap-2" 
+              disabled={isSubmitting}
+            >
+              {isSubmitting && (
+                <svg className="animate-spin h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              )}
+              <span>{isSubmitting ? 'Saving...' : 'Save Alterations'}</span>
             </Button>
           </div>
         </form>
@@ -395,7 +402,7 @@ export default function UserManagementPage() {
           </div>
           <div className="text-right flex-shrink-0">
             <p className="font-label-md text-label-md text-on-surface-variant uppercase font-bold">Role</p>
-            <p className="font-body-md text-body-md text-error font-bold">{selectedUser?.role}</p>
+            <p className="font-body-md text-body-md text-error font-bold">CUSTOMER</p>
           </div>
         </div>
 
@@ -403,8 +410,18 @@ export default function UserManagementPage() {
           <button className="px-xl h-11 flex items-center justify-center rounded-lg border border-outline text-on-surface font-title-md text-title-md hover:bg-surface-container-high transition-colors active:scale-95 duration-150 font-semibold" onClick={() => setIsDeleteOpen(false)}>
             Keep
           </button>
-          <button className="px-xl h-11 flex items-center justify-center rounded-lg bg-error text-on-error font-title-md text-title-md shadow-md hover:opacity-90 transition-all active:scale-95 duration-150 font-semibold" onClick={handleConfirmDelete}>
-            Remove Account
+          <button 
+            disabled={isSubmitting}
+            className="px-xl h-11 flex items-center justify-center rounded-lg bg-error text-on-error font-title-md text-title-md shadow-md hover:opacity-90 transition-all active:scale-95 duration-150 font-semibold disabled:opacity-50 disabled:cursor-not-allowed" 
+            onClick={handleConfirmDelete}
+          >
+            {isSubmitting && (
+              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            )}
+            {isSubmitting ? 'Removing...' : 'Remove Account'}
           </button>
         </div>
       </Modal>
