@@ -6,6 +6,7 @@ import { useTransactionStore } from '@/store/transactionStore';
 import { useAuth } from '@/components/auth/AuthContext';
 import { parseDate } from '@/lib/date';
 import { DashboardMetrics, RecentTransactions } from '@/components/features/dashboard';
+import { InsightCard } from '@/components/features/assistant';
 
 export default function CustomerDashboard() {
   const { user } = useAuth();
@@ -162,6 +163,9 @@ export default function CustomerDashboard() {
 
       {/* Stats Grid */}
       <DashboardMetrics totalSpend={totalSpend} todaySpend={todaySpend} totalDeposits={totalDeposits} />
+
+      {/* AI Proactive Insights */}
+      <InsightCard />
 
       {/* Bento Grid Content */}
       <section className="grid grid-cols-12 gap-6">

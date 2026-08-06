@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/useToast';
 import { dateToInputFormat } from '@/lib/date';
 import axios from 'axios';
 import { DocumentUploader } from '@/components/features/transactions';
+import type { ReceiptExtraction } from '@/lib/ai/types';
 
 interface CategoryOption {
   id: string;
@@ -281,6 +282,7 @@ export default function TransactionsPage() {
   const [addFile, setAddFile] = useState<File | null>(null);
   const [editFile, setEditFile] = useState<File | null>(null);
   const [removeExistingDoc, setRemoveExistingDoc] = useState(false);
+  const [aiExtracting, setAiExtracting] = useState(false);
 
   const {
     register: registerAdd,
@@ -288,6 +290,7 @@ export default function TransactionsPage() {
     reset: resetAdd,
     watch: watchAdd,
     control: controlAdd,
+    setValue: setValueAdd,
     formState: { errors: errorsAdd },
   } = useForm<TransactionFormInput>({
     defaultValues: {
@@ -374,6 +377,49 @@ export default function TransactionsPage() {
     });
     setAddFile(null);
     setIsAddOpen(true);
+  };
+
+  const handleExtractWithAI = async () => {
+    if (!addFile) return;
+    setAiExtracting(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', addFile);
+      fd.append('categories', JSON.stringify(categories.map((c) => c.name)));
+      fd.append('paymentTypes', JSON.stringify(paymentTypes.map((p) => p.name)));
+      const res = await axios.post('/api/ai/ocr', fd);
+      const ex = res.data.extraction as ReceiptExtraction | undefined;
+      if (!ex) throw new Error('No extraction returned');
+      if (ex.type) setValueAdd('type', ex.type);
+      if (ex.title) setValueAdd('title', ex.title);
+      if (ex.merchant) setValueAdd('merchant', ex.merchant);
+      if (ex.amount != null) setValueAdd('amount', String(ex.amount));
+      if (ex.date) setValueAdd('date', ex.date);
+      if (ex.currency) setValueAdd('currency', ex.currency);
+      const suggestedCategory = ex.category;
+      if (suggestedCategory) {
+        const match = categories.find(
+          (c) => c.name.toLowerCase() === suggestedCategory.toLowerCase()
+        );
+        setValueAdd('category', match ? match.name : '');
+      }
+      const suggestedPaymentType = ex.paymentType;
+      if (suggestedPaymentType && ex.type !== 'CREDIT') {
+        const match = paymentTypes.find(
+          (p) => p.name.toLowerCase() === suggestedPaymentType.toLowerCase()
+        );
+        if (match) setValueAdd('paymentType', match.name);
+      }
+      addToast('Receipt extracted — review the fields before saving', 'success');
+    } catch (err) {
+      const message =
+        axios.isAxiosError(err) && typeof err.response?.data?.error === 'string'
+          ? err.response.data.error
+          : 'Could not extract from this receipt';
+      addToast(message, 'error');
+    } finally {
+      setAiExtracting(false);
+    }
   };
 
   // Handle floating FAB ?openAdd=true from customer layout
@@ -737,6 +783,16 @@ export default function TransactionsPage() {
           </FormField>
 
           <DocumentUploader file={addFile} onFileChange={setAddFile} />
+
+          {addFile && addFile.type.startsWith('image/') && (
+            <div className="flex items-center gap-3">
+              <Button type="button" variant="secondary" onClick={handleExtractWithAI} disabled={aiExtracting}>
+                <span className="material-symbols-outlined text-sm">auto_awesome</span>
+                {aiExtracting ? 'Extracting...' : 'Extract with AI'}
+              </Button>
+              <span className="text-xs text-on-surface-variant">Auto-fill fields from the receipt image</span>
+            </div>
+          )}
 
           <div className="flex justify-end gap-3 pt-4 border-t border-outline-variant">
             <Button type="button" variant="secondary" onClick={() => setIsAddOpen(false)}>

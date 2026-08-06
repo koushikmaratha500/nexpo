@@ -9,6 +9,7 @@ const CUSTOMER_NAV_LINKS = [
   { name: 'Dashboard', path: '/customer', icon: 'dashboard' },
   { name: 'Transactions', path: '/customer/transactions', icon: 'receipt_long' },
   { name: 'Reports', path: '/customer/reports', icon: 'bar_chart' },
+  { name: 'AI Assistant', path: '/customer/assistant', icon: 'smart_toy' },
   { name: 'Settings', path: '/customer/settings', icon: 'settings' },
 ];
 

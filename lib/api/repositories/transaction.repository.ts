@@ -116,6 +116,19 @@ export class TransactionRepository {
     return prisma.transactionAudit.create({ data });
   }
 
+  static async findDistinctMonths(userId: string): Promise<string[]> {
+    const rows = await prisma.transaction.findMany({
+      where: { userId, status: { not: 'D' } },
+      select: { transactionDate: true },
+    });
+    const months = new Set<string>();
+    for (const row of rows) {
+      const d = row.transactionDate;
+      months.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    }
+    return [...months].sort();
+  }
+
   static serializeAmount(t: Record<string, unknown>) {
     const amount = t.amount;
     return typeof amount === 'object' && amount !== null ? Number(amount) : amount;
