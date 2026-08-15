@@ -54,21 +54,25 @@ export function InsightCard({ className = '' }: InsightCardProps) {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
+    // AbortController genuinely cancels the in-flight request on cleanup.
+    // Under React StrictMode (on by default in dev) the effect double-invokes
+    // mount → cleanup → mount: the first request is aborted before it can be
+    // processed server-side, so only one `/api/ai/insights` call is made.
+    const controller = new AbortController();
     (async () => {
       setState('loading');
       try {
-        const res = await axios.get<InsightsPayload>('/api/ai/insights');
-        if (cancelled) return;
+        const res = await axios.get<InsightsPayload>('/api/ai/insights', { signal: controller.signal });
         setInsights(res.data.insights ?? []);
         setGeneratedFor(res.data.generatedFor ?? '');
         setState('ready');
-      } catch {
-        if (!cancelled) setState('hidden');
+      } catch (err) {
+        if (axios.isCancel(err)) return;
+        setState('hidden');
       }
     })();
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, []);
 

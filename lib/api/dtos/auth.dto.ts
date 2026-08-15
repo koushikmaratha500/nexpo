@@ -37,3 +37,7 @@ export const updateProfileSchema = z.object({
   oldPassword: z.string().optional(),
   newPassword: z.string().min(7, 'New password must be at least 7 characters long').optional(),
 });
+
+export const completeForcedResetSchema = z.object({
+  newPassword: z.string().min(7, 'New password must be at least 7 characters long'),
+});

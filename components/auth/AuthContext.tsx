@@ -21,7 +21,7 @@ export interface User {
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string, isAdmin?: boolean) => Promise<{ success: boolean; error?: string; pendingVerification?: boolean }>;
+  login: (email: string, password: string, isAdmin?: boolean) => Promise<{ success: boolean; error?: string; pendingVerification?: boolean; forcePasswordReset?: boolean }>;
   logout: () => void;
   isLoading: boolean;
   updateUser: (updatedFields: Partial<User>) => void;
@@ -181,7 +181,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const login = async (email: string, password: string, isAdmin = false): Promise<{ success: boolean; error?: string; pendingVerification?: boolean }> => {
+  const login = async (email: string, password: string, isAdmin = false): Promise<{ success: boolean; error?: string; pendingVerification?: boolean; forcePasswordReset?: boolean }> => {
     if (!password || password.length <= 6) {
       return { success: false, error: 'Password must be more than 6 characters long.' };
     }
@@ -195,6 +195,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (response.data.success) {
         const resToken = response.data.token;
         const rawUser = response.data.user || response.data.admin;
+
+        if (!isAdminLogin && response.data.forcePasswordReset) {
+          localStorage.setItem('nexpo_forced_reset_token', resToken);
+          localStorage.setItem('nexpo_forced_reset_email', lowerEmail);
+          router.push('/auth/forced-reset');
+          return { success: true, forcePasswordReset: true };
+        }
 
         let loggedInUser: User;
         if (isAdminLogin) {

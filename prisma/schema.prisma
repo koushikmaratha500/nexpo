@@ -31,6 +31,7 @@ enum AuditAction {
   LOGOUT
   BLOCK
   ACTIVATE
+  PASSWORD_RESET
 }
 
 enum TransactionType {
@@ -79,6 +80,8 @@ model User {
   country         Country?     @relation(fields: [countryId], references: [id])
   currency        Currency?    @relation(fields: [currencyId], references: [id])
   status          Status       @default(A)
+  forcedResetPassword Boolean   @default(false)
+  lastPasswordChangedDate DateTime?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
   transactions    Transaction[]

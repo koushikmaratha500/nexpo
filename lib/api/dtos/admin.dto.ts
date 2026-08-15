@@ -33,6 +33,13 @@ export const updateAdminSchema = createAdminSchema.partial().extend({
 
 export type UpdateAdminDto = z.infer<typeof updateAdminSchema>;
 
+export const resetUserPasswordSchema = z.object({
+  password: z.string().min(7, 'Password must be at least 7 characters long'),
+  forcedResetPassword: z.boolean().optional().default(false),
+});
+
+export type ResetUserPasswordDto = z.infer<typeof resetUserPasswordSchema>;
+
 export const paginationSchema = z.object({
   page: z.coerce.number().min(1).optional().default(1),
   pageSize: z.coerce.number().min(1).max(200).optional().default(20),

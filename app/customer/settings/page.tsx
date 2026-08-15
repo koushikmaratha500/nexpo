@@ -7,6 +7,7 @@ import { useAuth } from '@/components/auth/AuthContext';
 import { useToast } from '@/hooks/useToast';
 import Image from 'next/image';
 import axios from 'axios';
+import { PasswordInput } from '@/components/forms/PasswordInput';
 
 interface CountryOption {
   id: string;
@@ -315,25 +316,21 @@ export default function CustomerSettingsPage() {
 
               <div className="flex flex-col gap-1 mt-2">
                 <label className="font-label-md text-label-md text-on-surface font-bold uppercase">Current Password</label>
-                <input
-                  type="password"
+                <PasswordInput
                   required
                   placeholder="••••••••"
                   value={oldPassword}
                   onChange={(e) => setOldPassword(e.target.value)}
-                  className="px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary text-on-surface w-full"
                 />
               </div>
 
               <div className="flex flex-col gap-1">
                 <label className="font-label-md text-label-md text-on-surface font-bold uppercase">New Password</label>
-                <input
-                  type="password"
+                <PasswordInput
                   required
                   placeholder="••••••••"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary text-on-surface w-full"
                 />
               </div>
 

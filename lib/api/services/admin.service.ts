@@ -6,7 +6,7 @@ import { AuditLogRepository } from '../repositories/audit-log.repository';
 import { SupportRepository } from '../repositories/support.repository';
 import { hashPassword } from './auth.service';
 import { AuditAction } from '@prisma/client';
-import { CreateUserDto, UpdateUserDto, CreateAdminDto, UpdateAdminDto } from '../dtos/admin.dto';
+import { CreateUserDto, UpdateUserDto, CreateAdminDto, UpdateAdminDto, ResetUserPasswordDto } from '../dtos/admin.dto';
 
 export interface RequestMeta {
   ip?: string | null;
@@ -138,6 +138,8 @@ export class AdminService {
         status: user.status,
         emailVerified: user.emailVerified,
         mobileVerified: user.mobileVerified,
+        forcedResetPassword: user.forcedResetPassword,
+        lastPasswordChangedDate: user.lastPasswordChangedDate,
         profileImageUrl: user.profileImageUrl || null,
         country: user.country || null,
         currency: user.currency || null,
@@ -283,6 +285,42 @@ export class AdminService {
     });
 
     return { success: true, message: 'User soft-deleted successfully' };
+  }
+
+  static async resetUserPassword(id: string, dto: ResetUserPasswordDto, meta: RequestMeta = {}) {
+    const original = await UserRepository.findById(id);
+    if (!original) {
+      throw new Error('User not found');
+    }
+
+    const hashedPassword = hashPassword(dto.password);
+    const updated = await UserRepository.update(id, {
+      passwordHash: hashedPassword,
+      forcedResetPassword: dto.forcedResetPassword,
+      lastPasswordChangedDate: new Date(),
+    });
+
+    await SessionRepository.invalidateAllForUser(id);
+
+    await UserRepository.createAudit({
+      userId: id,
+      action: AuditAction.PASSWORD_RESET,
+      oldValue: {
+        email: original.email,
+        forcedResetPassword: original.forcedResetPassword,
+        lastPasswordChangedDate: original.lastPasswordChangedDate,
+      },
+      newValue: {
+        email: updated.email,
+        forcedResetPassword: updated.forcedResetPassword,
+        lastPasswordChangedDate: updated.lastPasswordChangedDate,
+      },
+      ipAddress: meta.ip || null,
+      userAgent: meta.ua || null,
+      status: 'A',
+    });
+
+    return updated;
   }
 
   static async createAdmin(dto: CreateAdminDto) {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { AuthService } from '../services/auth.service';
 import { UserRepository } from '../repositories/user.repository';
 import { AdminRepository } from '../repositories/admin.repository';
-import { registerSchema, loginSchema, verifyOtpSchema, updateProfileSchema, forgotPasswordSchema, resetPasswordSchema } from '../dtos/auth.dto';
+import { registerSchema, loginSchema, verifyOtpSchema, updateProfileSchema, forgotPasswordSchema, resetPasswordSchema, completeForcedResetSchema } from '../dtos/auth.dto';
 import { EmailService } from '../services/email.service';
 
 export class AuthController {
@@ -61,11 +61,13 @@ export class AuthController {
 
       const ip = req.headers.get('x-forwarded-for') || 'anonymous';
       const ua = req.headers.get('user-agent') || '';
-      const { user, token } = await AuthService.loginUser(validated.email, validated.password, { ip, ua });
+      const result = await AuthService.loginUser(validated.email, validated.password, { ip, ua });
+      const { user, token } = result;
 
       return NextResponse.json({
         success: true,
         token,
+        ...(result.forcePasswordReset ? { forcePasswordReset: true } : {}),
         user: {
           firstName: user.firstName,
           lastName: user.lastName || '',
@@ -82,6 +84,38 @@ export class AuthController {
         return NextResponse.json({ error: message }, { status: 400 });
       }
       return NextResponse.json({ error: error.message || 'Login failed' }, { status: 400 });
+    }
+  }
+
+  static async completeForcedPasswordReset(req: NextRequest, userId: string) {
+    try {
+      const body = await req.json();
+      const validated = completeForcedResetSchema.parse(body);
+
+      const ip = req.headers.get('x-forwarded-for') || 'anonymous';
+      const ua = req.headers.get('user-agent') || '';
+      const { user, token } = await AuthService.completeForcedPasswordReset(userId, validated.newPassword, { ip, ua });
+
+      return NextResponse.json({
+        success: true,
+        message: 'Password updated successfully',
+        token,
+        user: {
+          firstName: user.firstName,
+          lastName: user.lastName || '',
+          phone: user.mobile || '',
+          email: user.email || '',
+          countryId: user.countryId,
+          currencyId: user.currencyId,
+          role: 'CUSTOMER',
+        },
+      });
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        const message = error.errors?.[0]?.message || error.issues?.[0]?.message || error.message || 'Validation error';
+        return NextResponse.json({ error: message }, { status: 400 });
+      }
+      return NextResponse.json({ error: error.message || 'Failed to update password' }, { status: 400 });
     }
   }
 
@@ -171,6 +205,10 @@ export class AuthController {
         }
 
         updateData.passwordHash = hashPassword(validated.newPassword);
+        if (!isAdmin) {
+          updateData.forcedResetPassword = false;
+          updateData.lastPasswordChangedDate = new Date();
+        }
       }
 
       delete updateData.oldPassword;

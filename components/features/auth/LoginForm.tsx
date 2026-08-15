@@ -8,6 +8,7 @@ import { useForm } from 'react-hook-form';
 import { useToast } from '@/hooks/useToast';
 import Link from 'next/link';
 import { useAuth } from '@/components/auth/AuthContext';
+import { PasswordInput } from '@/components/forms/PasswordInput';
 
 interface LoginFormProps {
   isAdmin?: boolean;
@@ -30,7 +31,6 @@ export function LoginForm({ isAdmin = false, onLoginSuccess }: LoginFormProps) {
 
   const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
 
   const {
     register,
@@ -73,6 +73,10 @@ export function LoginForm({ isAdmin = false, onLoginSuccess }: LoginFormProps) {
     try {
       const result = await login(data.email, data.password, isAdmin);
       if (result.success) {
+        if (result.forcePasswordReset) {
+          addToast('Please set a new password to continue.', 'warning');
+          return;
+        }
         addToast('Welcome back! Signed in successfully.', 'success');
         onLoginSuccess?.();
 
@@ -152,48 +156,25 @@ export function LoginForm({ isAdmin = false, onLoginSuccess }: LoginFormProps) {
         )}
       </div>
 
-      <div className="flex flex-col gap-1">
-        <div className="flex justify-between items-center">
-          <label htmlFor="login-password" className="font-label-md text-label-md text-on-surface font-bold uppercase tracking-wide">
-            Password
-          </label>
+      <PasswordInput
+        id="login-password"
+        label="Password"
+        required
+        placeholder="••••••••"
+        error={errors.password?.message}
+        labelRight={
           <Link
             href={isAdmin ? '/admin/forgot-password' : '/auth/forgot-password'}
             className="font-label-md text-label-md text-on-primary-container hover:underline"
           >
             Forgot password?
           </Link>
-        </div>
-        <div className="relative w-full">
-          <input
-            id="login-password"
-            type={showPassword ? 'text' : 'password'}
-            placeholder="••••••••"
-            {...register('password', {
-              required: 'Password is required',
-              minLength: { value: 6, message: 'Password must be at least 6 characters' },
-            })}
-            className={`${inputClassName} pr-12`}
-          />
-          <button
-            type="button"
-            tabIndex={-1}
-            onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors"
-            aria-label={showPassword ? 'Hide password' : 'Show password'}
-          >
-            <span className="material-symbols-outlined text-xs scale-90">
-              {showPassword ? 'visibility_off' : 'visibility'}
-            </span>
-          </button>
-        </div>
-        {errors.password && (
-          <span className="text-error text-xs font-semibold mt-1 flex items-center gap-1 animate-in slide-in-from-top-1">
-            <span className="material-symbols-outlined text-xs">error</span>
-            {errors.password.message}
-          </span>
-        )}
-      </div>
+        }
+        {...register('password', {
+          required: 'Password is required',
+          minLength: { value: 6, message: 'Password must be at least 6 characters' },
+        })}
+      />
 
       {!isAdmin && (
         <div className="flex items-center gap-2">

@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form';
 import { useToast } from '@/hooks/useToast';
 import Link from 'next/link';
 import axios from 'axios';
+import { PasswordInput } from '@/components/forms/PasswordInput';
 
 interface RegisterFormValues {
   firstName: string;
@@ -24,7 +25,6 @@ export function RegisterForm() {
   const [success, setSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
 
   const {
     register,
@@ -178,40 +178,17 @@ export function RegisterForm() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="register-password" className="font-label-md text-label-md text-on-surface font-bold uppercase tracking-wide">
-          Password (min. 7 chars)
-        </label>
-        <div className="relative w-full">
-          <input
-            id="register-password"
-            type={showPassword ? 'text' : 'password'}
-            placeholder="••••••••"
-            {...register('password', {
-              required: 'Password is required',
-              minLength: { value: 7, message: 'Password must be at least 7 characters' },
-            })}
-            className={`${inputClassName} pr-12`}
-          />
-          <button
-            type="button"
-            tabIndex={-1}
-            onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors"
-            aria-label={showPassword ? 'Hide password' : 'Show password'}
-          >
-            <span className="material_symbols-outlined text-xs scale-90">
-              {showPassword ? 'visibility_off' : 'visibility'}
-            </span>
-          </button>
-        </div>
-        {errors.password && (
-          <span className="text-error text-xs font-semibold mt-1 flex items-center gap-1 animate-in slide-in-from-top-1">
-            <span className="material_symbols-outlined text-xs">error</span>
-            {errors.password.message}
-          </span>
-        )}
-      </div>
+      <PasswordInput
+        id="register-password"
+        label="Password (min. 7 chars)"
+        required
+        placeholder="••••••••"
+        error={errors.password?.message}
+        {...register('password', {
+          required: 'Password is required',
+          minLength: { value: 7, message: 'Password must be at least 7 characters' },
+        })}
+      />
 
       <Button type="submit" disabled={isSubmitting} className="w-full h-11">
         {isSubmitting ? (
