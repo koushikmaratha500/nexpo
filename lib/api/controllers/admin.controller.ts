@@ -123,6 +123,32 @@ export class AdminController {
     }
   }
 
+  static async blockUser(req: NextRequest, id: string) {
+    try {
+      const result = await AdminService.blockUser(id, {
+        ip: req.headers.get('x-forwarded-for') || null,
+        ua: req.headers.get('user-agent') || null,
+      });
+      return NextResponse.json(result);
+    } catch (error: unknown) {
+      const e = error as Error;
+      return NextResponse.json({ error: e.message || 'Failed to block user' }, { status: 400 });
+    }
+  }
+
+  static async activateUser(req: NextRequest, id: string) {
+    try {
+      const result = await AdminService.activateUser(id, {
+        ip: req.headers.get('x-forwarded-for') || null,
+        ua: req.headers.get('user-agent') || null,
+      });
+      return NextResponse.json(result);
+    } catch (error: unknown) {
+      const e = error as Error;
+      return NextResponse.json({ error: e.message || 'Failed to activate user' }, { status: 400 });
+    }
+  }
+
   static async resetUserPassword(req: NextRequest, id: string) {
     try {
       const body = await req.json();

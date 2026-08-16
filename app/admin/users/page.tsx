@@ -65,6 +65,7 @@ export default function UserManagementPage() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isResetOpen, setIsResetOpen] = useState(false);
+  const [isStatusConfirmOpen, setIsStatusConfirmOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Forms state
@@ -131,21 +132,47 @@ export default function UserManagementPage() {
     }
   };
 
-  // Toggle user status via API (Block/Unblock)
-  const toggleStatus = async (user: APIUser) => {
-    const nextStatus = user.status === 'B' ? 'A' : 'B';
-    const displayStatus = user.status === 'B' ? 'ACTIVE' : 'BLOCKED';
+  // Block / Activate (vice-versa based on current status)
+  const handleStatusAction = (user: APIUser) => {
+    const canActivate = user.status === 'B' || user.status === 'P';
+    if (canActivate) {
+      void activateUser(user);
+    } else {
+      setSelectedUser(user);
+      setIsStatusConfirmOpen(true);
+    }
+  };
 
+  const activateUser = async (user: APIUser) => {
     try {
-      await axios.patch(`/api/admin/user/${user.id}`, {
-        status: nextStatus,
-      });
+      await axios.post(`/api/admin/user/${user.id}/activate`);
 
-      addToast(`Customer ${displayStatus === 'BLOCKED' ? 'blocked' : 'unblocked'}`, 'success');
+      addToast(user.status === 'B' ? 'Customer unblocked successfully' : 'Customer activated successfully', 'success');
       fetchUsers(currentPage);
     } catch (err: any) {
-      const errMsg = err.response?.data?.error || 'Failed to update customer status';
+      const errMsg = err.response?.data?.error || 'Failed to activate customer';
       addToast(errMsg, 'error');
+    }
+  };
+
+  // Confirm Block via API
+  const handleBlockConfirm = async () => {
+    if (!selectedUser) return;
+    setIsSubmitting(true);
+
+    try {
+      const response = await axios.post(`/api/admin/user/${selectedUser.id}/block`);
+      if (response.data?.user) {
+        addToast('Customer blocked successfully. Active sessions were terminated.', 'success');
+        setIsStatusConfirmOpen(false);
+        setSelectedUser(null);
+        fetchUsers(currentPage);
+      }
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to block customer';
+      addToast(errMsg, 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -260,6 +287,7 @@ export default function UserManagementPage() {
             <TableBody>
               {paginatedCustomers.map((u) => {
                 const displayStatus = mapStatus(u.status);
+                const canActivate = u.status === 'B' || u.status === 'P';
                 return (
                   <TableRow 
                     key={u.id} 
@@ -321,14 +349,14 @@ export default function UserManagementPage() {
                           <span className="material-symbols-outlined text-sm">edit</span>
                         </button>
                         <button 
-                          onClick={() => toggleStatus(u)}
+                          onClick={() => handleStatusAction(u)}
                           className={`p-1 hover:bg-surface-container rounded-full transition-all ${
-                            u.status === 'B' ? 'text-secondary hover:text-secondary' : 'text-on-surface-variant hover:text-error'
+                            canActivate ? 'text-secondary hover:text-secondary' : 'text-on-surface-variant hover:text-error'
                           }`}
-                          title={u.status === 'B' ? 'Unblock User' : 'Block User'}
+                          title={u.status === 'P' ? 'Force Activate Account' : u.status === 'B' ? 'Activate Account' : 'Block Account'}
                         >
                           <span className="material-symbols-outlined text-sm">
-                            {u.status === 'B' ? 'lock_open' : 'lock'}
+                            {u.status === 'B' ? 'lock_open' : u.status === 'P' ? 'how_to_reg' : 'lock'}
                           </span>
                         </button>
                         <button 
@@ -557,6 +585,50 @@ export default function UserManagementPage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Block Account Confirmation Modal */}
+      <Modal isOpen={isStatusConfirmOpen} onClose={() => setIsStatusConfirmOpen(false)} title="Block Account" customHeader={true} cardPadding="p-0" maxWidth="max-w-md">
+        <div className="pt-xl px-xl flex flex-col items-center text-center">
+          <div className="w-16 h-16 rounded-full bg-error-container flex items-center justify-center mb-md">
+            <span className="material-symbols-outlined text-error text-[32px]">lock</span>
+          </div>
+          <h2 className="font-headline-md text-headline-md text-on-surface mb-sm font-black">Block this Account?</h2>
+          <p className="font-body-md text-body-md text-on-surface-variant max-w-xs leading-relaxed">
+            Blocking immediately signs the customer out of all active sessions and prevents them from accessing the ledger. You can activate the account again anytime.
+          </p>
+        </div>
+
+        <div className="mx-xl my-lg p-md bg-surface-container rounded-lg border border-outline-variant flex items-center gap-md">
+          <div className="flex-grow min-w-0">
+            <p className="font-label-md text-label-md text-on-surface-variant uppercase font-bold text-left">Selected Account</p>
+            <p className="font-body-md text-body-md font-semibold text-on-surface truncate text-left">{selectedUser?.firstName} {selectedUser?.lastName || ''}</p>
+            <p className="font-label-md text-[10px] text-on-surface-variant font-mono-data text-left">{selectedUser?.email}</p>
+          </div>
+          <div className="text-right flex-shrink-0">
+            <p className="font-label-md text-label-md text-on-surface-variant uppercase font-bold">Role</p>
+            <p className="font-body-md text-body-md text-error font-bold">CUSTOMER</p>
+          </div>
+        </div>
+
+        <div className="p-lg bg-surface-container-low flex flex-col-reverse sm:flex-row gap-md sm:justify-end border-t border-outline-variant">
+          <button className="px-xl h-11 flex items-center justify-center rounded-lg border border-outline text-on-surface font-title-md text-title-md hover:bg-surface-container-high transition-colors active:scale-95 duration-150 font-semibold" onClick={() => setIsStatusConfirmOpen(false)}>
+            Keep
+          </button>
+          <button
+            disabled={isSubmitting}
+            className="px-xl h-11 flex items-center justify-center rounded-lg bg-error text-on-error font-title-md text-title-md shadow-md hover:opacity-90 transition-all active:scale-95 duration-150 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={handleBlockConfirm}
+          >
+            {isSubmitting && (
+              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            )}
+            {isSubmitting ? 'Blocking...' : 'Block Account'}
+          </button>
+        </div>
       </Modal>
 
     </div>

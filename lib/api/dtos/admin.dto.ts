@@ -14,6 +14,7 @@ export type CreateUserDto = z.infer<typeof createUserSchema>;
 
 export const updateUserSchema = createUserSchema.partial().extend({
   password: z.string().min(7, 'Password must be at least 7 characters long').optional(),
+  status: z.enum(['A', 'P', 'B'], 'Status must be ACTIVE (A), PENDING (P) or BLOCKED (B)').optional(),
 });
 
 export type UpdateUserDto = z.infer<typeof updateUserSchema>;
