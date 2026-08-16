@@ -422,6 +422,14 @@ body {
 @utility right-lg { right: 24px; }
 @utility right-xl { right: 32px; }
 
+@utility no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 @keyframes toast-progress {
   from { width: 100%; }
   to { width: 0%; }

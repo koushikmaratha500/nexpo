@@ -2,7 +2,7 @@ import React from 'react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   children: React.ReactNode;
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'tertiary';
   className?: string;
 }
 
@@ -19,6 +19,7 @@ export function Button({
     secondary: 'border border-outline-variant bg-surface-container-lowest text-on-surface hover:bg-surface-container-low',
     ghost: 'text-on-surface-variant hover:text-primary hover:bg-surface-container-low',
     danger: 'bg-error text-on-error hover:opacity-90 shadow-sm',
+    tertiary: 'bg-tertiary text-on-tertiary hover:opacity-90 shadow-sm',
   };
 
   return (

@@ -1,6 +1,10 @@
 export { TransactionForm } from './TransactionForm';
 export { TransactionList } from './TransactionList';
 export { DocumentUploader } from './DocumentUploader';
+export { RecurringApprovalPanel } from './RecurringApprovalPanel';
+export { ImportExpensesModal } from './ImportExpensesModal';
 export type { TransactionFormProps } from './TransactionForm';
 export type { TransactionListProps } from './TransactionList';
 export type { DocumentUploaderProps } from './DocumentUploader';
+export type { RecurringApprovalPanelProps } from './RecurringApprovalPanel';
+export type { ImportExpensesModalProps } from './ImportExpensesModal';

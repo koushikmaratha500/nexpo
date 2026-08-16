@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { Transaction, Prisma } from '@prisma/client';
+import { AuditAction } from '@prisma/client';
 
 export interface TransactionQueryParams {
   userId?: string;
@@ -114,6 +115,160 @@ export class TransactionRepository {
 
   static async createAudit(data: Prisma.TransactionAuditUncheckedCreateInput) {
     return prisma.transactionAudit.create({ data });
+  }
+
+  /* ------------------------- Recurring transactions ------------------------- */
+
+  static async findRecurring(userId: string) {
+    return prisma.transaction.findMany({
+      where: { userId, isRecurring: true, status: { not: 'D' } },
+      orderBy: { transactionDate: 'asc' },
+      include: { category: true, currency: true, paymentType: true, budgetDepositType: true, budgetType: true },
+    });
+  }
+
+  static async findRecurringAction(transactionId: string, dueDate: Date) {
+    return prisma.recurringTransactionAction.findFirst({
+      where: { transactionId, dueDate },
+    });
+  }
+
+  static async findRecurringActions(userId: string) {
+    return prisma.recurringTransactionAction.findMany({
+      where: { userId, action: 'APPROVED' },
+      select: { transactionId: true, dueDate: true },
+    });
+  }
+
+  static async createRecurringAction(data: Prisma.RecurringTransactionActionUncheckedCreateInput) {
+    return prisma.recurringTransactionAction.create({ data });
+  }
+
+  /**
+   * Converts a batch of recurring occurrences into real (one-time) transactions.
+   * Runs atomically: creates each new transaction + records its approval action.
+   * Already-approved occurrences are skipped idempotently.
+   */
+  static async approveRecurringBatch(
+    userId: string,
+    items: { transactionId: string; dueDate: Date }[],
+    meta: { ip?: string; ua?: string } = {}
+  ) {
+    return prisma.$transaction(async (tx) => {
+      const created: Transaction[] = [];
+      const skipped: string[] = [];
+
+      for (const item of items) {
+        const source = await tx.transaction.findFirst({
+          where: {
+            id: item.transactionId,
+            userId,
+            isRecurring: true,
+            status: { not: 'D' },
+          },
+          include: {
+            category: true,
+            currency: true,
+            paymentType: true,
+            budgetDepositType: true,
+            budgetType: true,
+          },
+        });
+
+        if (!source) continue;
+
+        // Drop the time component: e.g. 2026-09-14T07:00 -> 2026-09-14T00:00
+        const dueDate = new Date(item.dueDate);
+        dueDate.setHours(0, 0, 0, 0);
+
+        const existing = await tx.recurringTransactionAction.findFirst({
+          where: { transactionId: source.id, dueDate },
+        });
+        if (existing) {
+          skipped.push(source.id);
+          continue;
+        }
+
+        const txn = await tx.transaction.create({
+          data: {
+            userId,
+            type: source.type,
+            categoryId: source.categoryId,
+            currencyId: source.currencyId,
+            paymentTypeId: source.paymentTypeId,
+            budgetDepositTypeId: source.budgetDepositTypeId,
+            budgetTypeId: source.budgetTypeId,
+            title: source.title,
+            description: source.description,
+            amount: source.amount,
+            transactionDate: dueDate,
+            notes: source.notes,
+            merchant: source.merchant,
+            status: 'A',
+            isRecurring: false,
+          },
+        });
+
+        await tx.recurringTransactionAction.create({
+          data: {
+            userId,
+            transactionId: source.id,
+            dueDate,
+            action: 'APPROVED',
+          },
+        });
+
+        const auditNewValue = JSON.parse(JSON.stringify(txn));
+        await tx.transactionAudit.create({
+          data: {
+            transactionId: txn.id,
+            action: AuditAction.CREATE,
+            newValue: { ...auditNewValue, sourceRecurringId: source.id },
+            ipAddress: meta.ip || null,
+            userAgent: meta.ua || null,
+          },
+        });
+
+        created.push(txn);
+      }
+
+      return { created, skipped };
+    });
+  }
+
+  /* ----------------------------- Bulk import ----------------------------- */
+
+  /**
+   * Bulk-creates transactions from validated import rows inside a single
+   * transaction, writing an audit trail for each created record.
+   */
+  static async bulkCreateTransactions(
+    userId: string,
+    rows: { data: Prisma.TransactionUncheckedCreateInput; meta?: { ip?: string; ua?: string } }[]
+  ) {
+    return prisma.$transaction(async (tx) => {
+      const created: Transaction[] = [];
+      for (const row of rows) {
+        const txn = await tx.transaction.create({
+          data: {
+            ...row.data,
+            userId,
+            status: 'A',
+          },
+        });
+        await tx.transactionAudit.create({
+          data: {
+            transactionId: txn.id,
+            action: AuditAction.CREATE,
+            newValue: JSON.parse(JSON.stringify(txn)),
+            ipAddress: row.meta?.ip || null,
+            userAgent: row.meta?.ua || null,
+          },
+        });
+        created.push(txn);
+      }
+      return created;
+    });
   }
 
   static async findDistinctMonths(userId: string): Promise<string[]> {
