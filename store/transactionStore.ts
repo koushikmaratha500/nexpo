@@ -28,6 +28,23 @@ export interface Transaction {
   receiptDate?: string;
   // Credit-specific: Cash or Account (deposit method)
   depositType?: 'Cash' | 'Account';
+  // Recurring support
+  isRecurring?: boolean;
+  recurringDay?: number | null;
+}
+
+export interface PendingRecurring {
+  transactionId: string;
+  dueDate: string;
+  type: TransactionType;
+  title: string;
+  merchant?: string | null;
+  category?: string | null;
+  amount: number;
+  currency: string;
+  paymentType?: string | null;
+  notes?: string | null;
+  recurringDay?: number | null;
 }
 
 // Map database Prisma response to client Transaction interface
@@ -60,6 +77,8 @@ const mapDbTransactionToTransaction = (dbTxn: any): Transaction => {
     receiptUrl: dbTxn.documentUrl || dbTxn.receiptUrl || undefined,
     receiptDate: dbTxn.documentFileName ? formatDate(dbTxn.transactionDate || dbTxn.date) : undefined,
     depositType: isCredit ? ((dbTxn.paymentType?.name || 'Account') as 'Cash' | 'Account') : undefined,
+    isRecurring: dbTxn.isRecurring ?? false,
+    recurringDay: dbTxn.recurringDay ?? null,
   };
 
   return base;
@@ -88,16 +107,24 @@ interface TransactionState {
   transactions: Transaction[];
   isLoading: boolean;
   error: string | null;
+  recurringItems: PendingRecurring[];
+  recurringLoading: boolean;
+  recurringError: string | null;
   fetchTransactions: (filters?: { type?: 'DEBIT' | 'CREDIT'; categoryId?: string; category?: string; startDate?: string; endDate?: string }) => Promise<void>;
   addTransaction: (txn: Omit<Transaction, 'id' | 'submittedBy' | 'status'>, file?: File | null) => Promise<void>;
   updateTransaction: (id: string, txn: Partial<Transaction>, file?: File | null) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
+  fetchRecurring: () => Promise<void>;
+  approveRecurring: (items: { transactionId: string; dueDate: string }[]) => Promise<{ approved: number; skipped: number }>;
 }
 
 export const useTransactionStore = create<TransactionState>((set, get) => ({
   transactions: [],
   isLoading: false,
   error: null,
+  recurringItems: [],
+  recurringLoading: false,
+  recurringError: null,
 
   fetchTransactions: async (filters?: { type?: 'DEBIT' | 'CREDIT'; categoryId?: string; category?: string; startDate?: string; endDate?: string }) => {
     if (get().isLoading) return;
@@ -137,6 +164,10 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       formData.append('paymentType', txnData.paymentType || (txnData.type === 'CREDIT' ? 'Account' : 'Credit Card'));
       formData.append('notes', txnData.notes || txnData.merchant || txnData.title || '');
       formData.append('currency', txnData.currency || 'INR');
+      formData.append('isRecurring', String(txnData.isRecurring ?? false));
+      if (txnData.isRecurring && txnData.recurringDay != null) {
+        formData.append('recurringDay', String(txnData.recurringDay));
+      }
 
       if (file) {
         formData.append('file', file);
@@ -148,6 +179,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
       set({ isLoading: false });
       await get().fetchTransactions();
+      await get().fetchRecurring();
     } catch (err: any) {
       set({ isLoading: false, error: err.message || 'Failed to add transaction' });
       throw err;
@@ -167,6 +199,10 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       if (txnData.paymentType) formData.append('paymentType', txnData.paymentType);
       if (txnData.notes !== undefined) formData.append('notes', txnData.notes || '');
       if (txnData.currency) formData.append('currency', txnData.currency);
+      if (txnData.isRecurring !== undefined) formData.append('isRecurring', String(txnData.isRecurring));
+      if (txnData.recurringDay !== undefined) {
+        formData.append('recurringDay', txnData.recurringDay == null ? '' : String(txnData.recurringDay));
+      }
       // If documentName is provided (including empty string to clear), send it to the API
       if (txnData.documentName !== undefined) formData.append('documentFileName', txnData.documentName || '');
       // When clearing, also clear the URL
@@ -182,6 +218,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
       set({ isLoading: false });
       await get().fetchTransactions();
+      await get().fetchRecurring();
     } catch (err: any) {
       set({ isLoading: false, error: err.message || 'Failed to update transaction' });
       throw err;
@@ -194,8 +231,38 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       await axios.delete(`/api/user/transaction/${id}`);
       set({ isLoading: false });
       await get().fetchTransactions();
+      await get().fetchRecurring();
     } catch (err: any) {
       set({ isLoading: false, error: err.message || 'Failed to delete transaction' });
+      throw err;
+    }
+  },
+
+  fetchRecurring: async () => {
+    if (get().recurringLoading) return;
+    set({ recurringLoading: true, recurringError: null });
+    try {
+      const response = await axios.get('/api/user/transactions/recurring');
+      const items = response.data?.items || [];
+      set({ recurringItems: items, recurringLoading: false });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch recurring transactions';
+      set({ recurringItems: [], recurringLoading: false, recurringError: message });
+    }
+  },
+
+  approveRecurring: async (items) => {
+    set({ recurringLoading: true, recurringError: null });
+    try {
+      const response = await axios.post('/api/user/transactions/recurring', { items });
+      const { approved = 0, skipped = 0 } = response.data || {};
+      set({ recurringLoading: false, recurringError: null });
+      await get().fetchRecurring();
+      await get().fetchTransactions();
+      return { approved, skipped };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to approve recurring transactions';
+      set({ recurringLoading: false, recurringError: message });
       throw err;
     }
   },

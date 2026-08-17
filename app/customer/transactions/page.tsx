@@ -11,7 +11,8 @@ import { useForm, useWatch, type UseFormRegister, type UseFormWatch, type FieldE
 import { useToast } from '@/hooks/useToast';
 import { dateToInputFormat } from '@/lib/date';
 import axios from 'axios';
-import { DocumentUploader } from '@/components/features/transactions';
+import { DocumentUploader, RecurringApprovalPanel, ImportExpensesModal } from '@/components/features/transactions';
+import type { ReceiptExtraction } from '@/lib/ai/types';
 
 interface CategoryOption {
   id: string;
@@ -30,6 +31,8 @@ interface TransactionFormInput {
   paymentType: string;
   notes: string;
   depositType: string;
+  isRecurring: boolean;
+  recurringDay: string;
 }
 
 interface PaymentTypeOption {
@@ -263,8 +266,106 @@ function SelectField({
   );
 }
 
+/* ---------- Reusable Recurring toggle ---------- */
+function RecurringToggle({
+  register,
+  watch,
+  error,
+}: {
+  register: UseFormRegister<TransactionFormInput>;
+  watch: UseFormWatch<TransactionFormInput>;
+  error?: FieldError;
+}) {
+  const isRecurring = watch('isRecurring');
+  const recurringDay = watch('recurringDay');
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="font-label-md text-label-md text-on-surface font-bold uppercase tracking-wide block mb-1">
+        Recurring
+      </span>
+      <label
+        className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 cursor-pointer select-none transition-all duration-200 ${
+          isRecurring
+            ? 'border-tertiary bg-tertiary-container/15'
+            : 'border-outline-variant bg-surface-container-low hover:border-outline hover:bg-surface-container'
+        }`}
+      >
+        <input type="checkbox" {...register('isRecurring')} className="sr-only" />
+        <span
+          className={`w-10 h-6 shrink-0 rounded-full transition-colors duration-200 ${
+            isRecurring ? 'bg-tertiary' : 'bg-outline-variant'
+          }`}
+          title={isRecurring ? 'Recurring enabled' : 'Recurring disabled'}
+        >
+          <span
+            className={`block w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${
+              isRecurring ? 'translate-x-5' : 'translate-x-0.5'
+            }`}
+          />
+        </span>
+        <span className="flex flex-col">
+          <span className="font-body-md text-body-md text-on-surface font-semibold">
+            {isRecurring ? 'Recurring expense' : 'One-time expense'}
+          </span>
+          <span className="font-label-md text-label-md text-on-surface-variant">
+            {isRecurring
+              ? 'This expense will be surfaced every month for approval.'
+              : 'Mark as recurring to have the system remind you every month.'}
+          </span>
+        </span>
+      </label>
+
+      {isRecurring && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-1 duration-200">
+          <div className="flex flex-col gap-1.5">
+            <label className="font-label-md text-label-md text-on-surface font-bold uppercase tracking-wide">
+              Recurring day of month <span className="text-error">*</span>
+            </label>
+            <input
+              type="number"
+              min={1}
+              max={31}
+              onWheel={(e) => e.currentTarget.blur()}
+              {...register('recurringDay', {
+                required: isRecurring ? 'Recurring day of month is required' : false,
+                validate: (v) =>
+                  !isRecurring ||
+                  (v != null && v !== '' && Number(v) >= 1 && Number(v) <= 31) ||
+                  'Day must be between 1 and 31',
+                onChange: (e) => {
+                  let raw = String(e.target.value).replace(/\D/g, '').slice(0, 2);
+                  if (raw === '0') raw = '';
+                  if (Number(raw) > 31) raw = '31';
+                  if (String(e.target.value) !== raw) e.target.value = raw;
+                  return raw;
+                },
+              })}
+              placeholder="Enter a day of the month 1-31"
+              className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-tertiary transition-all text-on-surface"
+            />
+          </div>
+          <div className="flex items-end pb-2">
+            <span className="font-label-md text-label-md text-on-surface-variant">
+              The system will surface this expense{' '}
+              <span className="font-semibold text-tertiary">2 days before</span> the {Number(recurringDay) || '—'}{' '}
+              of every month.
+            </span>
+          </div>
+        </div>
+      )}
+      {error && (
+        <span className="text-error text-xs font-semibold mt-1 flex items-center gap-1">
+          <span className="material-symbols-outlined text-xs">error</span>
+          {error.message}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export default function TransactionsPage() {
-  const { transactions, fetchTransactions, addTransaction, updateTransaction, deleteTransaction, isLoading } = useTransactionStore();
+  const { transactions, fetchTransactions, addTransaction, updateTransaction, deleteTransaction, isLoading, recurringItems, recurringLoading, fetchRecurring, approveRecurring } = useTransactionStore();
   const { addToast } = useToast();
   const [activeFilter, setActiveFilter] = useState<"ALL" | TransactionType>("ALL");
   const [search, setSearch] = useState('');
@@ -281,6 +382,8 @@ export default function TransactionsPage() {
   const [addFile, setAddFile] = useState<File | null>(null);
   const [editFile, setEditFile] = useState<File | null>(null);
   const [removeExistingDoc, setRemoveExistingDoc] = useState(false);
+  const [aiExtracting, setAiExtracting] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
 
   const {
     register: registerAdd,
@@ -288,6 +391,7 @@ export default function TransactionsPage() {
     reset: resetAdd,
     watch: watchAdd,
     control: controlAdd,
+    setValue: setValueAdd,
     formState: { errors: errorsAdd },
   } = useForm<TransactionFormInput>({
     defaultValues: {
@@ -300,6 +404,8 @@ export default function TransactionsPage() {
       paymentType: '',
       notes: '',
       depositType: 'Account',
+      isRecurring: false,
+      recurringDay: String(new Date().getDate()),
     },
   });
 
@@ -330,7 +436,8 @@ export default function TransactionsPage() {
     if (hasFetchedRef.current) return;
     hasFetchedRef.current = true;
     fetchTransactions();
-  }, [fetchTransactions]);
+    fetchRecurring();
+  }, [fetchTransactions, fetchRecurring]);
 
   // Load all metadata (categories, payment types, currencies, deposit types) from DB
   useEffect(() => {
@@ -371,9 +478,54 @@ export default function TransactionsPage() {
       paymentType: '',
       notes: '',
       depositType: 'Account',
+      isRecurring: false,
+      recurringDay: String(new Date().getDate()),
     });
     setAddFile(null);
     setIsAddOpen(true);
+  };
+
+  const handleExtractWithAI = async () => {
+    if (!addFile) return;
+    setAiExtracting(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', addFile);
+      fd.append('categories', JSON.stringify(categories.map((c) => c.name)));
+      fd.append('paymentTypes', JSON.stringify(paymentTypes.map((p) => p.name)));
+      const res = await axios.post('/api/ai/ocr', fd);
+      const ex = res.data.extraction as ReceiptExtraction | undefined;
+      if (!ex) throw new Error('No extraction returned');
+      if (ex.type) setValueAdd('type', ex.type);
+      if (ex.title) setValueAdd('title', ex.title);
+      if (ex.merchant) setValueAdd('merchant', ex.merchant);
+      if (ex.amount != null) setValueAdd('amount', String(ex.amount));
+      if (ex.date) setValueAdd('date', ex.date);
+      if (ex.currency) setValueAdd('currency', ex.currency);
+      const suggestedCategory = ex.category;
+      if (suggestedCategory) {
+        const match = categories.find(
+          (c) => c.name.toLowerCase() === suggestedCategory.toLowerCase()
+        );
+        setValueAdd('category', match ? match.name : '');
+      }
+      const suggestedPaymentType = ex.paymentType;
+      if (suggestedPaymentType && ex.type !== 'CREDIT') {
+        const match = paymentTypes.find(
+          (p) => p.name.toLowerCase() === suggestedPaymentType.toLowerCase()
+        );
+        if (match) setValueAdd('paymentType', match.name);
+      }
+      addToast('Receipt extracted — review the fields before saving', 'success');
+    } catch (err) {
+      const message =
+        axios.isAxiosError(err) && typeof err.response?.data?.error === 'string'
+          ? err.response.data.error
+          : 'Could not extract from this receipt';
+      addToast(message, 'error');
+    } finally {
+      setAiExtracting(false);
+    }
   };
 
   // Handle floating FAB ?openAdd=true from customer layout
@@ -427,6 +579,8 @@ export default function TransactionsPage() {
       paymentType: t.paymentType || '',
       notes: t.notes || '',
       depositType: t.depositType || 'Account',
+      isRecurring: t.isRecurring ?? false,
+      recurringDay: t.isRecurring ? String(t.recurringDay ?? new Date(t.date).getDate()) : String(new Date(t.date).getDate()),
     });
     setIsEditOpen(true);
   };
@@ -456,6 +610,8 @@ export default function TransactionsPage() {
         paymentType: data.paymentType,
         notes: data.notes,
         depositType: data.type === 'CREDIT' ? (data.depositType as 'Cash' | 'Account') : undefined,
+        isRecurring: data.isRecurring ?? false,
+        recurringDay: data.isRecurring ? Number(data.recurringDay) : null,
       }, addFile);
       addToast('Transaction added successfully!', 'success');
       setIsAddOpen(false);
@@ -482,6 +638,8 @@ export default function TransactionsPage() {
         paymentType: data.paymentType,
         notes: data.notes,
         depositType: data.type === 'CREDIT' ? (data.depositType as 'Cash' | 'Account') : undefined,
+        isRecurring: data.isRecurring ?? false,
+        recurringDay: data.isRecurring ? Number(data.recurringDay) : null,
       };
       if (removeExistingDoc && !editFile) {
         txnData.documentName = '';
@@ -515,11 +673,20 @@ export default function TransactionsPage() {
           <h2 className="font-headline-lg text-headline-lg text-primary font-black tracking-tight">Personal Transactions</h2>
           <p className="font-body-lg text-body-lg text-on-surface-variant mt-1">Track your debits and credits in one place.</p>
         </div>
-        <Button onClick={handleOpenAdd} className="self-start md:self-auto">
-          <span className="material-symbols-outlined text-sm">add</span>
-          Add
-        </Button>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <Button onClick={() => setIsImportOpen(true)} variant="tertiary" className="self-start sm:self-auto">
+            <span className="material-symbols-outlined text-sm">upload_file</span>
+            Import
+          </Button>
+          <Button onClick={handleOpenAdd} className="self-start sm:self-auto">
+            <span className="material-symbols-outlined text-sm">add</span>
+            Add
+          </Button>
+        </div>
       </div>
+
+      {/* Recurring transactions awaiting approval (shown on top of page 1) */}
+      <RecurringApprovalPanel items={recurringItems} loading={recurringLoading} onApprove={approveRecurring} />
 
       {/* Filters */}
       <Card className="bg-surface-container-lowest flex flex-col lg:flex-row gap-4 items-stretch lg:items-center px-lg py-md" glass={false}>
@@ -721,6 +888,8 @@ export default function TransactionsPage() {
             />
           </div>
 
+          <RecurringToggle register={registerAdd} watch={watchAdd} error={errorsAdd.recurringDay} />
+
           {selectedAddType === 'CREDIT' && (
             <div className="animate-in fade-in zoom-in-95 duration-200">
               <DepositTypeSelector register={registerAdd} watch={watchAdd} options={depositTypes} />
@@ -737,6 +906,16 @@ export default function TransactionsPage() {
           </FormField>
 
           <DocumentUploader file={addFile} onFileChange={setAddFile} />
+
+          {addFile && addFile.type.startsWith('image/') && (
+            <div className="flex items-center gap-3">
+              <Button type="button" variant="secondary" onClick={handleExtractWithAI} disabled={aiExtracting}>
+                <span className="material-symbols-outlined text-sm">auto_awesome</span>
+                {aiExtracting ? 'Extracting...' : 'Extract with AI'}
+              </Button>
+              <span className="text-xs text-on-surface-variant">Auto-fill fields from the receipt image</span>
+            </div>
+          )}
 
           <div className="flex justify-end gap-3 pt-4 border-t border-outline-variant">
             <Button type="button" variant="secondary" onClick={() => setIsAddOpen(false)}>
@@ -830,6 +1009,8 @@ export default function TransactionsPage() {
             />
           </div>
 
+          <RecurringToggle register={registerEdit} watch={watchEdit} error={errorsEdit.recurringDay} />
+
           {selectedEditType === 'CREDIT' && (
             <div className="animate-in fade-in zoom-in-95 duration-200">
               <DepositTypeSelector register={registerEdit} watch={watchEdit} options={depositTypes} />
@@ -865,6 +1046,16 @@ export default function TransactionsPage() {
           </div>
         </form>
       </Modal>
+
+      {/* ---------------- BULK CSV IMPORT MODAL ---------------- */}
+      <ImportExpensesModal
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        onImported={() => {
+          fetchTransactions();
+          fetchRecurring();
+        }}
+      />
     </div>
   );
 }

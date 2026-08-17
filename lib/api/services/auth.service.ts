@@ -133,6 +133,29 @@ export class AuthService {
       throw new Error('Invalid credentials');
     }
 
+    // If an admin flagged a forced password reset, issue a short-lived session
+    // so the customer can set a new password before accessing the app.
+    if (user.forcedResetPassword) {
+      const tempJwt = await signJwt({ id: user.id, email: user.email, role: 'CUSTOMER' }, '15m');
+      const tempExpiryTime = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+      await SessionRepository.create({
+        jwt: tempJwt,
+        userId: user.id,
+        expiryTime: tempExpiryTime,
+      });
+
+      await UserRepository.createAudit({
+        userId: user.id,
+        action: AuditAction.LOGIN,
+        newValue: { email: user.email, note: 'Forced password reset required on next login' },
+        ipAddress: meta.ip || null,
+        userAgent: meta.ua || null,
+        status: 'A',
+      });
+
+      return { user, token: tempJwt, forcePasswordReset: true };
+    }
+
     // Sign JWT
     const jwt = await signJwt({ id: user.id, email: user.email, role: 'CUSTOMER' });
     
@@ -154,6 +177,46 @@ export class AuthService {
     });
 
     return { user, token: jwt };
+  }
+
+  static async completeForcedPasswordReset(userId: string, newPassword: string, meta = { ip: '', ua: '' }) {
+    const user = await UserRepository.findById(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    if (!user.forcedResetPassword) {
+      throw new Error('Forced password reset is not required for this account');
+    }
+
+    const hashedPassword = hashPassword(newPassword);
+    const updated = await UserRepository.update(userId, {
+      passwordHash: hashedPassword,
+      forcedResetPassword: false,
+      lastPasswordChangedDate: new Date(),
+    });
+
+    await SessionRepository.invalidateAllForUser(userId);
+
+    const jwt = await signJwt({ id: user.id, email: user.email, role: 'CUSTOMER' });
+    const expiryTime = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days (1 month)
+    await SessionRepository.create({
+      jwt,
+      userId: user.id,
+      expiryTime,
+    });
+
+    await UserRepository.createAudit({
+      userId: user.id,
+      action: AuditAction.PASSWORD_RESET,
+      oldValue: { email: user.email, forcedResetPassword: true },
+      newValue: { email: user.email, forcedResetPassword: false },
+      ipAddress: meta.ip || null,
+      userAgent: meta.ua || null,
+      status: 'A',
+    });
+
+    return { user: updated, token: jwt };
   }
 
   static async loginAdmin(email: string, password: string, meta = { ip: '', ua: '' }) {

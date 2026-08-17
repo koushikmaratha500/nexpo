@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import Link from 'next/link';
 import axios from 'axios';
 import { useToast } from '@/hooks/useToast';
+import { PasswordInput } from '@/components/forms/PasswordInput';
 
 function ResetPasswordContent() {
   const router = useRouter();
@@ -17,8 +18,6 @@ function ResetPasswordContent() {
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [success, setSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -118,61 +117,23 @@ function ResetPasswordContent() {
               )}
 
               <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                <div className="flex flex-col gap-1">
-                  <label htmlFor="pass" className="font-label-md text-label-md text-on-surface font-bold uppercase tracking-wide">
-                    New Password (min. 7 chars)
-                  </label>
-                  <div className="relative w-full">
-                    <input
-                      id="pass"
-                      type={showPassword ? 'text' : 'password'}
-                      required
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="block w-full px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary transition-all text-on-surface pr-12"
-                    />
-                    <button
-                      type="button"
-                      tabIndex={-1}
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors"
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    >
-                      <span className="material-symbols-outlined text-xs scale-90">
-                        {showPassword ? 'visibility_off' : 'visibility'}
-                      </span>
-                    </button>
-                  </div>
-                </div>
+                <PasswordInput
+                  id="pass"
+                  label="New Password (min. 7 chars)"
+                  required
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
 
-                <div className="flex flex-col gap-1">
-                  <label htmlFor="confirmPass" className="font-label-md text-label-md text-on-surface font-bold uppercase tracking-wide">
-                    Confirm Password
-                  </label>
-                  <div className="relative w-full">
-                    <input
-                      id="confirmPass"
-                      type={showConfirmPassword ? 'text' : 'password'}
-                      required
-                      placeholder="••••••••"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="block w-full px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary transition-all text-on-surface pr-12"
-                    />
-                    <button
-                      type="button"
-                      tabIndex={-1}
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors"
-                      aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
-                    >
-                      <span className="material-symbols-outlined text-xs scale-90">
-                        {showConfirmPassword ? 'visibility_off' : 'visibility'}
-                      </span>
-                    </button>
-                  </div>
-                </div>
+                <PasswordInput
+                  id="confirmPass"
+                  label="Confirm Password"
+                  required
+                  placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
 
                 <Button type="submit" disabled={isSubmitting || !token} className="w-full h-11">
                   {isSubmitting ? (

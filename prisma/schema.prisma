@@ -31,6 +31,7 @@ enum AuditAction {
   LOGOUT
   BLOCK
   ACTIVATE
+  PASSWORD_RESET
 }
 
 enum TransactionType {
@@ -79,6 +80,8 @@ model User {
   country         Country?     @relation(fields: [countryId], references: [id])
   currency        Currency?    @relation(fields: [currencyId], references: [id])
   status          Status       @default(A)
+  forcedResetPassword Boolean   @default(false)
+  lastPasswordChangedDate DateTime?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
   transactions    Transaction[]
@@ -170,13 +173,32 @@ model Transaction {
   documentSize        Int?
   merchant            String?
   status              String           @default("A")
+  isRecurring         Boolean          @default(false)
+  recurringDay        Int?
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
   transactionAudits   TransactionAudit[]
+  recurringActions    RecurringTransactionAction[]
 
   @@index([userId])
   @@index([type])
   @@index([transactionDate])
+  @@index([isRecurring])
+}
+
+model RecurringTransactionAction {
+  id            String      @id @default(uuid())
+  userId        String
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+  dueDate       DateTime
+  action        String      @default("APPROVED")
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([transactionId])
+  @@unique([transactionId, dueDate])
 }
 
 model TransactionAudit {
@@ -246,6 +268,23 @@ model UserAudit {
   updatedAt DateTime    @updatedAt
 
   @@index([userId])
+}
+
+model AiUsage {
+  id           String   @id @default(uuid())
+  userId       String
+  feature      String
+  model        String
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  latencyMs    Int      @default(0)
+  status       String   @default("OK")
+  error        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([feature])
 }
 
 model SupportTicket {

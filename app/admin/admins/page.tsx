@@ -8,6 +8,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { TablePagination } from '@/components/ui/TablePagination';
 import axios from 'axios';
 import { useToast } from '@/hooks/useToast';
+import { PasswordInput } from '@/components/forms/PasswordInput';
 
 interface APIAdmin {
   id: string;
@@ -437,13 +438,12 @@ export default function AdminManagementPage() {
 
               <div className="flex flex-col gap-1">
                 <label className="font-label-md text-label-md text-on-surface-variant font-bold uppercase ml-1">Password</label>
-                <input
-                  type="password"
+                <PasswordInput
                   required
                   placeholder="••••••••"
                   value={createPassword}
                   onChange={(e) => setCreatePassword(e.target.value)}
-                  className="w-full h-12 px-md bg-white border border-outline-variant rounded-lg font-body-md text-body-md focus:ring-2 focus:ring-secondary/20 focus:border-secondary outline-none transition-all"
+                  className="h-12 pl-4 bg-white border border-outline-variant rounded-lg font-body-md text-body-md focus:ring-2 focus:ring-secondary/20 focus:border-secondary outline-none transition-all"
                 />
               </div>
             </>

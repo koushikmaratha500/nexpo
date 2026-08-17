@@ -13,6 +13,7 @@ interface ModalProps {
   maxWidth?: string; // e.g. 'max-w-md', 'max-w-lg'
   customHeader?: boolean;
   cardPadding?: string;
+  dismissible?: boolean; // when false the backdrop click does not close the modal
 }
 
 export function Modal({
@@ -24,7 +25,8 @@ export function Modal({
   children,
   maxWidth = 'max-w-md',
   customHeader = false,
-  cardPadding = 'p-6'
+  cardPadding = 'p-6',
+  dismissible = true,
 }: ModalProps) {
   // Prevent background scroll when modal is open
   useEffect(() => {
@@ -45,7 +47,7 @@ export function Modal({
       {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-inverse-surface/40 backdrop-blur-sm transition-opacity"
-        onClick={onClose}
+        onClick={dismissible ? onClose : undefined}
       />
       
       {/* Modal Container */}
@@ -71,7 +73,7 @@ export function Modal({
           )}
           
           {/* Content */}
-          <div className={customHeader ? 'w-full' : 'overflow-y-auto overflow-x-hidden max-h-[70vh] pr-xs'}>
+          <div className={customHeader ? 'w-full' : 'overflow-y-auto overflow-x-hidden max-h-[70vh] pr-xs no-scrollbar'}>
             {children}
           </div>
         </Card>

@@ -9,6 +9,7 @@ import {
   updateUserSchema,
   createAdminSchema,
   updateAdminSchema,
+  resetUserPasswordSchema,
 } from '../dtos/admin.dto';
 
 export class AdminController {
@@ -119,6 +120,61 @@ export class AdminController {
     } catch (error: unknown) {
       const e = error as Error;
       return NextResponse.json({ error: e.message || 'Failed to delete user' }, { status: 400 });
+    }
+  }
+
+  static async blockUser(req: NextRequest, id: string) {
+    try {
+      const result = await AdminService.blockUser(id, {
+        ip: req.headers.get('x-forwarded-for') || null,
+        ua: req.headers.get('user-agent') || null,
+      });
+      return NextResponse.json(result);
+    } catch (error: unknown) {
+      const e = error as Error;
+      return NextResponse.json({ error: e.message || 'Failed to block user' }, { status: 400 });
+    }
+  }
+
+  static async activateUser(req: NextRequest, id: string) {
+    try {
+      const result = await AdminService.activateUser(id, {
+        ip: req.headers.get('x-forwarded-for') || null,
+        ua: req.headers.get('user-agent') || null,
+      });
+      return NextResponse.json(result);
+    } catch (error: unknown) {
+      const e = error as Error;
+      return NextResponse.json({ error: e.message || 'Failed to activate user' }, { status: 400 });
+    }
+  }
+
+  static async resetUserPassword(req: NextRequest, id: string) {
+    try {
+      const body = await req.json();
+      const validated = resetUserPasswordSchema.parse(body);
+
+      const updated = await AdminService.resetUserPassword(id, validated, {
+        ip: req.headers.get('x-forwarded-for') || null,
+        ua: req.headers.get('user-agent') || null,
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: 'Password reset successfully',
+        user: {
+          id: updated.id,
+          forcedResetPassword: updated.forcedResetPassword,
+          lastPasswordChangedDate: updated.lastPasswordChangedDate,
+        },
+      });
+    } catch (error: unknown) {
+      const e = error as Error & { name?: string; errors?: unknown[]; issues?: unknown[] };
+      if (e.name === 'ZodError') {
+        const message = e.errors?.[0] ? String(e.errors[0]) : e.issues?.[0] ? String(e.issues[0]) : e.message || 'Validation error';
+        return NextResponse.json({ error: message }, { status: 400 });
+      }
+      return NextResponse.json({ error: e.message || 'Failed to reset password' }, { status: 400 });
     }
   }
 

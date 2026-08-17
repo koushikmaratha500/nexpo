@@ -6,7 +6,7 @@ import { AuditLogRepository } from '../repositories/audit-log.repository';
 import { SupportRepository } from '../repositories/support.repository';
 import { hashPassword } from './auth.service';
 import { AuditAction } from '@prisma/client';
-import { CreateUserDto, UpdateUserDto, CreateAdminDto, UpdateAdminDto } from '../dtos/admin.dto';
+import { CreateUserDto, UpdateUserDto, CreateAdminDto, UpdateAdminDto, ResetUserPasswordDto } from '../dtos/admin.dto';
 
 export interface RequestMeta {
   ip?: string | null;
@@ -138,6 +138,8 @@ export class AdminService {
         status: user.status,
         emailVerified: user.emailVerified,
         mobileVerified: user.mobileVerified,
+        forcedResetPassword: user.forcedResetPassword,
+        lastPasswordChangedDate: user.lastPasswordChangedDate,
         profileImageUrl: user.profileImageUrl || null,
         country: user.country || null,
         currency: user.currency || null,
@@ -243,12 +245,22 @@ export class AdminService {
       throw new Error('User not found');
     }
 
+    // Reject soft-deleted users
+    if (original.status === 'D') {
+      throw new Error('User not found');
+    }
+
     const updated = await UserRepository.update(id, updateData);
+
+    // Blocking must take effect immediately: invalidate all active sessions.
+    if (updateData.status === 'B') {
+      await SessionRepository.invalidateAllForUser(id);
+    }
 
     const action =
       updateData.status === 'B'
         ? AuditAction.BLOCK
-        : updateData.status && original.status === 'B' && updateData.status === 'A'
+        : updateData.status && updateData.status === 'A' && original.status !== 'A'
           ? AuditAction.ACTIVATE
           : AuditAction.UPDATE;
 
@@ -263,6 +275,64 @@ export class AdminService {
     });
 
     return updated;
+  }
+
+  static async blockUser(id: string, meta: RequestMeta = {}) {
+    const original = await UserRepository.findById(id);
+    if (!original) {
+      throw new Error('User not found');
+    }
+    if (original.status === 'D') {
+      throw new Error('User not found');
+    }
+    if (original.status === 'B') {
+      throw new Error('Account is already blocked');
+    }
+
+    const updated = await UserRepository.update(id, { status: 'B' });
+
+    // Blocking takes effect immediately: invalidate all active sessions.
+    await SessionRepository.invalidateAllForUser(id);
+
+    await UserRepository.createAudit({
+      userId: id,
+      action: AuditAction.BLOCK,
+      oldValue: { email: original.email, status: original.status },
+      newValue: { email: updated.email, status: updated.status, note: 'Account blocked by admin' },
+      ipAddress: meta.ip || null,
+      userAgent: meta.ua || null,
+      status: 'A',
+    });
+
+    return { user: updated, message: 'Account blocked successfully' };
+  }
+
+  static async activateUser(id: string, meta: RequestMeta = {}) {
+    const original = await UserRepository.findById(id);
+    if (!original) {
+      throw new Error('User not found');
+    }
+    if (original.status === 'D') {
+      throw new Error('User not found');
+    }
+    if (original.status === 'A') {
+      throw new Error('Account is already active');
+    }
+
+    // Forced activation bypasses the OTP verification step.
+    const updated = await UserRepository.update(id, { status: 'A', emailVerified: true });
+
+    await UserRepository.createAudit({
+      userId: id,
+      action: AuditAction.ACTIVATE,
+      oldValue: { email: original.email, status: original.status, emailVerified: original.emailVerified },
+      newValue: { email: updated.email, status: updated.status, emailVerified: true, note: 'Account force-activated by admin' },
+      ipAddress: meta.ip || null,
+      userAgent: meta.ua || null,
+      status: 'A',
+    });
+
+    return { user: updated, message: 'Account activated successfully' };
   }
 
   static async deleteUser(id: string, meta: RequestMeta = {}) {
@@ -283,6 +353,42 @@ export class AdminService {
     });
 
     return { success: true, message: 'User soft-deleted successfully' };
+  }
+
+  static async resetUserPassword(id: string, dto: ResetUserPasswordDto, meta: RequestMeta = {}) {
+    const original = await UserRepository.findById(id);
+    if (!original) {
+      throw new Error('User not found');
+    }
+
+    const hashedPassword = hashPassword(dto.password);
+    const updated = await UserRepository.update(id, {
+      passwordHash: hashedPassword,
+      forcedResetPassword: dto.forcedResetPassword,
+      lastPasswordChangedDate: new Date(),
+    });
+
+    await SessionRepository.invalidateAllForUser(id);
+
+    await UserRepository.createAudit({
+      userId: id,
+      action: AuditAction.PASSWORD_RESET,
+      oldValue: {
+        email: original.email,
+        forcedResetPassword: original.forcedResetPassword,
+        lastPasswordChangedDate: original.lastPasswordChangedDate,
+      },
+      newValue: {
+        email: updated.email,
+        forcedResetPassword: updated.forcedResetPassword,
+        lastPasswordChangedDate: updated.lastPasswordChangedDate,
+      },
+      ipAddress: meta.ip || null,
+      userAgent: meta.ua || null,
+      status: 'A',
+    });
+
+    return updated;
   }
 
   static async createAdmin(dto: CreateAdminDto) {

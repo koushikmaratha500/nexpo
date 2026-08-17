@@ -31,6 +31,12 @@ export async function PATCH(req: NextRequest, segmentData: { params: Promise<{ i
 
     if (body.amount) body.amount = parseFloat(body.amount);
     if (body.documentSize) body.documentSize = parseInt(body.documentSize);
+    if (body.isRecurring !== undefined) {
+      body.isRecurring = ['true', '1', 'yes'].includes(String(body.isRecurring).toLowerCase());
+    }
+    if (body.recurringDay !== undefined) {
+      body.recurringDay = body.recurringDay === '' ? null : parseInt(body.recurringDay, 10);
+    }
 
     if (file) {
       const buffer = Buffer.from(await file.arrayBuffer());

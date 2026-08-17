@@ -34,4 +34,12 @@ Reusable UI lives in `components/features/<domain>/` with a barrel `index.ts`; d
 - `useToast` API: `addToast(message: string, type?: 'success' | 'error' | 'warning' | 'info')`.
 - `Button` has no `loading` prop; `TablePagination` uses `itemsPerPage` (not `pageSize`).
 - Avoid `any` — type react-hook-form usage with `UseFormRegister`/`UseFormWatch`/`FieldError`/`UseFormRegisterReturn`.
+
+# AI Layer (`lib/ai/`)
+
+Server-only AI helpers (Release 3.0) built on the **Vercel AI SDK v7** + **OpenRouter** (`@openrouter/ai-sdk-provider`). Never import `lib/ai/` from client components except `import type` (types only — `types.ts` re-exports zod schemas).
+- `config.ts` reads `OPENROUTER_API_KEY`, `AI_ENABLED`, and `AI_MODEL_<KIND>` overrides; `modelFor(kind)` resolves per-feature models (ocr/chat/structured). Defaults: ocr=`google/gemma-4-26b-a4b-it:free`, chat/structured=`openrouter/free`.
+- `provider.ts` — `createOpenRouter` singleton + `getModel(kind)` returning an AI SDK `LanguageModel`; throws `HttpError(503)` when unconfigured.
+- `agents/receipt.agent.ts` — image → structured extraction via `generateObject` + `ReceiptExtractionSchema` (auto-retry, zod-validated).
+- Routes live under `app/api/ai/...`, always `authGuard` + `handleApiError`. Keep keys server-side; scope tools/data per authenticated user.
 <!-- END:layered-architecture -->

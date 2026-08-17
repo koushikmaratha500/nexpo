@@ -3,10 +3,11 @@
 import React, { useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { PasswordInput } from '@/components/forms/PasswordInput';
 
 
 const inputClassName =
-  'block w-full px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary transition-all text-on-surface pr-12';
+  'block w-full px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary transition-all text-on-surface';
 
 interface ResetPasswordFormProps {
   token?: string;
@@ -17,8 +18,6 @@ export function ResetPasswordForm({ token: initialToken, onSuccess }: ResetPassw
   const [token, setToken] = useState(initialToken || '');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [success, setSuccess] = useState(false);
 
@@ -71,66 +70,28 @@ export function ResetPasswordForm({ token: initialToken, onSuccess }: ResetPassw
             placeholder="Paste your reset token here"
             value={token}
             onChange={(e) => setToken(e.target.value)}
-            className={inputClassName.replace(' pr-12', '')}
+            className={inputClassName}
           />
         </div>
       )}
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="reset-password" className="font-label-md text-label-md text-on-surface font-bold uppercase tracking-wide">
-          New Password (min. 7 chars)
-        </label>
-        <div className="relative w-full">
-          <input
-            id="reset-password"
-            type={showPassword ? 'text' : 'password'}
-            required
-            placeholder="••••••••"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className={inputClassName}
-          />
-          <button
-            type="button"
-            tabIndex={-1}
-            onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors"
-            aria-label={showPassword ? 'Hide password' : 'Show password'}
-          >
-            <span className="material_symbols-outlined text-xs scale-90">
-              {showPassword ? 'visibility_off' : 'visibility'}
-            </span>
-          </button>
-        </div>
-      </div>
+      <PasswordInput
+        id="reset-password"
+        label="New Password (min. 7 chars)"
+        required
+        placeholder="••••••••"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="reset-confirm-password" className="font-label-md text-label-md text-on-surface font-bold uppercase tracking-wide">
-          Confirm Password
-        </label>
-        <div className="relative w-full">
-          <input
-            id="reset-confirm-password"
-            type={showConfirmPassword ? 'text' : 'password'}
-            required
-            placeholder="••••••••"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            className={inputClassName}
-          />
-          <button
-            type="button"
-            tabIndex={-1}
-            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors"
-            aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
-          >
-            <span className="material_symbols-outlined text-xs scale-90">
-              {showConfirmPassword ? 'visibility_off' : 'visibility'}
-            </span>
-          </button>
-        </div>
-      </div>
+      <PasswordInput
+        id="reset-confirm-password"
+        label="Confirm Password"
+        required
+        placeholder="••••••••"
+        value={confirmPassword}
+        onChange={(e) => setConfirmPassword(e.target.value)}
+      />
 
       {errorMsg && (
         <div className="p-4 bg-error-container/20 border border-error/20 text-error rounded-lg text-body-md font-medium flex items-center gap-2">

@@ -28,6 +28,16 @@ Create a `.env.local` file in the root of your directory to customize testing fe
 # Set to 'true' to display the floating role-switcher widget in dashboard layouts.
 # Set to 'false' in production configurations to hide this testing utility.
 NEXT_PUBLIC_SHOW_TESTING_HELPER=true
+
+# --- AI (Release 3.0) ---
+# OpenRouter key for the Vercel AI SDK layer. Server-side only.
+OPENROUTER_API_KEY=
+# Optional per-feature model overrides (defaults):
+# ocr=google/gemma-4-26b-a4b-it:free, chat/structured=openrouter/free
+# AI_ENABLED=true
+# AI_MODEL_OCR=google/gemma-4-26b-a4b-it:free
+# AI_MODEL_CHAT=openrouter/free
+# AI_MODEL_STRUCTURED=openrouter/free
 ```
 
 ---

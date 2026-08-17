@@ -8,6 +8,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table';
 import axios from 'axios';
 import { useToast } from '@/hooks/useToast';
+import { PasswordInput } from '@/components/forms/PasswordInput';
 
 interface UserDetail {
   id: string;
@@ -18,6 +19,8 @@ interface UserDetail {
   status: string;
   emailVerified: boolean;
   mobileVerified: boolean;
+  forcedResetPassword?: boolean;
+  lastPasswordChangedDate?: string | null;
   profileImageUrl: string | null;
   country: { name: string; isoCode: string } | null;
   currency: { code: string; symbol: string } | null;
@@ -114,6 +117,8 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
   // Modals state
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isResetOpen, setIsResetOpen] = useState(false);
+  const [isStatusConfirmOpen, setIsStatusConfirmOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<ExpenseItem | null>(null);
   const [isExpenseDetailsOpen, setIsExpenseDetailsOpen] = useState(false);
@@ -123,6 +128,10 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
   const [editFirstName, setEditFirstName] = useState('');
   const [editLastName, setEditLastName] = useState('');
   const [editStatus, setEditStatus] = useState<'ACTIVE' | 'BLOCKED' | 'PENDING'>('ACTIVE');
+
+  // Reset password form state
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetForce, setResetForce] = useState(false);
 
   // Fetch user data, stats, expenses, and audit logs
   useEffect(() => {
@@ -195,22 +204,44 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
     }
   };
 
-  // Toggle user status via API
-  const toggleStatus = async () => {
+  // Block / Activate (vice-versa based on current status)
+  const canActivate = user?.status === 'B' || user?.status === 'P';
+
+  const handleStatusAction = async () => {
     if (!user) return;
-    const nextStatus = user.status === 'B' ? 'A' : 'B';
-    const displayStatus = user.status === 'B' ? 'ACTIVE' : 'BLOCKED';
+    if (canActivate) {
+      await activateUser();
+    } else {
+      setIsStatusConfirmOpen(true);
+    }
+  };
+
+  const activateUser = async () => {
+    if (!user) return;
+    try {
+      await axios.post(`/api/admin/user/${user.id}/activate`);
+      setUser(prev => prev ? { ...prev, status: 'A', emailVerified: true } : prev);
+      addToast(user.status === 'B' ? 'Customer unblocked successfully' : 'Customer activated successfully', 'success');
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to activate customer';
+      addToast(errMsg, 'error');
+    }
+  };
+
+  const handleBlockConfirm = async () => {
+    if (!user) return;
+    setIsSubmitting(true);
 
     try {
-      await axios.patch(`/api/admin/user/${user.id}`, {
-        status: nextStatus,
-      });
-
-      setUser(prev => prev ? { ...prev, status: nextStatus } : prev);
-      addToast(`Customer ${displayStatus === 'BLOCKED' ? 'blocked' : 'unblocked'}`, 'success');
+      await axios.post(`/api/admin/user/${user.id}/block`);
+      setUser(prev => prev ? { ...prev, status: 'B' } : prev);
+      setIsStatusConfirmOpen(false);
+      addToast('Customer blocked successfully. Active sessions were terminated.', 'success');
     } catch (err: any) {
-      const errMsg = err.response?.data?.error || 'Failed to update customer status';
+      const errMsg = err.response?.data?.error || 'Failed to block customer';
       addToast(errMsg, 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -228,6 +259,41 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
       }
     } catch (err: any) {
       const errMsg = err.response?.data?.error || 'Failed to delete customer';
+      addToast(errMsg, 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Open Reset Password Modal
+  const handleOpenReset = () => {
+    if (!user) return;
+    setResetPassword('');
+    setResetForce(Boolean(user.forcedResetPassword));
+    setIsResetOpen(true);
+  };
+
+  // Confirm Reset Password via API
+  const handleSubmitReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    setIsSubmitting(true);
+
+    try {
+      const response = await axios.post(`/api/admin/user/${user.id}/reset-password`, {
+        password: resetPassword,
+        forcedResetPassword: resetForce,
+      });
+
+      if (response.data?.success) {
+        setUser(prev => prev ? { ...prev, forcedResetPassword: resetForce, lastPasswordChangedDate: new Date().toISOString() } : prev);
+        addToast(resetForce ? 'Password reset. Customer must set a new one at next sign in.' : 'Password reset successfully', 'success');
+        setIsResetOpen(false);
+        setResetPassword('');
+        setResetForce(false);
+      }
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to reset password';
       addToast(errMsg, 'error');
     } finally {
       setIsSubmitting(false);
@@ -328,6 +394,11 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
                 }`}>
                   {displayStatus}
                 </span>
+                {user.forcedResetPassword && (
+                  <span className="px-2 py-0.5 rounded-full font-label-md text-[10px] font-bold bg-warning-container/20 text-on-warning-container" title="Customer must set a new password on next sign in">
+                    <span className="material-symbols-outlined text-[10px] align-[-1px]">lock_reset</span> PASSWORD RESET REQUIRED
+                  </span>
+                )}
               </div>
               <p className="font-body-lg text-body-lg text-on-surface-variant font-mono-data">{user.email}</p>
               <p className="font-label-md text-label-md text-on-surface-variant/70 mt-1 flex items-center justify-center sm:justify-start gap-1">
@@ -345,19 +416,23 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
 
           {/* Quick Action Triggers */}
           <div className="flex flex-row flex-wrap justify-center gap-sm">
+            <Button variant="secondary" onClick={handleOpenReset} className="px-3 py-2 hover:bg-warning-container/20 hover:text-on-warning-container">
+              <span className="material-symbols-outlined text-sm">password</span>
+              <span>Reset Password</span>
+            </Button>
             <Button variant="secondary" onClick={handleOpenEdit} className="px-3 py-2">
               <span className="material-symbols-outlined text-sm">edit</span>
               <span>Edit Profile</span>
             </Button>
             <Button
               variant="secondary"
-              onClick={toggleStatus}
-              className={`px-3 py-2 ${displayStatus === 'BLOCKED' ? 'hover:bg-secondary-container/20 hover:text-secondary' : 'hover:bg-error-container/20 hover:text-error'}`}
+              onClick={handleStatusAction}
+              className={`px-3 py-2 ${canActivate ? 'hover:bg-secondary-container/20 hover:text-secondary' : 'hover:bg-error-container/20 hover:text-error'}`}
             >
               <span className="material-symbols-outlined text-sm">
-                {displayStatus === 'BLOCKED' ? 'lock_open' : 'lock'}
+                {user.status === 'B' ? 'lock_open' : user.status === 'P' ? 'how_to_reg' : 'lock'}
               </span>
-              <span>{displayStatus === 'BLOCKED' ? 'Unblock' : 'Block'}</span>
+              <span>{user.status === 'P' ? 'Force Activate' : user.status === 'B' ? 'Activate Account' : 'Block Account'}</span>
             </Button>
             <Button variant="ghost" onClick={() => setIsDeleteOpen(true)} className="px-3 py-2 text-error hover:bg-error-container/10">
               <span className="material-symbols-outlined text-sm">delete</span>
@@ -511,6 +586,10 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
                 <div className="flex flex-col gap-xs">
                   <span className="text-on-surface-variant font-bold text-xs uppercase tracking-wider">Account Created</span>
                   <span className="text-primary text-body-lg font-medium">{formatDateTime(user.createdAt)}</span>
+                </div>
+                <div className="flex flex-col gap-xs">
+                  <span className="text-on-surface-variant font-bold text-xs uppercase tracking-wider">Last Password Changed</span>
+                  <span className="text-primary text-body-lg font-medium">{user.lastPasswordChangedDate ? formatDateTime(user.lastPasswordChangedDate) : '—'}</span>
                 </div>
                 <div className="flex flex-col gap-xs">
                   <span className="text-on-surface-variant font-bold text-xs uppercase tracking-wider">Last Updated</span>
@@ -751,6 +830,118 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
               </svg>
             )}
             {isSubmitting ? 'Removing...' : 'Remove Account'}
+          </button>
+        </div>
+      </Modal>
+
+      {/* Reset Password Modal */}
+      <Modal isOpen={isResetOpen} onClose={() => setIsResetOpen(false)} title="Reset Customer Password" customHeader={true} cardPadding="p-0" maxWidth="max-w-[520px]">
+        <div className="px-lg py-md border-b border-outline-variant flex items-center justify-between bg-surface-container-low">
+          <div className="flex items-center gap-sm">
+            <span className="material-symbols-outlined text-secondary" style={{ fontVariationSettings: "'FILL' 1" }}>password</span>
+            <h2 className="font-headline-sm text-headline-sm text-on-surface">Reset Customer Password</h2>
+          </div>
+          <button type="button" className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container-high transition-colors active:scale-90" onClick={() => setIsResetOpen(false)}>
+            <span className="material-symbols-outlined text-on-surface-variant">close</span>
+          </button>
+        </div>
+        <form onSubmit={handleSubmitReset} className="p-lg flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <label className="font-label-md text-label-md text-on-surface-variant font-bold uppercase ml-1">New Password</label>
+            <PasswordInput
+              required
+              minLength={7}
+              placeholder="At least 7 characters"
+              value={resetPassword}
+              onChange={(e) => setResetPassword(e.target.value)}
+              className="h-12 pl-4 bg-white border border-outline-variant rounded-lg font-body-md text-body-md focus:ring-2 focus:ring-secondary/20 focus:border-secondary outline-none transition-all"
+            />
+          </div>
+
+          <label className="flex items-start gap-sm cursor-pointer p-md bg-surface-container/40 rounded-lg border border-outline-variant/40">
+            <input
+              type="checkbox"
+              checked={resetForce}
+              onChange={(e) => setResetForce(e.target.checked)}
+              className="mt-0.5 w-4 h-4 accent-secondary"
+            />
+            <span className="flex flex-col gap-0.5">
+              <span className="font-title-md text-title-md font-semibold text-on-surface">Force password change on next sign in</span>
+              <span className="font-label-md text-label-md text-on-surface-variant">
+                The customer will be asked to set a new password immediately after signing in with this one.
+              </span>
+            </span>
+          </label>
+
+          {user?.forcedResetPassword && (
+            <p className="font-label-md text-label-md text-warning-container flex items-center gap-1">
+              <span className="material-symbols-outlined text-sm">info</span>
+              This account currently requires a forced password change.
+            </p>
+          )}
+
+          <div className="flex gap-2 justify-end border-t border-outline-variant/30 pt-4 mt-4">
+            <Button type="button" variant="secondary" onClick={() => setIsResetOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              type="submit" 
+              variant="primary" 
+              className="flex items-center gap-2" 
+              disabled={isSubmitting || resetPassword.length < 7}
+            >
+              {isSubmitting && (
+                <svg className="animate-spin h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              )}
+              <span>{isSubmitting ? 'Resetting...' : 'Reset Password'}</span>
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Block Account Confirmation Modal */}
+      <Modal isOpen={isStatusConfirmOpen} onClose={() => setIsStatusConfirmOpen(false)} title="Block Account" customHeader={true} cardPadding="p-0" maxWidth="max-w-md">
+        <div className="pt-xl px-xl flex flex-col items-center text-center">
+          <div className="w-16 h-16 rounded-full bg-error-container flex items-center justify-center mb-md">
+            <span className="material-symbols-outlined text-error text-[32px]">lock</span>
+          </div>
+          <h2 className="font-headline-md text-headline-md text-on-surface mb-sm font-black">Block this Account?</h2>
+          <p className="font-body-md text-body-md text-on-surface-variant max-w-xs leading-relaxed">
+            Blocking immediately signs the customer out of all active sessions and prevents them from accessing the ledger. You can activate the account again anytime.
+          </p>
+        </div>
+
+        <div className="mx-xl my-lg p-md bg-surface-container rounded-lg border border-outline-variant flex items-center gap-md">
+          <div className="flex-grow min-w-0">
+            <p className="font-label-md text-label-md text-on-surface-variant uppercase font-bold text-left">Selected Account</p>
+            <p className="font-body-md text-body-md font-semibold text-on-surface truncate text-left">{userFullName}</p>
+            <p className="font-label-md text-[10px] text-on-surface-variant font-mono-data text-left">{user.email}</p>
+          </div>
+          <div className="text-right flex-shrink-0">
+            <p className="font-label-md text-label-md text-on-surface-variant uppercase font-bold">Role</p>
+            <p className="font-body-md text-body-md text-error font-bold">CUSTOMER</p>
+          </div>
+        </div>
+
+        <div className="p-lg bg-surface-container-low flex flex-col-reverse sm:flex-row gap-md sm:justify-end border-t border-outline-variant">
+          <button className="px-xl h-11 flex items-center justify-center rounded-lg border border-outline text-on-surface font-title-md text-title-md hover:bg-surface-container-high transition-colors active:scale-95 duration-150 font-semibold" onClick={() => setIsStatusConfirmOpen(false)}>
+            Keep
+          </button>
+          <button
+            disabled={isSubmitting}
+            className="px-xl h-11 flex items-center justify-center rounded-lg bg-error text-on-error font-title-md text-title-md shadow-md hover:opacity-90 transition-all active:scale-95 duration-150 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={handleBlockConfirm}
+          >
+            {isSubmitting && (
+              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            )}
+            {isSubmitting ? 'Blocking...' : 'Block Account'}
           </button>
         </div>
       </Modal>
