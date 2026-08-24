@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { prisma } from '../lib/prisma';
+import { hashPassword } from '../lib/api/services/auth.service';
 
 async function main() {
     console.log('🌱 Seeding currencies...');
@@ -141,9 +142,17 @@ async function main() {
         });
     }
 
-    console.log('🌱 Seeding admin user...');
+    if (process.env.SEED_DEMO_DATA !== 'true') {
+        console.log('ℹ️  Skipping demo admin/customer accounts (set SEED_DEMO_DATA=true to seed them).');
+        console.log('✅ Seed completed');
+        return;
+    }
+
+    console.log('🌱 Seeding demo admin and customer accounts...');
     const adminEmail = 'admin@nexpo.com';
-    const passwordHash = '77257610b3c9ca33bccc9e7fbd8f7509:a9a9acaeb65c6a25f100f040f9ad06cb626df013bf53e86de16f696a30f3c519c8e61c57ad7ff303eb6410ca363dbb6fad50a591aebfffee272c2dbbe7a550c7'; // nexpo-ultra-secure-secret-key-1230456
+    const userEmail = 'user@nexpo.com';
+    const demoPassword = process.env.SEED_DEMO_PASSWORD || 'ChangeMe-Demo-123!';
+    const passwordHash = hashPassword(demoPassword);
 
     await prisma.admin.upsert({
         where: { email: adminEmail },
@@ -163,7 +172,6 @@ async function main() {
     });
 
     console.log('🌱 Seeding customer user...');
-    const userEmail = 'user@nexpo.com';
 
     const india = await prisma.country.findUnique({ where: { isoCode: 'IN' } });
     const inr = await prisma.currency.findUnique({ where: { code: 'INR' } });

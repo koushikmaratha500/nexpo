@@ -50,4 +50,8 @@ export class SupportRepository {
       data: { status: 'D' },
     });
   }
+
+  static async createAudit(data: Prisma.SupportTicketAuditUncheckedCreateInput) {
+    return prisma.supportTicketAudit.create({ data });
+  }
 }

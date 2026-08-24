@@ -90,13 +90,13 @@ export function ActivateForm() {
 
       <div className="flex flex-col gap-1">
         <label htmlFor="activate-code" className="font-label-md text-label-md text-on-surface font-bold uppercase tracking-wide">
-          Activation OTP (Try &quot;123456&quot;)
+          Activation OTP
         </label>
         <input
           id="activate-code"
           type="text"
           required
-          placeholder="123456"
+          placeholder="Enter 6-digit code"
           value={code}
           onChange={(e) => setCode(e.target.value)}
           className={`${inputClassName} uppercase text-center tracking-widest font-bold font-mono`}

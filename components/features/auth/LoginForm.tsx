@@ -46,13 +46,14 @@ export function LoginForm({ isAdmin = false, onLoginSuccess }: LoginFormProps) {
   });
 
   useEffect(() => {
+    // Remove legacy plaintext password storage from older builds
+    localStorage.removeItem('nexpo_saved_password');
+
     const savedRememberMe = localStorage.getItem('nexpo_remember_me');
     if (savedRememberMe === 'true') {
       setValue('rememberMe', true);
       const savedEmail = localStorage.getItem('nexpo_saved_email');
-      const savedPassword = localStorage.getItem('nexpo_saved_password');
       if (savedEmail) setValue('email', savedEmail);
-      if (savedPassword) setValue('password', savedPassword);
     }
   }, [setValue]);
 
@@ -83,12 +84,11 @@ export function LoginForm({ isAdmin = false, onLoginSuccess }: LoginFormProps) {
         if (data.rememberMe) {
           localStorage.setItem('nexpo_remember_me', 'true');
           localStorage.setItem('nexpo_saved_email', data.email);
-          localStorage.setItem('nexpo_saved_password', data.password);
         } else {
           localStorage.removeItem('nexpo_remember_me');
           localStorage.removeItem('nexpo_saved_email');
-          localStorage.removeItem('nexpo_saved_password');
         }
+        localStorage.removeItem('nexpo_saved_password');
       } else {
         const errMsg = result.error || 'Authentication failed.';
         if (result.pendingVerification) {

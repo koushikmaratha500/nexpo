@@ -2,8 +2,6 @@ export type { IRepository, PaginatedResult, PaginationParams } from './IReposito
 export type { IUserRepository } from './IUserRepository';
 export type { IAdminRepository } from './IAdminRepository';
 export type { ITransactionRepository } from './ITransactionRepository';
-export type { IExpenseRepository } from './IExpenseRepository';
-export type { IDepositRepository } from './IDepositRepository';
 export type { ISessionRepository } from './ISessionRepository';
 export type { ICategoryRepository } from './ICategoryRepository';
 export type { ISupportRepository } from './ISupportRepository';

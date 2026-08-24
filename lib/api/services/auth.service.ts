@@ -1,14 +1,38 @@
 import { UserRepository } from '../repositories/user.repository';
 import { AdminRepository } from '../repositories/admin.repository';
 import { SessionRepository } from '../repositories/session.repository';
-import { prisma } from '@/lib/prisma';
+import { MetaRepository } from '../repositories/meta.repository';
+import { PasswordResetTokenRepository } from '../repositories/password-reset-token.repository';
 import crypto from 'crypto';
 import { EmailService } from './email.service';
 import { OtpService } from './otp.service';
 import * as jose from 'jose';
 import { AuditAction } from '@prisma/client';
 
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'nexpo-ultra-secure-secret-key-123456');
+function getJwtSecretBytes(): Uint8Array {
+  const secret = process.env.JWT_SECRET?.trim();
+  if (!secret) {
+    throw new Error(
+      'JWT_SECRET environment variable is required. Set it in .env.local (see .env.example).',
+    );
+  }
+  return new TextEncoder().encode(secret);
+}
+
+let jwtSecretBytes: Uint8Array | undefined;
+
+function jwtSecret(): Uint8Array {
+  if (!jwtSecretBytes) {
+    jwtSecretBytes = getJwtSecretBytes();
+  }
+  return jwtSecretBytes;
+}
+
+function shouldExposeDevResetToken(): boolean {
+  return (
+    process.env.NODE_ENV === 'development' && process.env.EXPOSE_DEV_RESET_TOKEN === 'true'
+  );
+}
 
 export function hashPassword(password: string): string {
   const salt = crypto.randomBytes(16).toString('hex');
@@ -31,12 +55,12 @@ export async function signJwt(payload: any, expiry = '30d'): Promise<string> {
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime(expiry)
-    .sign(JWT_SECRET);
+    .sign(jwtSecret());
 }
 
 export async function verifyJwt(token: string): Promise<any | null> {
   try {
-    const { payload } = await jose.jwtVerify(token, JWT_SECRET);
+    const { payload } = await jose.jwtVerify(token, jwtSecret());
     return payload;
   } catch (e) {
     return null;
@@ -53,9 +77,7 @@ export class AuthService {
     const hashedPassword = hashPassword(data.password);
 
     const countryRecord = data.country
-      ? await prisma.country.findFirst({
-          where: { name: { equals: data.country, mode: 'insensitive' } },
-        })
+      ? await MetaRepository.findCountryByName(data.country)
       : null;
 
     const user = await UserRepository.create({
@@ -86,7 +108,8 @@ export class AuthService {
   }
 
   static async verifyUserOtp(email: string, otp: string, meta = { ip: '', ua: '' }) {
-    if (!OtpService.verifyOtp(email, otp)) {
+    const verified = await OtpService.verifyOtp(email, otp);
+    if (!verified) {
       throw new Error('Invalid or expired verification OTP code');
     }
 
@@ -260,24 +283,19 @@ export class AuthService {
     }
 
     // Invalidate any existing active reset tokens for this email
-    await prisma.passwordResetToken.updateMany({
-      where: { email, status: 'A', adminId: admin.id },
-      data: { status: 'I' },
-    });
+    await PasswordResetTokenRepository.invalidateActiveForAdmin(email, admin.id);
 
     // Generate a secure random token
     const resetToken = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
     // Store token in database
-    await prisma.passwordResetToken.create({
-      data: {
-        token: resetToken,
-        email: admin.email,
-        adminId: admin.id,
-        expiresAt,
-        status: 'A',
-      },
+    await PasswordResetTokenRepository.create({
+      token: resetToken,
+      email: admin.email,
+      adminId: admin.id,
+      expiresAt,
+      status: 'A',
     });
 
     // Build reset link (simulate since we can't use absolute URLs in dev easily)
@@ -286,13 +304,14 @@ export class AuthService {
 
     await EmailService.sendPasswordResetEmail(admin.email, resetLink, true);
 
-    return { success: true, resetToken };
+    return {
+      success: true,
+      ...(shouldExposeDevResetToken() ? { resetToken } : {}),
+    };
   }
 
   static async resetAdminPassword(token: string, newPassword: string) {
-    const resetRecord = await prisma.passwordResetToken.findUnique({
-      where: { token },
-    });
+    const resetRecord = await PasswordResetTokenRepository.findByToken(token);
 
     if (!resetRecord || !resetRecord.adminId) {
       throw new Error('Invalid or expired reset token');
@@ -304,10 +323,7 @@ export class AuthService {
 
     if (resetRecord.expiresAt < new Date()) {
       // Mark token as expired
-      await prisma.passwordResetToken.update({
-        where: { id: resetRecord.id },
-        data: { status: 'I' },
-      });
+      await PasswordResetTokenRepository.markInactive(resetRecord.id);
       throw new Error('Reset token has expired. Please request a new one.');
     }
 
@@ -318,13 +334,7 @@ export class AuthService {
     });
 
     // Mark token as used
-    await prisma.passwordResetToken.update({
-      where: { id: resetRecord.id },
-      data: {
-        status: 'I',
-        usedAt: new Date(),
-      },
-    });
+    await PasswordResetTokenRepository.markUsed(resetRecord.id);
 
     // Invalidate all existing sessions for this admin
     await SessionRepository.invalidateAllForAdmin(resetRecord.adminId);

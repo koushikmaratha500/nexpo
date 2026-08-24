@@ -454,13 +454,6 @@ export default function TransactionsPage() {
       } catch (err) {
         console.error('Failed to load metadata', err);
         metadataFetchedRef.current = false;
-        // Fallback: load categories from dedicated endpoint
-        try {
-          const res = await axios.get('/api/user/category');
-          if (Array.isArray(res.data)) setCategories(res.data);
-        } catch (err2) {
-          console.error('Failed to load categories fallback', err2);
-        }
       }
     };
     loadMetadata();
@@ -564,6 +557,23 @@ export default function TransactionsPage() {
   const totalDebit = filteredTransactions.filter((t) => t.type === 'DEBIT').reduce((sum, t) => sum + t.amount, 0);
   const totalCredit = filteredTransactions.filter((t) => t.type === 'CREDIT').reduce((sum, t) => sum + t.amount, 0);
 
+  const resolveCategoryForForm = (value: string, type: TransactionType): string => {
+    if (type === 'CREDIT') {
+      const depositMatch = depositTypes.find(
+        (d) => d.name === value || d.name.toLowerCase() === value.toLowerCase(),
+      );
+      return depositMatch?.name ?? value;
+    }
+
+    const categoryMatch = categories.find(
+      (c) =>
+        c.name === value ||
+        c.name.toLowerCase() === value.toLowerCase() ||
+        c.name.toUpperCase().replace(/\s+/g, '_') === value.toUpperCase(),
+    );
+    return categoryMatch?.name ?? value;
+  };
+
   const handleOpenEdit = (t: Transaction) => {
     setEditingTransaction(t);
     setEditFile(null);
@@ -572,7 +582,7 @@ export default function TransactionsPage() {
       type: t.type,
       title: t.title,
       merchant: t.merchant || '',
-      category: t.category,
+      category: resolveCategoryForForm(t.category, t.type),
       amount: t.amount.toString(),
       date: dateToInputFormat(t.date),
       currency: t.currency,

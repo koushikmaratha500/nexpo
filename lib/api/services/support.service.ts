@@ -1,28 +1,24 @@
 import { SupportRepository } from '../repositories/support.repository';
-import { prisma } from '@/lib/prisma';
 import { AuditAction } from '@prisma/client';
 
 export class SupportService {
-  static async createTicket(data: any, meta = { ip: '', ua: '' }) {
+  static async createTicket(data: Record<string, unknown>, meta = { ip: '', ua: '' }) {
     const ticket = await SupportRepository.create({
-      name: data.name,
-      email: data.email,
-      phone: data.phone || null,
-      message: data.message,
-      fileUrl: data.fileUrl || null,
-      fileName: data.fileName || null,
-      fileSize: data.fileSize || null,
+      name: data.name as string,
+      email: data.email as string,
+      phone: (data.phone as string) || null,
+      message: data.message as string,
+      fileUrl: (data.fileUrl as string) || null,
+      fileName: (data.fileName as string) || null,
+      fileSize: (data.fileSize as number) || null,
     });
 
-    // Audit log
-    await prisma.supportTicketAudit.create({
-      data: {
-        supportTicketId: ticket.id,
-        action: AuditAction.CREATE,
-        newValue: JSON.parse(JSON.stringify(ticket)),
-        ipAddress: meta.ip || null,
-        userAgent: meta.ua || null,
-      },
+    await SupportRepository.createAudit({
+      supportTicketId: ticket.id,
+      action: AuditAction.CREATE,
+      newValue: JSON.parse(JSON.stringify(ticket)),
+      ipAddress: meta.ip || null,
+      userAgent: meta.ua || null,
     });
 
     return ticket;
@@ -40,7 +36,7 @@ export class SupportService {
     return ticket;
   }
 
-  static async updateTicket(id: string, adminId: string, data: any, meta = { ip: '', ua: '' }) {
+  static async updateTicket(id: string, adminId: string, data: Record<string, unknown>, meta = { ip: '', ua: '' }) {
     const original = await SupportRepository.findById(id);
     if (!original) {
       throw new Error('Support ticket not found');
@@ -48,17 +44,14 @@ export class SupportService {
 
     const updated = await SupportRepository.update(id, data);
 
-    // Audit log
-    await prisma.supportTicketAudit.create({
-      data: {
-        supportTicketId: id,
-        adminId,
-        action: AuditAction.UPDATE,
-        oldValue: JSON.parse(JSON.stringify(original)),
-        newValue: JSON.parse(JSON.stringify(updated)),
-        ipAddress: meta.ip || null,
-        userAgent: meta.ua || null,
-      },
+    await SupportRepository.createAudit({
+      supportTicketId: id,
+      adminId,
+      action: AuditAction.UPDATE,
+      oldValue: JSON.parse(JSON.stringify(original)),
+      newValue: JSON.parse(JSON.stringify(updated)),
+      ipAddress: meta.ip || null,
+      userAgent: meta.ua || null,
     });
 
     return updated;
@@ -72,16 +65,13 @@ export class SupportService {
 
     await SupportRepository.softDelete(id);
 
-    // Audit log
-    await prisma.supportTicketAudit.create({
-      data: {
-        supportTicketId: id,
-        adminId,
-        action: AuditAction.DELETE,
-        oldValue: JSON.parse(JSON.stringify(original)),
-        ipAddress: meta.ip || null,
-        userAgent: meta.ua || null,
-      },
+    await SupportRepository.createAudit({
+      supportTicketId: id,
+      adminId,
+      action: AuditAction.DELETE,
+      oldValue: JSON.parse(JSON.stringify(original)),
+      ipAddress: meta.ip || null,
+      userAgent: meta.ua || null,
     });
 
     return { success: true };

@@ -95,7 +95,7 @@ export default function AdminManagementPage() {
   const fetchAdmins = useCallback(async (page = 1) => {
     setIsLoading(true);
     try {
-      const response = await axios.get(`/api/admin/adminstrators?page=1&pageSize=1000`);
+      const response = await axios.get(`/api/admin/administrators?page=1&pageSize=1000`);
       if (response.data) {
         setAdmins(response.data.items || []);
       }
@@ -212,7 +212,7 @@ export default function AdminManagementPage() {
     setIsCreating(true);
 
     try {
-      const response = await axios.post('/api/admin/adminstrators', {
+      const response = await axios.post('/api/admin/administrators', {
         firstName: createFirstName,
         lastName: createLastName || null,
         email: createEmail,

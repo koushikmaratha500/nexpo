@@ -13,7 +13,11 @@
     "db:studio": "prisma studio",
     "db:format": "prisma format",
     "db:seed": "prisma db seed",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:unit": "vitest run tests/unit release4.0/tests release3.0/tests",
+    "test:integration": "vitest run tests/integration",
+    "test:security": "vitest run tests/security",
+    "test:all": "vitest run"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"
@@ -30,7 +34,7 @@
     "@upstash/redis": "^1.38.0",
     "@vercel/kv": "^3.0.0",
     "ai": "^7.0.55",
-    "axios": "^1.17.0",
+    "axios": "^1.18.0",
     "dayjs": "^1.11.21",
     "jose": "^6.2.3",
     "next": "16.2.7",

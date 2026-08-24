@@ -5,6 +5,7 @@ import { AuditAction } from '@prisma/client';
 export interface TransactionQueryParams {
   userId?: string;
   type?: 'DEBIT' | 'CREDIT';
+  types?: ('DEBIT' | 'CREDIT')[];
   categoryId?: string;
   category?: string;
   startDate?: Date;
@@ -26,13 +27,13 @@ export class TransactionRepository {
   }
 
   static async findAll(params: TransactionQueryParams) {
-    const { userId, type, categoryId, category, startDate, endDate, page = 1, pageSize = 5 } = params;
+    const { userId, type, types, categoryId, category, startDate, endDate, page = 1, pageSize = 20 } = params;
     const skip = (page - 1) * pageSize;
 
     const where: Prisma.TransactionWhereInput = {
       status: { not: 'D' },
       ...(userId && { userId }),
-      ...(type && { type }),
+      ...(types?.length ? { type: { in: types } } : type ? { type } : {}),
       ...(categoryId && { categoryId }),
     };
 
@@ -76,6 +77,47 @@ export class TransactionRepository {
   static async countByType(type: 'DEBIT' | 'CREDIT', where: Prisma.TransactionWhereInput = {}) {
     return prisma.transaction.count({
       where: { status: { not: 'D' }, type, ...where },
+    });
+  }
+
+  static async findRecentForUser(userId: string, take = 5) {
+    return prisma.transaction.findMany({
+      where: { userId, status: { not: 'D' } },
+      orderBy: { transactionDate: 'desc' },
+      take,
+      include: {
+        category: true,
+        currency: true,
+        paymentType: true,
+        budgetDepositType: true,
+      },
+    });
+  }
+
+  static async findForUserReport(params: {
+    userId: string;
+    types: ('DEBIT' | 'CREDIT')[];
+    categoryId?: string;
+    startDate?: Date;
+    endDate?: Date;
+  }) {
+    const where: Prisma.TransactionWhereInput = {
+      userId: params.userId,
+      status: { not: 'D' },
+      type: { in: params.types },
+      ...(params.categoryId && { categoryId: params.categoryId }),
+    };
+
+    if (params.startDate || params.endDate) {
+      where.transactionDate = {};
+      if (params.startDate) where.transactionDate.gte = params.startDate;
+      if (params.endDate) where.transactionDate.lte = params.endDate;
+    }
+
+    return prisma.transaction.findMany({
+      where,
+      orderBy: { transactionDate: 'desc' },
+      include: { category: true, currency: true, budgetDepositType: true },
     });
   }
 

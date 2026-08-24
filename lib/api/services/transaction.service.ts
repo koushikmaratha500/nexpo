@@ -1,5 +1,5 @@
 import { TransactionRepository } from '../repositories/transaction.repository';
-import { prisma } from '@/lib/prisma';
+import { MetaResolutionService } from './meta-resolution.service';
 import { AuditAction } from '@prisma/client';
 import { createTransactionSchema } from '../dtos/transaction.dto';
 import type { z } from 'zod';
@@ -21,113 +21,9 @@ interface TransactionMeta {
   ua?: string;
 }
 
-async function resolveIdsForTransaction(data: Record<string, unknown>) {
-  const str = (key: string): string | undefined => {
-    const val = data[key];
-    return typeof val === 'string' ? val : undefined;
-  };
-
-  let categoryId = str('categoryId') || null;
-  const categoryName = str('category') || str('categoryName');
-  if (!categoryId && categoryName) {
-    let category = await prisma.category.findFirst({
-      where: { OR: [{ name: { equals: categoryName, mode: 'insensitive' } }, { code: { equals: categoryName.toUpperCase() } }] },
-    });
-    if (!category) {
-      category = await prisma.category.create({
-        data: {
-          name: categoryName,
-          code: categoryName.toUpperCase().replace(/\s+/g, '_').trim(),
-          status: 'A',
-        },
-      });
-    }
-    categoryId = category.id;
-  }
-  if (!categoryId) {
-    const defaultCat = await prisma.category.findFirst({ where: { status: 'A' } });
-    categoryId = defaultCat ? defaultCat.id : null;
-  }
-
-  let currencyId = str('currencyId') || null;
-  const currencyCode = str('currency') || str('currencyCode') || 'INR';
-  if (!currencyId && currencyCode) {
-    let currency = await prisma.currency.findUnique({
-      where: { code: currencyCode.toUpperCase() },
-    });
-    if (!currency) {
-      currency = await prisma.currency.create({
-        data: {
-          code: currencyCode.toUpperCase(),
-          name: currencyCode.toUpperCase(),
-          symbol: '₹',
-          status: 'A',
-        },
-      });
-    }
-    currencyId = currency.id;
-  }
-
-  let paymentTypeId = str('paymentTypeId') || null;
-  const paymentTypeName = str('paymentType') || str('paymentTypeName') || 'Credit Card';
-  if (!paymentTypeId && paymentTypeName) {
-    let paymentType = await prisma.paymentType.findFirst({
-      where: { name: { equals: paymentTypeName, mode: 'insensitive' } },
-    });
-    if (!paymentType) {
-      paymentType = await prisma.paymentType.create({
-        data: {
-          name: paymentTypeName,
-          code: paymentTypeName.toUpperCase().replace(/\s+/g, '_').trim(),
-          status: 'A',
-        },
-      });
-    }
-    paymentTypeId = paymentType.id;
-  }
-
-  let budgetDepositTypeId = str('budgetDepositTypeId') || null;
-  const depositTypeName = str('budgetDepositType') || str('category');
-  if (!budgetDepositTypeId && depositTypeName) {
-    let depType = await prisma.budgetDepositType.findFirst({
-      where: { name: { equals: depositTypeName, mode: 'insensitive' } },
-    });
-    if (!depType) {
-      depType = await prisma.budgetDepositType.create({
-        data: {
-          name: depositTypeName,
-          code: depositTypeName.toUpperCase().replace(/\s+/g, '_').trim(),
-          status: 'A',
-        },
-      });
-    }
-    budgetDepositTypeId = depType.id;
-  }
-
-  let budgetTypeId = str('budgetTypeId') || null;
-  const budgetTypeName = str('budgetType') || 'Regular';
-  if (!budgetTypeId && budgetTypeName) {
-    let budType = await prisma.budgetType.findFirst({
-      where: { name: { equals: budgetTypeName, mode: 'insensitive' } },
-    });
-    if (!budType) {
-      budType = await prisma.budgetType.create({
-        data: {
-          name: budgetTypeName,
-          code: budgetTypeName.toUpperCase().replace(/\s+/g, '_').trim(),
-          status: 'A',
-        },
-      });
-    }
-    budgetTypeId = budType.id;
-  }
-
-  return { categoryId, currencyId, paymentTypeId, budgetDepositTypeId, budgetTypeId };
-}
-
 export class TransactionService {
   static async createTransaction(userId: string, data: TransactionData, meta: TransactionMeta = {}) {
-    const resolved = await resolveIdsForTransaction(data);
+    const resolved = await MetaResolutionService.resolveForTransaction(data);
 
     const transaction = await TransactionRepository.create({
       userId,
@@ -189,7 +85,7 @@ export class TransactionService {
       throw new Error('Transaction not found or unauthorized');
     }
 
-    const resolved = await resolveIdsForTransaction(data);
+    const resolved = await MetaResolutionService.resolveForTransaction(data);
     const updateData = {
       ...data,
       ...(resolved.categoryId && { categoryId: resolved.categoryId }),

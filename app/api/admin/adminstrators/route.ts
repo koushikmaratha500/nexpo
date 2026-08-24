@@ -1,22 +1,21 @@
-import { NextRequest } from 'next/server';
-import { AdminController } from '@/lib/api/controllers/admin.controller';
-import { authGuard } from '@/lib/api/middleware/authGuard';
-import { handleApiError } from '@/lib/api/middleware/errorHandler';
+import { NextRequest, NextResponse } from 'next/server';
+import { GET as getAdministrators, POST as postAdministrator } from '../administrators/route';
+
+function withDeprecation(response: Response): Response {
+  const headers = new Headers(response.headers);
+  headers.set('Deprecation', 'true');
+  headers.set('Link', '</api/admin/administrators>; rel="successor-version"');
+  return new NextResponse(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
 
 export async function GET(req: NextRequest) {
-  try {
-    await authGuard(req, 'ADMIN');
-    return await AdminController.getAdministrators(req);
-  } catch (error) {
-    return handleApiError(error);
-  }
+  return withDeprecation(await getAdministrators(req));
 }
 
 export async function POST(req: NextRequest) {
-  try {
-    await authGuard(req, 'ADMIN');
-    return await AdminController.createAdministrator(req);
-  } catch (error) {
-    return handleApiError(error);
-  }
+  return withDeprecation(await postAdministrator(req));
 }
