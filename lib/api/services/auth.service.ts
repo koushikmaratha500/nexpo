@@ -8,6 +8,7 @@ import { EmailService } from './email.service';
 import { OtpService } from './otp.service';
 import * as jose from 'jose';
 import { AuditAction } from '@prisma/client';
+import { assertValidUsername } from '../utils/username';
 
 function getJwtSecretBytes(): Uint8Array {
   const secret = process.env.JWT_SECRET?.trim();
@@ -74,6 +75,12 @@ export class AuthService {
       throw new Error('Email is already registered');
     }
 
+    const username = assertValidUsername(data.username);
+    const existingUsername = await UserRepository.findByUsername(username);
+    if (existingUsername) {
+      throw new Error('Username is already taken');
+    }
+
     const hashedPassword = hashPassword(data.password);
 
     const countryRecord = data.country
@@ -81,6 +88,7 @@ export class AuthService {
       : null;
 
     const user = await UserRepository.create({
+      username,
       firstName: data.firstName,
       lastName: data.lastName || null,
       email: data.email,
@@ -272,6 +280,83 @@ export class AuthService {
 
   static async logout(jwt: string) {
     await SessionRepository.invalidate(jwt);
+    return { success: true };
+  }
+
+  static async forgotUserPassword(email: string, meta = { ip: '', ua: '' }) {
+    const user = await UserRepository.findByEmail(email);
+    if (!user || user.status !== 'A' || !user.email) {
+      return { success: true, simulated: true };
+    }
+
+    await PasswordResetTokenRepository.invalidateActiveForUser(email, user.id);
+
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+    await PasswordResetTokenRepository.create({
+      token: resetToken,
+      email: user.email,
+      userId: user.id,
+      expiresAt,
+      status: 'A',
+    });
+
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const resetLink = `${baseUrl}/auth/reset-password?token=${resetToken}`;
+
+    await EmailService.sendPasswordResetEmail(user.email, resetLink, false);
+
+    await UserRepository.createAudit({
+      userId: user.id,
+      action: AuditAction.PASSWORD_RESET,
+      newValue: { email: user.email, note: 'Password reset requested' },
+      ipAddress: meta.ip || null,
+      userAgent: meta.ua || null,
+      status: 'A',
+    });
+
+    return {
+      success: true,
+      ...(shouldExposeDevResetToken() ? { resetToken } : {}),
+    };
+  }
+
+  static async resetUserPassword(token: string, newPassword: string, meta = { ip: '', ua: '' }) {
+    const resetRecord = await PasswordResetTokenRepository.findByToken(token);
+
+    if (!resetRecord || !resetRecord.userId) {
+      throw new Error('Invalid or expired reset token');
+    }
+
+    if (resetRecord.status !== 'A' || resetRecord.usedAt) {
+      throw new Error('Reset token has already been used');
+    }
+
+    if (resetRecord.expiresAt < new Date()) {
+      await PasswordResetTokenRepository.markInactive(resetRecord.id);
+      throw new Error('Reset token has expired. Please request a new one.');
+    }
+
+    const hashedPassword = hashPassword(newPassword);
+    await UserRepository.update(resetRecord.userId, {
+      passwordHash: hashedPassword,
+      forcedResetPassword: false,
+      lastPasswordChangedDate: new Date(),
+    });
+
+    await PasswordResetTokenRepository.markUsed(resetRecord.id);
+    await SessionRepository.invalidateAllForUser(resetRecord.userId);
+
+    await UserRepository.createAudit({
+      userId: resetRecord.userId,
+      action: AuditAction.PASSWORD_RESET,
+      newValue: { email: resetRecord.email, note: 'Password reset completed via token' },
+      ipAddress: meta.ip || null,
+      userAgent: meta.ua || null,
+      status: 'A',
+    });
+
     return { success: true };
   }
 

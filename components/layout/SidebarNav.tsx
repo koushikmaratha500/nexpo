@@ -10,6 +10,24 @@ export interface NavLink {
   icon: string;
 }
 
+/** Longest matching nav path so nested routes (e.g. /groups/[id]) highlight the parent item. */
+export function getActiveNavPath(pathname: string, navLinks: NavLink[]): string | null {
+  let best: string | null = null;
+
+  for (const link of navLinks) {
+    const matches = pathname === link.path || pathname.startsWith(`${link.path}/`);
+    if (matches && (!best || link.path.length > best.length)) {
+      best = link.path;
+    }
+  }
+
+  return best;
+}
+
+export function isNavLinkActive(pathname: string, linkPath: string, navLinks: NavLink[]): boolean {
+  return getActiveNavPath(pathname, navLinks) === linkPath;
+}
+
 export interface SidebarNavProps {
   navLinks: NavLink[];
   roleLabel: string;
@@ -34,10 +52,11 @@ export function SidebarNav({
   onLinkClick,
 }: SidebarNavProps) {
   const pathname = usePathname();
+  const activeNavPath = getActiveNavPath(pathname, navLinks);
 
   const renderNavLinks = (mobile = false) =>
     navLinks.map((link) => {
-      const isActive = pathname === link.path;
+      const isActive = activeNavPath === link.path;
       const baseClassName = mobile
         ? `flex items-center gap-4 px-4 py-2 rounded-lg transition-all duration-200 ${
             isActive

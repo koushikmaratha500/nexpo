@@ -19,6 +19,7 @@ export class ReportService {
       }),
       TransactionRepository.findAll({
         userId,
+        groupId: null,
         types,
         categoryId: query.categoryId,
         startDate,

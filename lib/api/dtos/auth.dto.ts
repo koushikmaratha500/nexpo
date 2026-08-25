@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { usernameFieldSchema } from './group.dto';
 
 export const loginSchema = z.object({
   email: z.string().email('Provide a valid email address'),
@@ -6,6 +7,7 @@ export const loginSchema = z.object({
 });
 
 export const registerSchema = z.object({
+  username: usernameFieldSchema,
   firstName: z.string().min(1, 'First name is required').max(50, 'First name is too long'),
   lastName: z.string().optional(),
   email: z.string().email('Provide a valid email address'),
@@ -28,6 +30,7 @@ export const resetPasswordSchema = z.object({
 });
 
 export const updateProfileSchema = z.object({
+  username: usernameFieldSchema.optional(),
   firstName: z.string().min(1, 'First name is required').max(50, 'First name is too long').optional(),
   lastName: z.string().optional(),
   mobile: z.string().optional(),

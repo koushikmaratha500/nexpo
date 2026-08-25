@@ -2,6 +2,11 @@ import crypto from 'crypto';
 import { HttpError } from '../middleware/errorHandler';
 import { EmailService } from './email.service';
 import {
+  getDevOtpCode,
+  isResendEnabled,
+  logOtpDevMode,
+} from '../utils/emailConfig';
+import {
   isProductionEnv,
   isRedisConfigured,
   kvDelete,
@@ -34,10 +39,14 @@ export class OtpService {
     return crypto.randomInt(100000, 999999).toString();
   }
 
+  static resolveOtpCode(): string {
+    return isResendEnabled() ? this.generateOtp() : getDevOtpCode();
+  }
+
   static async createOtp(email: string, sendEmail = true): Promise<string> {
     assertOtpStoreAvailable();
 
-    const code = this.generateOtp();
+    const code = this.resolveOtpCode();
     const record: OtpRecord = {
       code,
       attempts: 0,
@@ -47,7 +56,15 @@ export class OtpService {
     await kvSetJson(otpKey(email), record, OTP_TTL_SECONDS);
 
     if (sendEmail) {
-      await EmailService.sendOtpEmail(email, code);
+      if (isResendEnabled()) {
+        const result = await EmailService.sendOtpEmail(email, code);
+        if (!result.success) {
+          await kvDelete(otpKey(email));
+          throw new Error('Failed to send verification email. Please try again later.');
+        }
+      } else {
+        logOtpDevMode(email);
+      }
     }
 
     return code;

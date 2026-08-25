@@ -1,0 +1,178 @@
+// Release 4.1 — proposed schema additions (draft)
+// Merge into prisma/schema.prisma during implementation sprints
+
+enum GroupMemberRole {
+  ADMIN
+  MEMBER
+}
+
+enum GroupInviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+}
+
+enum SplitMode {
+  EQUAL_INCLUDED
+  CUSTOM_AMOUNT
+  CUSTOM_PERCENT
+}
+
+enum ReminderRecurrence {
+  NONE
+  WEEKLY
+  MONTHLY
+}
+
+enum ReminderChannel {
+  IN_APP
+  EMAIL
+  WHATSAPP
+}
+
+enum ReminderStatus {
+  ACTIVE
+  COMPLETED
+  SNOOZED
+  CANCELLED
+}
+
+// --- P3: Username (alter User) ---
+// User {
+//   username String? @unique  // migrate existing users; require on new signup
+//   groupMembers GroupMember[]
+//   groupInvitesSent GroupInvite[] @relation("InvitedBy")
+//   createdGroups Group[] @relation("GroupCreator")
+//   paymentReminders PaymentReminder[]
+//   groupExpenseSplits GroupExpenseSplit[]
+// }
+
+model Group {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  createdById String
+  createdBy   User     @relation("GroupCreator", fields: [createdById], references: [id])
+  status      Status   @default(A)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members     GroupMember[]
+  invites     GroupInvite[]
+  transactions Transaction[]
+  reminders   PaymentReminder[]
+
+  @@index([createdById])
+}
+
+model GroupMember {
+  id        String          @id @default(uuid())
+  groupId   String
+  userId    String
+  role      GroupMemberRole @default(MEMBER)
+  joinedAt  DateTime        @default(now())
+  group     Group           @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User            @relation(fields: [userId], references: [id])
+
+  @@unique([groupId, userId])
+  @@index([userId])
+}
+
+model GroupInvite {
+  id          String            @id @default(uuid())
+  groupId     String
+  invitedById String
+  email       String?
+  phone       String?
+  username    String?
+  inviteeUserId String?
+  status      GroupInviteStatus @default(PENDING)
+  expiresAt   DateTime
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  group       Group             @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  invitedBy   User              @relation("InvitedBy", fields: [invitedById], references: [id])
+
+  @@index([groupId])
+  @@index([email])
+  @@index([phone])
+  @@index([username])
+}
+
+// --- P4: Extend Transaction ---
+// Transaction {
+//   groupId String?
+//   group   Group? @relation(fields: [groupId], references: [id])
+//   splitMode SplitMode?
+//   splits  GroupExpenseSplit[]
+//   @@index([groupId])
+// }
+
+model GroupExpenseSplit {
+  id             String   @id @default(uuid())
+  transactionId  String
+  userId         String
+  included       Boolean  @default(true)
+  shareAmount    Decimal? @db.Decimal(18, 2)
+  sharePercent   Decimal? @db.Decimal(5, 2)
+  computedAmount Decimal  @db.Decimal(18, 2)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id])
+
+  @@unique([transactionId, userId])
+  @@index([userId])
+}
+
+// --- P2: Admin settings ---
+model SystemSetting {
+  key               String   @id
+  value             Json
+  updatedByAdminId  String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// --- P5: Reminders ---
+model PaymentReminder {
+  id              String             @id @default(uuid())
+  userId          String?
+  groupId         String?
+  createdByUserId String
+  title           String
+  amount          Decimal?           @db.Decimal(18, 2)
+  dueDate         DateTime
+  recurrence      ReminderRecurrence @default(NONE)
+  channel         ReminderChannel    @default(IN_APP)
+  status          ReminderStatus     @default(ACTIVE)
+  snoozedUntil    DateTime?
+  notes           String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  user    User?  @relation(fields: [userId], references: [id])
+  group   Group? @relation(fields: [groupId], references: [id])
+  createdBy User @relation("ReminderCreator", fields: [createdByUserId], references: [id])
+  deliveries ReminderDelivery[]
+
+  @@index([userId, dueDate])
+  @@index([groupId, dueDate])
+  @@index([status, dueDate])
+}
+
+model ReminderDelivery {
+  id         String          @id @default(uuid())
+  reminderId String
+  channel    ReminderChannel
+  sentAt     DateTime        @default(now())
+  status     String          @default("SENT")
+  error      String?
+
+  reminder PaymentReminder @relation(fields: [reminderId], references: [id], onDelete: Cascade)
+
+  @@index([reminderId])
+}

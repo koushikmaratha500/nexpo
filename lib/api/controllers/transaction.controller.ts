@@ -48,6 +48,7 @@ export class TransactionController extends BaseController {
 
       const result = await TransactionService.getTransactions({
         userId,
+        groupId: null,
         type,
         categoryId,
         category,

@@ -8,9 +8,12 @@ import { useAuth } from '@/components/auth/AuthContext';
 const ADMIN_NAV_LINKS = [
   { name: 'Dashboard', path: '/admin', icon: 'dashboard' },
   { name: 'Customers', path: '/admin/users', icon: 'group' },
+  { name: 'Groups', path: '/admin/groups', icon: 'groups' },
+  { name: 'Reminders', path: '/admin/reminders', icon: 'notifications_active' },
   { name: 'Administrators', path: '/admin/admins', icon: 'shield_person' },
   { name: 'Categories', path: '/admin/categories', icon: 'category' },
   { name: 'Reports', path: '/admin/reports', icon: 'assessment' },
+  { name: 'Support', path: '/admin/support', icon: 'support_agent' },
   { name: 'Settings', path: '/admin/settings', icon: 'settings' },
 ];
 

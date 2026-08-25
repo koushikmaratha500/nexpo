@@ -2,6 +2,10 @@
   "name": "nexpo",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "mobile",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -17,7 +21,11 @@
     "test:unit": "vitest run tests/unit release4.0/tests release3.0/tests",
     "test:integration": "vitest run tests/integration",
     "test:security": "vitest run tests/security",
-    "test:all": "vitest run"
+    "test:all": "vitest run",
+    "mobile": "npm run start --workspace=mobile",
+    "mobile:ios": "npm run ios --workspace=mobile",
+    "mobile:android": "npm run android --workspace=mobile",
+    "mobile:typecheck": "npm run typecheck --workspace=mobile"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"

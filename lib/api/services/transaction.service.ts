@@ -60,6 +60,7 @@ export class TransactionService {
 
   static async getTransactions(params: {
     userId?: string;
+    groupId?: string | null;
     type?: 'DEBIT' | 'CREDIT';
     categoryId?: string;
     category?: string;
@@ -72,7 +73,7 @@ export class TransactionService {
   }
 
   static async getTransactionById(id: string, userId?: string) {
-    const transaction = await TransactionRepository.findById(id, userId);
+    const transaction = await TransactionRepository.findById(id, userId, true);
     if (!transaction) {
       throw new Error('Transaction not found');
     }
@@ -80,7 +81,7 @@ export class TransactionService {
   }
 
   static async updateTransaction(id: string, userId: string, data: Partial<TransactionData>, meta: TransactionMeta = {}) {
-    const original = await TransactionRepository.findById(id, userId);
+    const original = await TransactionRepository.findById(id, userId, true);
     if (!original) {
       throw new Error('Transaction not found or unauthorized');
     }
@@ -127,7 +128,7 @@ export class TransactionService {
   }
 
   static async deleteTransaction(id: string, userId: string, meta: TransactionMeta = {}) {
-    const original = await TransactionRepository.findById(id, userId);
+    const original = await TransactionRepository.findById(id, userId, true);
     if (!original) {
       throw new Error('Transaction not found or unauthorized');
     }

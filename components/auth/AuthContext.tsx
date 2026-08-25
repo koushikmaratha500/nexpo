@@ -7,6 +7,7 @@ import { useAuthStore, UserState } from '@/store/authStore';
 import { useToast } from '@/hooks/useToast';
 
 export interface User {
+  username?: string;
   firstName: string;
   lastName?: string;
   phone?: string;
@@ -213,6 +214,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           };
         } else {
           loggedInUser = {
+            username: rawUser.username || '',
             firstName: rawUser.firstName,
             lastName: rawUser.lastName || '',
             phone: rawUser.phone || rawUser.mobile || '',

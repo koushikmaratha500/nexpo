@@ -8,6 +8,7 @@ import { comparePassword } from '@/lib/api/services/auth.service';
 vi.mock('@/lib/api/repositories/user.repository', () => ({
   UserRepository: {
     findByEmail: vi.fn(),
+    findByUsername: vi.fn(),
     create: vi.fn(),
     createAudit: vi.fn(),
     update: vi.fn(),
@@ -40,6 +41,7 @@ vi.mock('@/lib/api/repositories/session.repository', () => ({
 }));
 
 const mockedFindByEmail = vi.mocked(UserRepository.findByEmail);
+const mockedFindByUsername = vi.mocked(UserRepository.findByUsername);
 const mockedCreateUser = vi.mocked(UserRepository.create);
 const mockedCreateOtp = vi.mocked(OtpService.createOtp);
 const mockedVerifyOtp = vi.mocked(OtpService.verifyOtp);
@@ -53,9 +55,11 @@ describe('register → verify → login flow', () => {
 
   it('registers a pending user and sends OTP', async () => {
     mockedFindByEmail.mockResolvedValue(null);
+    mockedFindByUsername.mockResolvedValue(null);
     mockedCreateUser.mockResolvedValue({
       id: 'user-1',
       email: 'new@example.com',
+      username: 'new_user',
       firstName: 'New',
       lastName: null,
       status: 'P',
@@ -63,6 +67,7 @@ describe('register → verify → login flow', () => {
     mockedCreateOtp.mockResolvedValue('123456');
 
     const { user, otp } = await AuthService.registerUser({
+      username: 'new_user',
       firstName: 'New',
       email: 'new@example.com',
       password: 'SecurePass123!',

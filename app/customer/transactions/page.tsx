@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { useTransactionStore, type TransactionType, type Transaction } from '@/store/transactionStore';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -681,7 +682,13 @@ export default function TransactionsPage() {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-outline-variant/30 pb-6">
         <div>
           <h2 className="font-headline-lg text-headline-lg text-primary font-black tracking-tight">Personal Transactions</h2>
-          <p className="font-body-lg text-body-lg text-on-surface-variant mt-1">Track your debits and credits in one place.</p>
+          <p className="font-body-lg text-body-lg text-on-surface-variant mt-1">
+            Your private debit and credit ledger. Group expenses are managed separately under{' '}
+            <Link href="/customer/groups" className="text-primary font-bold hover:underline">
+              Groups
+            </Link>
+            .
+          </p>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <Button onClick={() => setIsImportOpen(true)} variant="tertiary" className="self-start sm:self-auto">
@@ -690,7 +697,7 @@ export default function TransactionsPage() {
           </Button>
           <Button onClick={handleOpenAdd} className="self-start sm:self-auto">
             <span className="material-symbols-outlined text-sm">add</span>
-            Add
+            Add Transaction
           </Button>
         </div>
       </div>
@@ -815,6 +822,19 @@ export default function TransactionsPage() {
           onPageChange={setCurrentPage}
           onItemsPerPageChange={handleItemsPerPageChange}
         />
+      </Card>
+
+      <Card className="bg-surface-container-lowest p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4" glass={false}>
+        <div>
+          <h4 className="font-title-md text-title-md font-bold text-primary">Add a transaction</h4>
+          <p className="font-body-md text-on-surface-variant mt-1">
+            Record a personal debit or credit. This ledger does not include group expenses.
+          </p>
+        </div>
+        <Button onClick={handleOpenAdd} className="self-start sm:self-auto">
+          <span className="material-symbols-outlined text-sm">add</span>
+          Add Transaction
+        </Button>
       </Card>
 
       {/* ---------------- ADD TRANSACTION MODAL ---------------- */}

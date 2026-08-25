@@ -43,4 +43,20 @@ Server-only AI helpers (Release 3.0) built on the **Vercel AI SDK v7** + **OpenR
 - `provider.ts` — `createOpenRouter` singleton + `getModel(kind)` returning an AI SDK `LanguageModel`; throws `HttpError(503)` when unconfigured.
 - `agents/receipt.agent.ts` — image → structured extraction via `generateObject` + `ReceiptExtractionSchema` (auto-retry, zod-validated).
 - Routes live under `app/api/ai/...`, always `authGuard` + `handleApiError`. Keep keys server-side; scope tools/data per authenticated user.
+
+# Groups & splits (`lib/api/services/group*.ts`, `split.service.ts`)
+
+- Group ACL (`assertMember`, `assertAdmin`) lives in `GroupService` — never in route handlers.
+- Group transactions reuse the shared `Transaction` table with `groupId` set; personal APIs filter `groupId IS NULL`.
+- Split math is pure in `SplitService.calculate()` — equal/custom amount/custom percent; penny remainder to payer.
+- Balances: `GET /api/user/groups/[id]/balances`; settlement CSV: `GET /api/user/groups/[id]/settlements/export`.
+
+# Notifications & reminders (Release 4.1)
+
+- **NotificationService** orchestrates in-app, email, and push channels — controllers never call Resend or OneSignal directly.
+- **PushService** — server-only OneSignal REST (`ONESIGNAL_APP_ID`, `ONESIGNAL_REST_API_KEY`).
+- **EmailService** — Resend; gated by `ENABLE_RESEND` via `lib/api/utils/emailConfig.ts`.
+- Effective delivery = admin global policy AND user preference AND channel-specific rules (email also requires Resend).
+- Due reminder dispatch: `ReminderDispatchService` via `POST /api/internal/reminders/dispatch` + `REMINDER_DISPATCH_SECRET`.
+- Customer UI: `components/features/notifications/` (bell, preferences, OneSignal provider); reminders in `components/features/reminders/`.
 <!-- END:layered-architecture -->

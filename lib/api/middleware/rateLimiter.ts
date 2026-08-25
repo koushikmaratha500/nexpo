@@ -35,9 +35,12 @@ export const RATE_LIMIT_PRESETS = {
   adminUserWrite: { limit: 20, windowSeconds: 60 },
   adminForgotPassword: { limit: 5, windowSeconds: 60 },
   adminResetPassword: { limit: 5, windowSeconds: 60 },
+  userForgotPassword: { limit: 5, windowSeconds: 60 },
+  userResetPassword: { limit: 5, windowSeconds: 60 },
   aiChat: { limit: 20, windowSeconds: 60 },
   aiOcr: { limit: 10, windowSeconds: 60 },
   aiInsights: { limit: 10, windowSeconds: 60 },
+  groupInvite: { limit: 20, windowSeconds: 60 },
 } as const;
 
 export interface RateLimitOptions {

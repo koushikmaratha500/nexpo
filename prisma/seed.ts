@@ -179,6 +179,7 @@ async function main() {
     await prisma.user.upsert({
         where: { email: userEmail },
         update: {
+            username: 'alex_sterling',
             passwordHash,
             firstName: 'Alex',
             lastName: 'Sterling',
@@ -188,6 +189,7 @@ async function main() {
             emailVerified: true,
         },
         create: {
+            username: 'alex_sterling',
             email: userEmail,
             passwordHash,
             firstName: 'Alex',
@@ -198,6 +200,27 @@ async function main() {
             emailVerified: true,
         },
     });
+
+    console.log('🌱 Seeding system settings...');
+
+    const systemSettings = [
+        { key: 'baseCurrency', value: 'INR' },
+        { key: 'matchingRate', value: 90 },
+        { key: 'requireReceipt', value: true },
+        { key: 'autoApproveLimit', value: 100 },
+        { key: 'notifications.pushEnabled', value: true },
+        { key: 'notifications.emailRemindersEnabled', value: true },
+        { key: 'notifications.inAppEnabled', value: true },
+        { key: 'notifications.defaultChannels', value: ['IN_APP'] },
+    ];
+
+    for (const setting of systemSettings) {
+        await prisma.systemSetting.upsert({
+            where: { key: setting.key },
+            update: { value: setting.value },
+            create: { key: setting.key, value: setting.value },
+        });
+    }
 
     console.log('✅ Seed completed');
 }

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { User, UserAudit, Prisma, Country, Currency } from '@prisma/client';
+import { normalizeUsername } from '../utils/username';
 
 export type UserWithRelations = User & {
   country?: Country | null;
@@ -17,6 +18,23 @@ export class UserRepository {
   static async findByEmail(email: string): Promise<UserWithRelations | null> {
     return prisma.user.findFirst({
       where: { email, status: { not: 'D' } },
+      include: { country: true, currency: true },
+    });
+  }
+
+  static async findByUsername(username: string): Promise<UserWithRelations | null> {
+    return prisma.user.findFirst({
+      where: {
+        username: { equals: normalizeUsername(username), mode: 'insensitive' },
+        status: { not: 'D' },
+      },
+      include: { country: true, currency: true },
+    });
+  }
+
+  static async findByMobile(mobile: string): Promise<UserWithRelations | null> {
+    return prisma.user.findFirst({
+      where: { mobile, status: { not: 'D' } },
       include: { country: true, currency: true },
     });
   }
@@ -43,12 +61,16 @@ export class UserRepository {
   }
 
   static async create(data: Prisma.UserUncheckedCreateInput): Promise<User> {
-    return prisma.user.create({
-      data: {
-        status: 'A',
-        ...data,
-      },
-    });
+    const payload: Prisma.UserUncheckedCreateInput = {
+      status: 'A',
+      ...data,
+    };
+
+    if (payload.passwordHash && payload.lastPasswordChangedDate === undefined) {
+      payload.lastPasswordChangedDate = new Date();
+    }
+
+    return prisma.user.create({ data: payload });
   }
 
   static async createAudit(data: Prisma.UserAuditUncheckedCreateInput): Promise<UserAudit> {
@@ -56,9 +78,17 @@ export class UserRepository {
   }
 
   static async update(id: string, data: Prisma.UserUncheckedUpdateInput): Promise<User> {
+    const patch: Prisma.UserUncheckedUpdateInput = { ...data };
+
+    if (patch.passwordHash !== undefined && patch.passwordHash !== null) {
+      if (patch.lastPasswordChangedDate === undefined) {
+        patch.lastPasswordChangedDate = new Date();
+      }
+    }
+
     return prisma.user.update({
       where: { id },
-      data,
+      data: patch,
     });
   }
 

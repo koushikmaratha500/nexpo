@@ -41,3 +41,10 @@ yarn-error.log*
 next-env.d.ts
 
 /app/generated/prisma
+
+# Expo / React Native (source tracked; artifacts ignored)
+mobile/.expo/
+mobile/dist/
+mobile/web-build/
+mobile/node_modules/
+packages/*/node_modules/

@@ -23,9 +23,11 @@ export class SupportController extends BaseController {
   static async getAll(req: NextRequest) {
     return this.safeExecuteJson(async () => {
       const { searchParams } = new URL(req.url);
+      const status = searchParams.get('status') || undefined;
       return SupportService.getTickets(
         parseInt(searchParams.get('page') || '1', 10),
         parseInt(searchParams.get('pageSize') || '100', 10),
+        status || undefined,
       );
     }, { fallbackMessage: 'Failed to fetch support tickets' });
   }

@@ -9,6 +9,13 @@ export class PasswordResetTokenRepository {
     });
   }
 
+  static async invalidateActiveForUser(email: string, userId: string) {
+    return prisma.passwordResetToken.updateMany({
+      where: { email, status: 'A', userId },
+      data: { status: 'I' },
+    });
+  }
+
   static async create(data: Prisma.PasswordResetTokenUncheckedCreateInput) {
     return prisma.passwordResetToken.create({ data });
   }

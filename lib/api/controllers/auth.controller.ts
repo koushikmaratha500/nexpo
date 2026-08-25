@@ -13,10 +13,11 @@ import {
   resetPasswordSchema,
   completeForcedResetSchema,
 } from '../dtos/auth.dto';
-import { EmailService } from '../services/email.service';
 import { comparePassword, hashPassword } from '../services/auth.service';
+import { assertValidUsername } from '../utils/username';
 
 function serializeCustomerUser(user: {
+  username?: string | null;
   firstName: string;
   lastName: string | null;
   mobile: string | null;
@@ -25,6 +26,7 @@ function serializeCustomerUser(user: {
   currencyId: string | null;
 }) {
   return {
+    username: user.username || '',
     firstName: user.firstName,
     lastName: user.lastName || '',
     phone: user.mobile || '',
@@ -41,8 +43,7 @@ export class AuthController extends BaseController {
       const body = await req.json();
       const validated = registerSchema.parse(body);
       const meta = this.requestMeta(req);
-      const { user, otp } = await AuthService.registerUser(validated, meta);
-      await EmailService.sendOtpEmail(user.email!, otp);
+      const { user } = await AuthService.registerUser(validated, meta);
       return {
         success: true,
         message: 'Registration successful. OTP sent to email.',
@@ -134,6 +135,15 @@ export class AuthController extends BaseController {
       const validated = updateProfileSchema.parse(body);
       const updateData = { ...validated } as Record<string, unknown>;
 
+      if (validated.username) {
+        const normalizedUsername = assertValidUsername(validated.username);
+        const existingUsername = await UserRepository.findByUsername(normalizedUsername);
+        if (existingUsername && existingUsername.id !== userId) {
+          throw new HttpError(400, 'Username is already taken');
+        }
+        updateData.username = normalizedUsername;
+      }
+
       if (validated.newPassword) {
         if (!validated.oldPassword) {
           throw new HttpError(400, 'Old password is required to change password');
@@ -188,11 +198,40 @@ export class AuthController extends BaseController {
     }, { fallbackMessage: 'Failed to request password reset' });
   }
 
+  static async forgotUserPassword(req: NextRequest) {
+    return this.safeExecuteJson(async () => {
+      const body = await req.json();
+      const validated = forgotPasswordSchema.parse(body);
+      const meta = this.requestMeta(req);
+      const result = await AuthService.forgotUserPassword(validated.email, meta);
+      const devPayload =
+        'resetToken' in result && result.resetToken ? { devToken: result.resetToken } : {};
+      return {
+        success: true,
+        message: 'If the account exists, a password reset link has been sent to your email.',
+        ...devPayload,
+      };
+    }, { fallbackMessage: 'Failed to request password reset' });
+  }
+
   static async resetAdminPassword(req: NextRequest) {
     return this.safeExecuteJson(async () => {
       const body = await req.json();
       const validated = resetPasswordSchema.parse(body);
       await AuthService.resetAdminPassword(validated.token, validated.password);
+      return {
+        success: true,
+        message: 'Password has been reset successfully. You can now sign in with your new password.',
+      };
+    }, { fallbackMessage: 'Failed to reset password' });
+  }
+
+  static async resetUserPassword(req: NextRequest) {
+    return this.safeExecuteJson(async () => {
+      const body = await req.json();
+      const validated = resetPasswordSchema.parse(body);
+      const meta = this.requestMeta(req);
+      await AuthService.resetUserPassword(validated.token, validated.password, meta);
       return {
         success: true,
         message: 'Password has been reset successfully. You can now sign in with your new password.',

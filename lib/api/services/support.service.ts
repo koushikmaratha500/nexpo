@@ -24,8 +24,8 @@ export class SupportService {
     return ticket;
   }
 
-  static async getTickets(page = 1, pageSize = 5) {
-    return SupportRepository.findAll(page, pageSize);
+  static async getTickets(page = 1, pageSize = 5, status?: string) {
+    return SupportRepository.findAll(page, pageSize, status);
   }
 
   static async getTicketById(id: string) {

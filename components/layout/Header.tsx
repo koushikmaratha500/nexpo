@@ -3,17 +3,20 @@
 import React from 'react';
 import { useAuth } from '@/components/auth/AuthContext';
 import { useThemeStore } from '@/store/themeStore';
+import { NotificationBell } from '@/components/features/notifications';
 
 interface HeaderProps {
   onMenuToggle?: () => void;
   searchPlaceholder?: string;
   onSearchChange?: (val: string) => void;
+  showNotifications?: boolean;
 }
 
 export function Header({
   onMenuToggle,
   searchPlaceholder = 'Search data...',
-  onSearchChange
+  onSearchChange,
+  showNotifications = false,
 }: HeaderProps) {
   const { user } = useAuth();
   const { isDark, toggleTheme } = useThemeStore();
@@ -63,8 +66,9 @@ export function Header({
           )}
         </button>
 
-        {/* Notifications & Help (Hidden per user request) */}
+        {/* Notifications & Help */}
         <div className="flex items-center gap-4">
+          {showNotifications && <NotificationBell />}
           <div className="h-8 w-px bg-outline-variant mx-2 hidden sm:block"></div>
 
           {/* User Profile */}

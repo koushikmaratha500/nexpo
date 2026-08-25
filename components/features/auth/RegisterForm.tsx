@@ -10,6 +10,7 @@ import axios from 'axios';
 import { PasswordInput } from '@/components/forms/PasswordInput';
 
 interface RegisterFormValues {
+  username: string;
   firstName: string;
   lastName: string;
   email: string;
@@ -32,6 +33,7 @@ export function RegisterForm() {
     formState: { errors },
   } = useForm<RegisterFormValues>({
     defaultValues: {
+      username: '',
       firstName: '',
       lastName: '',
       email: '',
@@ -53,6 +55,7 @@ export function RegisterForm() {
 
     try {
       const response = await axios.post('/api/user/auth/register', {
+        username: data.username,
         firstName: data.firstName,
         lastName: data.lastName || '',
         email: data.email,
@@ -132,6 +135,31 @@ export function RegisterForm() {
             className={inputClassName}
           />
         </div>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label htmlFor="register-username" className="font-label-md text-label-md text-on-surface font-bold uppercase tracking-wide">
+          Username
+        </label>
+        <input
+          id="register-username"
+          type="text"
+          placeholder="alex_sterling"
+          {...register('username', {
+            required: 'Username is required',
+            pattern: {
+              value: /^[a-z0-9_]{3,30}$/i,
+              message: 'Username must be 3-30 characters using letters, numbers, or underscores',
+            },
+          })}
+          className={inputClassName}
+        />
+        {errors.username && (
+          <span className="text-error text-xs font-semibold mt-1 flex items-center gap-1 animate-in slide-in-from-top-1">
+            <span className="material_symbols-outlined text-xs">error</span>
+            {errors.username.message}
+          </span>
+        )}
       </div>
 
       <div className="flex flex-col gap-1">

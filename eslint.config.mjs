@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Expo / shared workspace (use mobile/tsconfig + `npx tsc` in mobile/ instead)
+    "mobile/**",
+    "packages/**",
   ]),
 ]);
 

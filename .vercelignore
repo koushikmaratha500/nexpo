@@ -1,0 +1,5 @@
+# React Native / Expo — tracked in git, not deployed to Vercel
+mobile/
+
+# Shared mobile-only package (Next.js does not import this)
+packages/

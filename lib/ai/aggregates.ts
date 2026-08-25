@@ -85,6 +85,7 @@ export async function getMonthSummary(userId: string, month: string): Promise<Mo
   }
   const { items, total } = await TransactionRepository.findAll({
     userId,
+    groupId: null,
     startDate: range.start,
     endDate: new Date(range.end.getTime() - 1),
     page: 1,
@@ -142,6 +143,7 @@ export async function detectSubscriptionsAndOverruns(
   const start = new Date(today.getFullYear(), today.getMonth() - 5, 1);
   const { items } = await TransactionRepository.findAll({
     userId,
+    groupId: null,
     type: 'DEBIT',
     startDate: start,
     page: 1,
