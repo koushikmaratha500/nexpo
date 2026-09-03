@@ -14,6 +14,7 @@ import { dateToInputFormat } from '@/lib/date';
 import axios from 'axios';
 import { DocumentUploader, RecurringApprovalPanel, ImportExpensesModal } from '@/components/features/transactions';
 import type { ReceiptExtraction } from '@/lib/ai/types';
+import { fileForOcrUpload, isOcrSupportedImageFile } from '@/lib/files/receiptImage';
 
 interface CategoryOption {
   id: string;
@@ -480,11 +481,14 @@ export default function TransactionsPage() {
   };
 
   const handleExtractWithAI = async () => {
-    if (!addFile) return;
+    if (!addFile || !isOcrSupportedImageFile(addFile)) {
+      addToast('AI extraction supports JPG, PNG, or WEBP images only', 'warning');
+      return;
+    }
     setAiExtracting(true);
     try {
       const fd = new FormData();
-      fd.append('file', addFile);
+      fd.append('file', fileForOcrUpload(addFile));
       fd.append('categories', JSON.stringify(categories.map((c) => c.name)));
       fd.append('paymentTypes', JSON.stringify(paymentTypes.map((p) => p.name)));
       const res = await axios.post('/api/ai/ocr', fd);
@@ -937,7 +941,7 @@ export default function TransactionsPage() {
 
           <DocumentUploader file={addFile} onFileChange={setAddFile} />
 
-          {addFile && addFile.type.startsWith('image/') && (
+          {addFile && isOcrSupportedImageFile(addFile) && (
             <div className="flex items-center gap-3">
               <Button type="button" variant="secondary" onClick={handleExtractWithAI} disabled={aiExtracting}>
                 <span className="material-symbols-outlined text-sm">auto_awesome</span>
@@ -945,6 +949,12 @@ export default function TransactionsPage() {
               </Button>
               <span className="text-xs text-on-surface-variant">Auto-fill fields from the receipt image</span>
             </div>
+          )}
+
+          {addFile && !isOcrSupportedImageFile(addFile) && (
+            <p className="text-xs text-on-surface-variant">
+              AI receipt scan works on JPG, PNG, or WEBP images. PDFs can still be attached when you save.
+            </p>
           )}
 
           <div className="flex justify-end gap-3 pt-4 border-t border-outline-variant">

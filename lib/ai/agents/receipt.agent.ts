@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { generateObject } from 'ai';
 import { withModelFallback } from '@/lib/ai/provider';
 import { ReceiptExtractionSchema, type ReceiptExtraction } from '@/lib/ai/types';
@@ -54,7 +55,11 @@ export async function extractReceipt({
         {
           role: 'user',
           content: [
-            { type: 'image', image: imageBase64, mediaType: mimeType },
+            {
+              type: 'file',
+              data: { type: 'data', data: Buffer.from(imageBase64, 'base64') },
+              mediaType: mimeType,
+            },
             { type: 'text', text: 'Extract the receipt fields.' },
           ],
         },

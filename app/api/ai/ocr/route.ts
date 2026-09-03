@@ -5,9 +5,10 @@ import { checkRateLimit } from '@/lib/api/middleware/rateLimiter';
 import { AiUsageRepository } from '@/lib/api/repositories/aiUsage.repository';
 import { getAiConfig } from '@/lib/ai/config';
 import { extractReceipt } from '@/lib/ai/agents/receipt.agent';
+import { inferOcrImageMimeType, OCR_IMAGE_MIME_TYPES } from '@/lib/files/receiptImage';
 import { toProviderHttpError, unwrapProviderError } from '@/lib/ai/errors';
 
-const SUPPORTED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const SUPPORTED_MIME_TYPES: readonly string[] = OCR_IMAGE_MIME_TYPES;
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const OCR_DAILY_LIMIT = 50;
 const OCR_WINDOW_SECONDS = 24 * 60 * 60;
@@ -42,7 +43,12 @@ export async function POST(req: NextRequest) {
     if (!file) {
       throw new HttpError(400, 'No file uploaded');
     }
-    if (!SUPPORTED_MIME_TYPES.includes(file.type)) {
+
+    const resolvedMime =
+      (SUPPORTED_MIME_TYPES.includes(file.type) ? file.type : null) ??
+      inferOcrImageMimeType({ name: file.name, type: file.type });
+
+    if (!resolvedMime) {
       throw new HttpError(415, 'AI extraction supports JPG, PNG or WEBP images only');
     }
     if (file.size > MAX_FILE_SIZE) {
@@ -56,7 +62,7 @@ export async function POST(req: NextRequest) {
 
     const { extraction, inputTokens, outputTokens } = await extractReceipt({
       imageBase64,
-      mimeType: file.type,
+      mimeType: resolvedMime,
       categoryNames,
       paymentTypeNames,
     });

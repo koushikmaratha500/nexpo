@@ -42,6 +42,23 @@ export function getKvClient(): KvClient | null {
   return null;
 }
 
+const HEALTH_PING_KEY = 'nexpo:health:ping';
+
+export async function kvPing(): Promise<{ configured: boolean; reachable: boolean }> {
+  const client = getKvClient();
+  if (!client) {
+    return { configured: false, reachable: false };
+  }
+
+  try {
+    await client.set(HEALTH_PING_KEY, 'ok', { ex: 60 });
+    const value = await client.get<string>(HEALTH_PING_KEY);
+    return { configured: true, reachable: value === 'ok' };
+  } catch {
+    return { configured: true, reachable: false };
+  }
+}
+
 function purgeExpiredMemoryEntries(now = Date.now()): void {
   for (const [key, entry] of memoryStore.entries()) {
     if (entry.expiresAt <= now) {

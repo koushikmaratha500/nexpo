@@ -21,6 +21,7 @@
 | Doc | Role |
 |-----|------|
 | `release4.1/api-contract.md` | New endpoints & envelopes |
+| `release4.1/appsec-remediation-plan.md` | AppSec / Design Checkpoint findings & phased fixes |
 | `release4.1/schema-draft.prisma` | Proposed Prisma models |
 | `release4.0/remediation-plan.md` | Completed foundation (4.0) |
 | `AGENTS.md` | Layered architecture conventions |

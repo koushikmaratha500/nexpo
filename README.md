@@ -61,6 +61,9 @@ REMINDER_DISPATCH_SECRET=      # protects POST /api/internal/reminders/dispatch
 
 ```env
 OPENROUTER_API_KEY=
+# Comma-separated vision models for receipt OCR (auto-fallback on 429/5xx)
+# AI_MODEL_OCR=google/gemma-4-26b-a4b-it:free,google/gemini-2.0-flash-exp:free,google/gemini-2.0-flash-001
+# Higher free limits: link Google AI Studio at https://openrouter.ai/settings/integrations
 # AI_ENABLED=true
 # AI_MODEL_OCR=google/gemma-4-26b-a4b-it:free
 # AI_MODEL_CHAT=openrouter/free
