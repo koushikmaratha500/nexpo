@@ -12,11 +12,20 @@ export interface NavLink {
 }
 
 /** Longest matching nav path so nested routes (e.g. /groups/[id]) highlight the parent item. */
+export function navLinkMatchesPath(pathname: string, linkPath: string): boolean {
+  if (pathname === linkPath) return true;
+  if (!pathname.startsWith(`${linkPath}/`)) return false;
+
+  // Section roots like /customer or /admin should not match every sibling route.
+  const linkSegments = linkPath.split('/').filter(Boolean);
+  return linkSegments.length >= 2;
+}
+
 export function getActiveNavPath(pathname: string, navLinks: NavLink[]): string | null {
   let best: string | null = null;
 
   for (const link of navLinks) {
-    const matches = pathname === link.path || pathname.startsWith(`${link.path}/`);
+    const matches = navLinkMatchesPath(pathname, link.path);
     if (matches && (!best || link.path.length > best.length)) {
       best = link.path;
     }

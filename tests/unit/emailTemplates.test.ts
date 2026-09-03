@@ -9,6 +9,7 @@ describe('emailTemplates', () => {
     const html = buildVerificationEmailHtml('123456');
     expect(html).toContain('123456');
     expect(html).toContain('PaysaSuchan');
+    expect(html).toContain('/brand/email-header-560x160.png');
     expect(html).toContain('15 minutes');
   });
 

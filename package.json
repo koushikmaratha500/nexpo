@@ -29,7 +29,9 @@
     "mobile:android": "npm run android --workspace=mobile",
     "mobile:typecheck": "npm run typecheck --workspace=mobile",
     "mobile:build:preview": "npm run build:preview --workspace=mobile",
-    "mobile:build:production": "npm run build:production --workspace=mobile"
+    "mobile:build:production": "npm run build:production --workspace=mobile",
+    "brand:generate": "node scripts/generate-brand-assets.mjs",
+    "brand:check": "node scripts/generate-brand-assets.mjs"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"

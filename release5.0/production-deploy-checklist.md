@@ -17,6 +17,8 @@ Use for **Vercel web go-live** and **production EAS** builds.
 | `JWT_SECRET` | Yes | Strong random string |
 | `NEXT_PUBLIC_APP_URL` | Yes | `https://your-domain.com` — share links + emails |
 | `APP_URL` | Recommended | Same as above; server runtime override (fixes OAuth if `NEXT_PUBLIC_*` was baked as localhost) |
+
+Brand assets ship in `public/brand/` and `mobile/assets/` (run `npm run brand:check` after updates).
 | `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Yes | Anon/publishable key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes | Server uploads only |

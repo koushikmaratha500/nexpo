@@ -1,7 +1,8 @@
-import { BRAND_NAME, getPublicAppUrl } from '@/lib/brand/constants';
+import { BRAND_NAME, getPublicAppUrl, getBrandEmailLogoUrl } from '@/lib/brand/constants';
 
 function emailShell(title: string, bodyHtml: string, footerNote?: string): string {
   const appUrl = getPublicAppUrl();
+  const logoUrl = getBrandEmailLogoUrl();
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -17,8 +18,8 @@ function emailShell(title: string, bodyHtml: string, footerNote?: string): strin
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;">
             <tr>
               <td style="background:linear-gradient(135deg,#7C3AED 0%,#5B21B6 100%);padding:24px 28px;">
-                <p style="margin:0;font-size:22px;font-weight:800;color:#ffffff;">${BRAND_NAME}</p>
-                <p style="margin:8px 0 0;font-size:13px;color:#ede9fe;">Smart expense tracking</p>
+                <img src="${logoUrl}" alt="${BRAND_NAME}" width="280" height="80" style="display:block;max-width:100%;height:auto;" />
+                <p style="margin:12px 0 0;font-size:13px;color:#ede9fe;">Smart expense tracking</p>
               </td>
             </tr>
             <tr>
