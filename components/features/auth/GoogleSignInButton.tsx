@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
-import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/useToast';
 
 function GoogleIcon() {
@@ -44,26 +43,10 @@ export function GoogleSignInButton() {
   const { addToast } = useToast();
   const [loading, setLoading] = useState(false);
 
-  const handleGoogleSignIn = async () => {
+  const handleGoogleSignIn = () => {
     setLoading(true);
     try {
-      const supabase = createClient();
-      const redirectTo = `${window.location.origin}/auth/callback?next=/auth/callback/complete`;
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'select_account',
-          },
-        },
-      });
-
-      if (error) {
-        addToast(error.message || 'Could not start Google sign-in', 'error');
-        setLoading(false);
-      }
+      window.location.href = '/api/auth/google?next=/auth/callback/complete';
     } catch {
       addToast('Could not start Google sign-in', 'error');
       setLoading(false);
