@@ -30,6 +30,7 @@ export const RATE_LIMIT_PRESETS = {
   login: { limit: 10, windowSeconds: 60 },
   register: { limit: 5, windowSeconds: 60 },
   verify: { limit: 10, windowSeconds: 60 },
+  resendOtp: { limit: 5, windowSeconds: 300 },
   support: { limit: 20, windowSeconds: 60 },
   transactionWrite: { limit: 30, windowSeconds: 60 },
   adminUserWrite: { limit: 20, windowSeconds: 60 },

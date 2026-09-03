@@ -22,8 +22,21 @@ describe('emailConfig', () => {
     vi.unstubAllEnvs();
   });
 
-  it('defaults ENABLE_RESEND to false', () => {
+  it('defaults to disabled without RESEND_API_KEY', () => {
     vi.stubEnv('ENABLE_RESEND', '');
+    vi.stubEnv('RESEND_API_KEY', '');
+    expect(isResendEnabled()).toBe(false);
+  });
+
+  it('auto-enables when RESEND_API_KEY is set', () => {
+    vi.stubEnv('ENABLE_RESEND', '');
+    vi.stubEnv('RESEND_API_KEY', 're_test_key');
+    expect(isResendEnabled()).toBe(true);
+  });
+
+  it('respects explicit ENABLE_RESEND=false even with API key', () => {
+    vi.stubEnv('ENABLE_RESEND', 'false');
+    vi.stubEnv('RESEND_API_KEY', 're_test_key');
     expect(isResendEnabled()).toBe(false);
   });
 
