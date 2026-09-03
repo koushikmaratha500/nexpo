@@ -16,6 +16,7 @@ Use for **Vercel web go-live** and **production EAS** builds.
 | `DATABASE_URL` | Yes | Supabase Postgres pooler URL |
 | `JWT_SECRET` | Yes | Strong random string |
 | `NEXT_PUBLIC_APP_URL` | Yes | `https://your-domain.com` — share links + emails |
+| `APP_URL` | Recommended | Same as above; server runtime override (fixes OAuth if `NEXT_PUBLIC_*` was baked as localhost) |
 | `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Yes | Anon/publishable key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes | Server uploads only |
@@ -42,8 +43,10 @@ Use for **Vercel web go-live** and **production EAS** builds.
 ## Supabase Auth (Google)
 
 1. Enable Google provider with OAuth client ID/secret
-2. Redirect URLs:
+2. **Site URL:** set to `https://<prod-domain>` (NOT `http://localhost:3000`)
+3. **Redirect URLs** (Authentication → URL Configuration):
    - `https://<prod-domain>/auth/callback`
+   - `https://<prod-domain>/**` (covers query strings / preview paths)
    - `paysasuchan://auth/callback` (mobile)
 
 ## Deploy web
