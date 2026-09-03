@@ -8,6 +8,7 @@ import {
   registerSchema,
   loginSchema,
   verifyOtpSchema,
+  resendOtpSchema,
   updateProfileSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
@@ -61,6 +62,14 @@ export class AuthController extends BaseController {
       await AuthService.verifyUserOtp(validated.email, validated.otp, meta);
       return { success: true, message: 'Account verified successfully' };
     }, { fallbackMessage: 'Verification failed' });
+  }
+
+  static async resendOtp(req: NextRequest) {
+    return this.safeExecuteJson(async () => {
+      const body = await req.json();
+      const validated = resendOtpSchema.parse(body);
+      return AuthService.resendVerificationOtp(validated.email);
+    }, { fallbackMessage: 'Failed to resend verification code' });
   }
 
   static async loginUser(req: NextRequest) {

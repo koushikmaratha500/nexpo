@@ -148,6 +148,25 @@ export class AuthService {
     return { success: true };
   }
 
+  static async resendVerificationOtp(email: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await UserRepository.findByEmail(normalizedEmail);
+
+    if (!user || user.status !== 'P' || !user.email) {
+      return {
+        success: true,
+        message: 'If the account is pending verification, a new code has been sent.',
+      };
+    }
+
+    await OtpService.createOtp(user.email, true);
+
+    return {
+      success: true,
+      message: 'Verification code sent. Check your inbox.',
+    };
+  }
+
   static async loginUser(email: string, password: string, meta = { ip: '', ua: '' }) {
     const user = await UserRepository.findByEmail(email);
     if (!user) {
@@ -410,7 +429,10 @@ export class AuthService {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     const resetLink = `${baseUrl}/auth/reset-password?token=${resetToken}`;
 
-    await EmailService.sendPasswordResetEmail(user.email, resetLink, false);
+    const emailResult = await EmailService.sendPasswordResetEmail(user.email, resetLink, false);
+    if (!emailResult.success && !('simulated' in emailResult && emailResult.simulated)) {
+      throw new Error('Failed to send password reset email. Please try again later.');
+    }
 
     await UserRepository.createAudit({
       userId: user.id,
@@ -492,7 +514,10 @@ export class AuthService {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     const resetLink = `${baseUrl}/admin/reset-password?token=${resetToken}`;
 
-    await EmailService.sendPasswordResetEmail(admin.email, resetLink, true);
+    const emailResult = await EmailService.sendPasswordResetEmail(admin.email, resetLink, true);
+    if (!emailResult.success && !('simulated' in emailResult && emailResult.simulated)) {
+      throw new Error('Failed to send password reset email. Please try again later.');
+    }
 
     return {
       success: true,
