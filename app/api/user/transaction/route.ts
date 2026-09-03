@@ -2,11 +2,13 @@ import { NextRequest } from 'next/server';
 import { TransactionController } from '@/lib/api/controllers/transaction.controller';
 import { authGuard } from '@/lib/api/middleware/authGuard';
 import { handleApiError } from '@/lib/api/middleware/errorHandler';
-import { StorageService } from '@/lib/api/services/storage.service';
+import { checkRateLimit, RATE_LIMIT_PRESETS } from '@/lib/api/middleware/rateLimiter';
+import { uploadValidatedFormFile } from '@/lib/api/utils/fileUpload';
 
 export async function POST(req: NextRequest) {
   try {
     const user = await authGuard(req, 'CUSTOMER');
+    await checkRateLimit(req, `txn_write:${user.id}`, RATE_LIMIT_PRESETS.transactionWrite);
 
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
@@ -28,8 +30,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (file) {
-      const buffer = Buffer.from(await file.arrayBuffer());
-      const uploadResult = await StorageService.uploadFile(buffer, file.name, file.type, 'nexpo');
+      const uploadResult = await uploadValidatedFormFile(file);
       body.documentUrl = uploadResult.url;
       body.documentFileName = file.name;
       body.documentMimeType = file.type;

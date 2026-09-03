@@ -3,6 +3,7 @@
 import React from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { sanitizeMarkdownHref } from '@/lib/markdown/sanitizeLink';
 
 const components: Components = {
   p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
@@ -23,11 +24,17 @@ const components: Components = {
   ul: ({ children }) => <ul className="list-disc pl-5 mb-2 space-y-0.5 last:mb-0">{children}</ul>,
   ol: ({ children }) => <ol className="list-decimal pl-5 mb-2 space-y-0.5 last:mb-0">{children}</ol>,
   li: ({ children }) => <li className="leading-relaxed">{children}</li>,
-  a: ({ href, children }) => (
-    <a href={href} target="_blank" rel="noreferrer" className="text-primary underline hover:opacity-80">
-      {children}
-    </a>
-  ),
+  a: ({ href, children }) => {
+    const safeHref = sanitizeMarkdownHref(href);
+    if (!safeHref) {
+      return <span className="text-primary">{children}</span>;
+    }
+    return (
+      <a href={safeHref} target="_blank" rel="noreferrer" className="text-primary underline hover:opacity-80">
+        {children}
+      </a>
+    );
+  },
   blockquote: ({ children }) => (
     <blockquote className="border-l-2 border-primary/40 pl-3 italic text-on-surface-variant my-2">{children}</blockquote>
   ),

@@ -8,8 +8,10 @@ import { useToast } from '@/hooks/useToast';
 import Link from 'next/link';
 import axios from 'axios';
 import { PasswordInput } from '@/components/forms/PasswordInput';
+import { AuthSocialDivider, GoogleSignInButton } from '@/components/features/auth/GoogleSignInButton';
 
 interface RegisterFormValues {
+  username: string;
   firstName: string;
   lastName: string;
   email: string;
@@ -32,6 +34,7 @@ export function RegisterForm() {
     formState: { errors },
   } = useForm<RegisterFormValues>({
     defaultValues: {
+      username: '',
       firstName: '',
       lastName: '',
       email: '',
@@ -53,6 +56,7 @@ export function RegisterForm() {
 
     try {
       const response = await axios.post('/api/user/auth/register', {
+        username: data.username,
         firstName: data.firstName,
         lastName: data.lastName || '',
         email: data.email,
@@ -135,6 +139,31 @@ export function RegisterForm() {
       </div>
 
       <div className="flex flex-col gap-1">
+        <label htmlFor="register-username" className="font-label-md text-label-md text-on-surface font-bold uppercase tracking-wide">
+          Username
+        </label>
+        <input
+          id="register-username"
+          type="text"
+          placeholder="alex_sterling"
+          {...register('username', {
+            required: 'Username is required',
+            pattern: {
+              value: /^[a-z0-9_]{3,30}$/i,
+              message: 'Username must be 3-30 characters using letters, numbers, or underscores',
+            },
+          })}
+          className={inputClassName}
+        />
+        {errors.username && (
+          <span className="text-error text-xs font-semibold mt-1 flex items-center gap-1 animate-in slide-in-from-top-1">
+            <span className="material_symbols-outlined text-xs">error</span>
+            {errors.username.message}
+          </span>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-1">
         <label htmlFor="register-email" className="font-label-md text-label-md text-on-surface font-bold uppercase tracking-wide">
           Email Address
         </label>
@@ -214,8 +243,8 @@ export function RegisterPageWrapper() {
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary text-on-primary mb-4 shadow-sm">
             <span className="material_symbols-outlined text-lg">corporate_fare</span>
           </div>
-          <h1 className="font-headline-lg text-headline-lg font-black tracking-tight text-primary">Corporate Pro Ledger</h1>
-          <p className="font-body-md text-body-md text-on-surface-variant mt-1">Enterprise Registration Hub</p>
+          <h1 className="font-headline-lg text-headline-lg font-black tracking-tight text-primary">PaysaSuchan</h1>
+          <p className="font-body-md text-body-md text-on-surface-variant mt-1">Sign up with Google or email</p>
         </div>
 
         <Card className="flex flex-col gap-6 bg-surface-container-lowest" glass={false}>
@@ -224,11 +253,14 @@ export function RegisterPageWrapper() {
             <p className="font-label-md text-label-md text-on-surface-variant mt-1">Fill in your information to join your organization.</p>
           </div>
 
+          <GoogleSignInButton />
+          <AuthSocialDivider />
+
           <RegisterForm />
 
           <div className="text-center text-label-md text-on-surface-variant">
             Already registered?{' '}
-            <Link href="/" className="text-primary font-bold hover:underline">
+            <Link href="/auth/login" className="text-primary font-bold hover:underline">
               Sign in instead
             </Link>
           </div>

@@ -1,0 +1,12 @@
+{
+  "extends": "../node_modules/expo/tsconfig.base.json",
+  "compilerOptions": {
+    "strict": true,
+    "ignoreDeprecations": "6.0",
+    "paths": {
+      "@nexpo/shared": ["../packages/shared/src/index.ts"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts", "nativewind-env.d.ts"],
+  "exclude": ["node_modules"]
+}

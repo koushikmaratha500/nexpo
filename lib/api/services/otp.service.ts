@@ -1,57 +1,119 @@
+import crypto from 'crypto';
+import { HttpError } from '../middleware/errorHandler';
 import { EmailService } from './email.service';
+import {
+  getDevOtpCode,
+  isResendEnabled,
+  logOtpDevMode,
+  assertOtpAllowedInProduction,
+} from '../utils/emailConfig';
+import {
+  isProductionEnv,
+  isRedisConfigured,
+  kvDelete,
+  kvGetJson,
+  kvSetJson,
+} from '../utils/redisClient';
 
 interface OtpRecord {
   code: string;
-  expiresAt: Date;
   attempts: number;
+  expiresAt: number;
 }
 
-const otpStore = new Map<string, OtpRecord>();
+const OTP_KEY_PREFIX = 'nexpo_otp:';
 const MAX_ATTEMPTS = 5;
-const OTP_TTL_MS = 15 * 60 * 1000;
+const OTP_TTL_SECONDS = 15 * 60;
+
+function otpKey(email: string): string {
+  return `${OTP_KEY_PREFIX}${email.toLowerCase()}`;
+}
+
+function assertOtpStoreAvailable(): void {
+  if (isProductionEnv() && !isRedisConfigured()) {
+    throw new Error('Redis is required for OTP storage in production');
+  }
+}
 
 export class OtpService {
   static generateOtp(): string {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    return crypto.randomInt(100000, 999999).toString();
+  }
+
+  static resolveOtpCode(): string {
+    return isResendEnabled() ? this.generateOtp() : getDevOtpCode();
   }
 
   static async createOtp(email: string, sendEmail = true): Promise<string> {
-    const code = this.generateOtp();
-    otpStore.set(email, { code, expiresAt: new Date(Date.now() + OTP_TTL_MS), attempts: 0 });
+    assertOtpStoreAvailable();
+    assertOtpAllowedInProduction();
+
+    const code = this.resolveOtpCode();
+    const record: OtpRecord = {
+      code,
+      attempts: 0,
+      expiresAt: Date.now() + OTP_TTL_SECONDS * 1000,
+    };
+
+    await kvSetJson(otpKey(email), record, OTP_TTL_SECONDS);
 
     if (sendEmail) {
-      await EmailService.sendOtpEmail(email, code);
+      if (isResendEnabled()) {
+        const result = await EmailService.sendOtpEmail(email, code);
+        if (!result.success) {
+          await kvDelete(otpKey(email));
+          throw new Error('Failed to send verification email. Please try again later.');
+        }
+      } else {
+        logOtpDevMode(email);
+      }
     }
 
     return code;
   }
 
-  static verifyOtp(email: string, code: string): boolean {
-    const record = otpStore.get(email);
+  static async verifyOtp(email: string, code: string): Promise<boolean> {
+    assertOtpStoreAvailable();
+    assertOtpAllowedInProduction();
+
+    const key = otpKey(email);
+    const record = await kvGetJson<OtpRecord>(key);
     if (!record) {
       return false;
     }
 
-    if (record.expiresAt < new Date()) {
-      otpStore.delete(email);
+    if (record.expiresAt < Date.now()) {
+      await kvDelete(key);
       return false;
     }
 
     if (record.attempts >= MAX_ATTEMPTS) {
-      otpStore.delete(email);
-      return false;
+      throw new HttpError(429, 'Too many OTP attempts. Request a new verification code.');
     }
 
     if (record.code !== code) {
-      record.attempts++;
+      const nextAttempts = record.attempts + 1;
+      const remainingMs = Math.max(record.expiresAt - Date.now(), 1000);
+      const remainingSeconds = Math.ceil(remainingMs / 1000);
+
+      if (nextAttempts >= MAX_ATTEMPTS) {
+        await kvDelete(key);
+        throw new HttpError(429, 'Too many OTP attempts. Request a new verification code.');
+      }
+
+      await kvSetJson(
+        key,
+        { ...record, attempts: nextAttempts },
+        Math.min(remainingSeconds, OTP_TTL_SECONDS),
+      );
       return false;
     }
 
-    otpStore.delete(email);
+    await kvDelete(key);
     return true;
   }
 
-  static clearOtp(email: string): void {
-    otpStore.delete(email);
+  static async clearOtp(email: string): Promise<void> {
+    await kvDelete(otpKey(email));
   }
 }

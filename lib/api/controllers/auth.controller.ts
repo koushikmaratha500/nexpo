@@ -1,207 +1,176 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
+import { HttpError } from '../middleware/errorHandler';
+import { BaseController } from './base.controller';
 import { AuthService } from '../services/auth.service';
 import { UserRepository } from '../repositories/user.repository';
 import { AdminRepository } from '../repositories/admin.repository';
-import { registerSchema, loginSchema, verifyOtpSchema, updateProfileSchema, forgotPasswordSchema, resetPasswordSchema, completeForcedResetSchema } from '../dtos/auth.dto';
-import { EmailService } from '../services/email.service';
+import {
+  registerSchema,
+  loginSchema,
+  verifyOtpSchema,
+  updateProfileSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  completeForcedResetSchema,
+  googleAuthSchema,
+} from '../dtos/auth.dto';
+import { comparePassword, hashPassword } from '../services/auth.service';
+import { assertValidUsername } from '../utils/username';
 
-export class AuthController {
+function serializeCustomerUser(user: {
+  username?: string | null;
+  firstName: string;
+  lastName: string | null;
+  mobile: string | null;
+  email: string | null;
+  countryId: string | null;
+  currencyId: string | null;
+}) {
+  return {
+    username: user.username || '',
+    firstName: user.firstName,
+    lastName: user.lastName || '',
+    phone: user.mobile || '',
+    email: user.email || '',
+    countryId: user.countryId,
+    currencyId: user.currencyId,
+    role: 'CUSTOMER' as const,
+  };
+}
+
+export class AuthController extends BaseController {
   static async register(req: NextRequest) {
-    try {
+    return this.safeExecuteJson(async () => {
       const body = await req.json();
       const validated = registerSchema.parse(body);
-
-      const ip = req.headers.get('x-forwarded-for') || 'anonymous';
-      const ua = req.headers.get('user-agent') || '';
-      const { user, otp } = await AuthService.registerUser(validated, { ip, ua });
-
-      // Send OTP
-      await EmailService.sendOtpEmail(user.email!, otp);
-
-      return NextResponse.json({
+      const meta = this.requestMeta(req);
+      const { user } = await AuthService.registerUser(validated, meta);
+      return {
         success: true,
         message: 'Registration successful. OTP sent to email.',
         user: { id: user.id, email: user.email },
-      }, { status: 201 });
-    } catch (error: any) {
-      if (error.name === 'ZodError') {
-        const message = error.errors?.[0]?.message || error.issues?.[0]?.message || error.message || 'Validation error';
-        return NextResponse.json({ error: message }, { status: 400 });
-      }
-      return NextResponse.json({ error: error.message || 'Registration failed' }, { status: 400 });
-    }
+      };
+    }, { status: 201, fallbackMessage: 'Registration failed' });
   }
 
   static async verify(req: NextRequest) {
-    try {
+    return this.safeExecuteJson(async () => {
       const body = await req.json();
       const validated = verifyOtpSchema.parse(body);
-
-      const ip = req.headers.get('x-forwarded-for') || 'anonymous';
-      const ua = req.headers.get('user-agent') || '';
-      await AuthService.verifyUserOtp(validated.email, validated.otp, { ip, ua });
-
-      return NextResponse.json({
-        success: true,
-        message: 'Account verified successfully',
-      });
-    } catch (error: any) {
-      if (error.name === 'ZodError') {
-        const message = error.errors?.[0]?.message || error.issues?.[0]?.message || error.message || 'Validation error';
-        return NextResponse.json({ error: message }, { status: 400 });
-      }
-      return NextResponse.json({ error: error.message || 'Verification failed' }, { status: 400 });
-    }
+      const meta = this.requestMeta(req);
+      await AuthService.verifyUserOtp(validated.email, validated.otp, meta);
+      return { success: true, message: 'Account verified successfully' };
+    }, { fallbackMessage: 'Verification failed' });
   }
 
   static async loginUser(req: NextRequest) {
-    try {
+    return this.safeExecuteJson(async () => {
       const body = await req.json();
       const validated = loginSchema.parse(body);
-
-      const ip = req.headers.get('x-forwarded-for') || 'anonymous';
-      const ua = req.headers.get('user-agent') || '';
-      const result = await AuthService.loginUser(validated.email, validated.password, { ip, ua });
-      const { user, token } = result;
-
-      return NextResponse.json({
+      const meta = this.requestMeta(req);
+      const result = await AuthService.loginUser(validated.email, validated.password, meta);
+      return {
         success: true,
-        token,
+        token: result.token,
         ...(result.forcePasswordReset ? { forcePasswordReset: true } : {}),
-        user: {
-          firstName: user.firstName,
-          lastName: user.lastName || '',
-          phone: user.mobile || '',
-          email: user.email || '',
-          countryId: user.countryId,
-          currencyId: user.currencyId,
-          role: 'CUSTOMER',
-        },
-      });
-    } catch (error: any) {
-      if (error.name === 'ZodError') {
-        const message = error.errors?.[0]?.message || error.issues?.[0]?.message || error.message || 'Validation error';
-        return NextResponse.json({ error: message }, { status: 400 });
-      }
-      return NextResponse.json({ error: error.message || 'Login failed' }, { status: 400 });
-    }
+        user: serializeCustomerUser(result.user),
+      };
+    }, { fallbackMessage: 'Login failed' });
+  }
+
+  static async loginWithGoogle(req: NextRequest) {
+    return this.safeExecuteJson(async () => {
+      const body = await req.json();
+      const validated = googleAuthSchema.parse(body);
+      const meta = this.requestMeta(req);
+      const result = await AuthService.loginWithGoogle(validated.accessToken, meta);
+      return {
+        success: true,
+        token: result.token,
+        user: serializeCustomerUser(result.user),
+      };
+    }, { fallbackMessage: 'Google sign-in failed' });
   }
 
   static async completeForcedPasswordReset(req: NextRequest, userId: string) {
-    try {
+    return this.safeExecuteJson(async () => {
       const body = await req.json();
       const validated = completeForcedResetSchema.parse(body);
-
-      const ip = req.headers.get('x-forwarded-for') || 'anonymous';
-      const ua = req.headers.get('user-agent') || '';
-      const { user, token } = await AuthService.completeForcedPasswordReset(userId, validated.newPassword, { ip, ua });
-
-      return NextResponse.json({
+      const meta = this.requestMeta(req);
+      const { user, token } = await AuthService.completeForcedPasswordReset(userId, validated.newPassword, meta);
+      return {
         success: true,
         message: 'Password updated successfully',
         token,
-        user: {
-          firstName: user.firstName,
-          lastName: user.lastName || '',
-          phone: user.mobile || '',
-          email: user.email || '',
-          countryId: user.countryId,
-          currencyId: user.currencyId,
-          role: 'CUSTOMER',
-        },
-      });
-    } catch (error: any) {
-      if (error.name === 'ZodError') {
-        const message = error.errors?.[0]?.message || error.issues?.[0]?.message || error.message || 'Validation error';
-        return NextResponse.json({ error: message }, { status: 400 });
-      }
-      return NextResponse.json({ error: error.message || 'Failed to update password' }, { status: 400 });
-    }
+        user: serializeCustomerUser(user),
+      };
+    }, { fallbackMessage: 'Failed to update password' });
   }
 
   static async loginAdmin(req: NextRequest) {
-    try {
+    return this.safeExecuteJson(async () => {
       const body = await req.json();
       const validated = loginSchema.parse(body);
-
       const { admin, token } = await AuthService.loginAdmin(validated.email, validated.password);
-
-      return NextResponse.json({
+      return {
         success: true,
         token,
         admin: {
           firstName: admin.firstName,
           lastName: admin.lastName || '',
           email: admin.email || '',
-          role: 'ADMIN',
+          role: 'ADMIN' as const,
         },
-      });
-    } catch (error: any) {
-      if (error.name === 'ZodError') {
-        const message = error.errors?.[0]?.message || error.issues?.[0]?.message || error.message || 'Validation error';
-        return NextResponse.json({ error: message }, { status: 400 });
-      }
-      return NextResponse.json({ error: error.message || 'Login failed' }, { status: 400 });
-    }
+      };
+    }, { fallbackMessage: 'Login failed' });
   }
 
-  static async getProfile(req: NextRequest, userId: string, isAdmin = false) {
-    try {
+  static async getProfile(_req: NextRequest, userId: string, isAdmin = false) {
+    return this.safeExecuteJson(async () => {
       if (isAdmin) {
         const adminProfile = await AdminRepository.findById(userId);
-        if (!adminProfile) {
-          return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
-        }
-        return NextResponse.json({
+        if (!adminProfile) throw new HttpError(404, 'Profile not found');
+        return {
           firstName: adminProfile.firstName,
           lastName: adminProfile.lastName || '',
           email: adminProfile.email || '',
-          role: 'ADMIN',
-        });
-      } else {
-        const userProfile = await UserRepository.findById(userId);
-        if (!userProfile) {
-          return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
-        }
-        return NextResponse.json({
-          firstName: userProfile.firstName,
-          lastName: userProfile.lastName || '',
-          phone: userProfile.mobile || '',
-          email: userProfile.email || '',
-          countryId: userProfile.countryId,
-          currencyId: userProfile.currencyId,
-          role: 'CUSTOMER',
-        });
+          role: 'ADMIN' as const,
+        };
       }
-    } catch (error: any) {
-      return NextResponse.json({ error: error.message || 'Failed to fetch profile' }, { status: 500 });
-    }
+
+      const userProfile = await UserRepository.findById(userId);
+      if (!userProfile) throw new HttpError(404, 'Profile not found');
+      return serializeCustomerUser(userProfile);
+    }, { fallbackMessage: 'Failed to fetch profile' });
   }
 
   static async updateProfile(req: NextRequest, userId: string, isAdmin = false) {
-    try {
+    return this.safeExecuteJson(async () => {
       const body = await req.json();
       const validated = updateProfileSchema.parse(body);
+      const updateData = { ...validated } as Record<string, unknown>;
 
-      const updateData = { ...validated } as any;
+      if (validated.username) {
+        const normalizedUsername = assertValidUsername(validated.username);
+        const existingUsername = await UserRepository.findByUsername(normalizedUsername);
+        if (existingUsername && existingUsername.id !== userId) {
+          throw new HttpError(400, 'Username is already taken');
+        }
+        updateData.username = normalizedUsername;
+      }
 
       if (validated.newPassword) {
         if (!validated.oldPassword) {
-          return NextResponse.json({ error: 'Old password is required to change password' }, { status: 400 });
+          throw new HttpError(400, 'Old password is required to change password');
         }
 
         const profile = isAdmin
           ? await AdminRepository.findById(userId)
           : await UserRepository.findById(userId);
 
-        if (!profile) {
-          return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
-        }
-
-        const passwordHash = profile.passwordHash;
-        const { comparePassword, hashPassword } = await import('../services/auth.service');
-        if (!passwordHash || !comparePassword(validated.oldPassword, passwordHash)) {
-          return NextResponse.json({ error: 'Incorrect old password' }, { status: 400 });
+        if (!profile) throw new HttpError(404, 'Profile not found');
+        if (!profile.passwordHash || !comparePassword(validated.oldPassword, profile.passwordHash)) {
+          throw new HttpError(400, 'Incorrect old password');
         }
 
         updateData.passwordHash = hashPassword(validated.newPassword);
@@ -216,85 +185,81 @@ export class AuthController {
 
       if (isAdmin) {
         const updatedAdmin = await AdminRepository.update(userId, updateData);
-        return NextResponse.json({
+        return {
           firstName: updatedAdmin.firstName,
           lastName: updatedAdmin.lastName || '',
           email: updatedAdmin.email || '',
-          role: 'ADMIN',
-        });
-      } else {
-        const updatedUser = await UserRepository.update(userId, updateData);
-        return NextResponse.json({
-          firstName: updatedUser.firstName,
-          lastName: updatedUser.lastName || '',
-          phone: updatedUser.mobile || '',
-          email: updatedUser.email || '',
-          countryId: updatedUser.countryId,
-          currencyId: updatedUser.currencyId,
-          role: 'CUSTOMER',
-        });
+          role: 'ADMIN' as const,
+        };
       }
-    } catch (error: any) {
-      if (error.name === 'ZodError') {
-        const message = error.errors?.[0]?.message || error.issues?.[0]?.message || error.message || 'Validation error';
-        return NextResponse.json({ error: message }, { status: 400 });
-      }
-      return NextResponse.json({ error: error.message || 'Failed to update profile' }, { status: 400 });
-    }
+
+      const updatedUser = await UserRepository.update(userId, updateData);
+      return serializeCustomerUser(updatedUser);
+    }, { fallbackMessage: 'Failed to update profile' });
   }
 
   static async forgotAdminPassword(req: NextRequest) {
-    try {
+    return this.safeExecuteJson(async () => {
       const body = await req.json();
       const validated = forgotPasswordSchema.parse(body);
-
       const result = await AuthService.forgotAdminPassword(validated.email);
-
-      // Always return success to prevent email enumeration
-      return NextResponse.json({
+      const devPayload =
+        'resetToken' in result && result.resetToken ? { devToken: result.resetToken } : {};
+      return {
         success: true,
         message: 'If the account exists, a password reset link has been sent to your email.',
-        ...(result.resetToken ? { devToken: result.resetToken } : {}),
-      });
-    } catch (error: any) {
-      if (error.name === 'ZodError') {
-        const message = error.errors?.[0]?.message || error.issues?.[0]?.message || error.message || 'Validation error';
-        return NextResponse.json({ error: message }, { status: 400 });
-      }
-      return NextResponse.json({ error: error.message || 'Failed to request password reset' }, { status: 400 });
-    }
+        ...devPayload,
+      };
+    }, { fallbackMessage: 'Failed to request password reset' });
+  }
+
+  static async forgotUserPassword(req: NextRequest) {
+    return this.safeExecuteJson(async () => {
+      const body = await req.json();
+      const validated = forgotPasswordSchema.parse(body);
+      const meta = this.requestMeta(req);
+      const result = await AuthService.forgotUserPassword(validated.email, meta);
+      const devPayload =
+        'resetToken' in result && result.resetToken ? { devToken: result.resetToken } : {};
+      return {
+        success: true,
+        message: 'If the account exists, a password reset link has been sent to your email.',
+        ...devPayload,
+      };
+    }, { fallbackMessage: 'Failed to request password reset' });
   }
 
   static async resetAdminPassword(req: NextRequest) {
-    try {
+    return this.safeExecuteJson(async () => {
       const body = await req.json();
       const validated = resetPasswordSchema.parse(body);
-
       await AuthService.resetAdminPassword(validated.token, validated.password);
-
-      return NextResponse.json({
+      return {
         success: true,
         message: 'Password has been reset successfully. You can now sign in with your new password.',
-      });
-    } catch (error: any) {
-      if (error.name === 'ZodError') {
-        const message = error.errors?.[0]?.message || error.issues?.[0]?.message || error.message || 'Validation error';
-        return NextResponse.json({ error: message }, { status: 400 });
-      }
-      return NextResponse.json({ error: error.message || 'Failed to reset password' }, { status: 400 });
-    }
+      };
+    }, { fallbackMessage: 'Failed to reset password' });
+  }
+
+  static async resetUserPassword(req: NextRequest) {
+    return this.safeExecuteJson(async () => {
+      const body = await req.json();
+      const validated = resetPasswordSchema.parse(body);
+      const meta = this.requestMeta(req);
+      await AuthService.resetUserPassword(validated.token, validated.password, meta);
+      return {
+        success: true,
+        message: 'Password has been reset successfully. You can now sign in with your new password.',
+      };
+    }, { fallbackMessage: 'Failed to reset password' });
   }
 
   static async logout(req: NextRequest) {
-    try {
+    return this.safeExecuteJson(async () => {
       const authHeader = req.headers.get('Authorization') || '';
       const token = authHeader.replace('Bearer ', '');
-      if (token) {
-        await AuthService.logout(token);
-      }
-      return NextResponse.json({ success: true, message: 'Logged out successfully' });
-    } catch (error: any) {
-      return NextResponse.json({ error: error.message || 'Logout failed' }, { status: 500 });
-    }
+      if (token) await AuthService.logout(token);
+      return { success: true, message: 'Logged out successfully' };
+    }, { fallbackMessage: 'Logout failed' });
   }
 }

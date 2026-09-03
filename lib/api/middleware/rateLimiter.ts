@@ -1,44 +1,21 @@
 import { NextRequest } from 'next/server';
 import { Ratelimit } from '@upstash/ratelimit';
-import { Redis } from '@upstash/redis';
-import { kv } from '@vercel/kv';
 import { HttpError } from './errorHandler';
+import { getKvClient, isProductionEnv, isRedisConfigured } from '../utils/redisClient';
 
-// Simple in-memory fallback
 const memoryStore = new Map<string, { count: number; resetAt: number }>();
-
-const isUpstashConfigured = !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
-const isKvConfigured = !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
-
-let redis: Redis | null = null;
-if (isUpstashConfigured) {
-  try {
-    redis = Redis.fromEnv();
-    console.log('Upstash Redis initialized for Rate Limiting');
-  } catch (error) {
-    console.warn('Failed to initialize Upstash Redis, checking Vercel KV fallback:', error);
-  }
-}
-
-let kvReady = false;
-if (!redis && isKvConfigured) {
-  try {
-    kvReady = true;
-    console.log('Vercel KV initialized for Rate Limiting');
-  } catch (error) {
-    console.warn('Failed to initialize Vercel KV, using memory fallback:', error);
-  }
-}
 
 const ratelimitInstances = new Map<string, Ratelimit>();
 
 function getRatelimit(limit: number, windowSeconds: number): Ratelimit | null {
-  if (!redis && !kvReady) return null;
+  const client = getKvClient();
+  if (!client) return null;
+
   const key = `${limit}_${windowSeconds}`;
   let instance = ratelimitInstances.get(key);
   if (!instance) {
     instance = new Ratelimit({
-      redis: redis ?? kv,
+      redis: client,
       limiter: Ratelimit.slidingWindow(limit, `${windowSeconds} s`),
       analytics: true,
       prefix: `nexpo_ratelimit_${limit}_${windowSeconds}`,
@@ -48,50 +25,88 @@ function getRatelimit(limit: number, windowSeconds: number): Ratelimit | null {
   return instance;
 }
 
+export const RATE_LIMIT_PRESETS = {
+  default: { limit: 50, windowSeconds: 60 },
+  login: { limit: 10, windowSeconds: 60 },
+  register: { limit: 5, windowSeconds: 60 },
+  verify: { limit: 10, windowSeconds: 60 },
+  support: { limit: 20, windowSeconds: 60 },
+  transactionWrite: { limit: 30, windowSeconds: 60 },
+  adminUserWrite: { limit: 20, windowSeconds: 60 },
+  adminForgotPassword: { limit: 5, windowSeconds: 60 },
+  adminResetPassword: { limit: 5, windowSeconds: 60 },
+  userForgotPassword: { limit: 5, windowSeconds: 60 },
+  userResetPassword: { limit: 5, windowSeconds: 60 },
+  aiChat: { limit: 20, windowSeconds: 60 },
+  aiOcr: { limit: 10, windowSeconds: 60 },
+  aiInsights: { limit: 10, windowSeconds: 60 },
+  groupInvite: { limit: 20, windowSeconds: 60 },
+  shareCreate: { limit: 20, windowSeconds: 86400 },
+  sharePublic: { limit: 60, windowSeconds: 60 },
+  upload: { limit: 20, windowSeconds: 60 },
+} as const;
+
 export interface RateLimitOptions {
   limit?: number;
   windowSeconds?: number;
 }
 
+function applyMemoryRateLimit(identifier: string, limit: number, windowSeconds: number): boolean {
+  const now = Date.now();
+  const windowMs = windowSeconds * 1000;
+  const record = memoryStore.get(identifier);
+
+  if (!record || now > record.resetAt) {
+    memoryStore.set(identifier, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+
+  if (record.count >= limit) {
+    return false;
+  }
+
+  record.count += 1;
+  return true;
+}
+
 export async function checkRateLimit(
   req: NextRequest,
   identifier: string,
-  options: RateLimitOptions = {}
+  options: RateLimitOptions = {},
 ): Promise<void> {
-  const limit = options.limit ?? 50;
-  const windowSeconds = options.windowSeconds ?? 60;
+  const limit = options.limit ?? RATE_LIMIT_PRESETS.default.limit;
+  const windowSeconds = options.windowSeconds ?? RATE_LIMIT_PRESETS.default.windowSeconds;
   const instance = getRatelimit(limit, windowSeconds);
-
-  let success = true;
 
   if (instance) {
     try {
       const result = await instance.limit(identifier);
-      success = result.success;
+      if (!result.success) {
+        throw new HttpError(429, 'Too many requests. Please try again later.');
+      }
+      return;
     } catch (error) {
-      console.error('Rate limit redis error, falling back to memory store:', error);
-    }
-  }
-
-  if (!instance || !success) {
-    // Fallback to in-memory rate limiting
-    const now = Date.now();
-    const windowMs = windowSeconds * 1000;
-
-    const record = memoryStore.get(identifier);
-    if (!record || now > record.resetAt) {
-      const newRecord = { count: 1, resetAt: now + windowMs };
-      memoryStore.set(identifier, newRecord);
-    } else {
-      if (record.count >= limit) {
-        success = false;
-      } else {
-        record.count += 1;
+      if (error instanceof HttpError) {
+        throw error;
+      }
+      console.error('Rate limit redis error:', error);
+      if (isProductionEnv()) {
+        throw new HttpError(503, 'Rate limiting temporarily unavailable.');
       }
     }
+  } else if (isProductionEnv()) {
+    if (!isRedisConfigured()) {
+      throw new HttpError(503, 'Rate limiting is not configured.');
+    }
+    throw new HttpError(503, 'Rate limiting temporarily unavailable.');
   }
 
-  if (!success) {
+  const allowed = applyMemoryRateLimit(identifier, limit, windowSeconds);
+  if (!allowed) {
     throw new HttpError(429, 'Too many requests. Please try again later.');
   }
+}
+
+export function getRequestIp(req: NextRequest): string {
+  return req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'anonymous';
 }

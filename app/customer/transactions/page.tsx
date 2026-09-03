@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { useTransactionStore, type TransactionType, type Transaction } from '@/store/transactionStore';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -12,7 +13,10 @@ import { useToast } from '@/hooks/useToast';
 import { dateToInputFormat } from '@/lib/date';
 import axios from 'axios';
 import { DocumentUploader, RecurringApprovalPanel, ImportExpensesModal } from '@/components/features/transactions';
+import { PersonalTransactionActionsMenu } from '@/components/features/transactions/PersonalTransactionActionsMenu';
+import { TransactionDetailModal } from '@/components/features/transactions/TransactionDetailModal';
 import type { ReceiptExtraction } from '@/lib/ai/types';
+import { fileForOcrUpload, isOcrSupportedImageFile } from '@/lib/files/receiptImage';
 
 interface CategoryOption {
   id: string;
@@ -384,6 +388,7 @@ export default function TransactionsPage() {
   const [removeExistingDoc, setRemoveExistingDoc] = useState(false);
   const [aiExtracting, setAiExtracting] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [viewingTransaction, setViewingTransaction] = useState<Transaction | null>(null);
 
   const {
     register: registerAdd,
@@ -454,13 +459,6 @@ export default function TransactionsPage() {
       } catch (err) {
         console.error('Failed to load metadata', err);
         metadataFetchedRef.current = false;
-        // Fallback: load categories from dedicated endpoint
-        try {
-          const res = await axios.get('/api/user/category');
-          if (Array.isArray(res.data)) setCategories(res.data);
-        } catch (err2) {
-          console.error('Failed to load categories fallback', err2);
-        }
       }
     };
     loadMetadata();
@@ -486,11 +484,14 @@ export default function TransactionsPage() {
   };
 
   const handleExtractWithAI = async () => {
-    if (!addFile) return;
+    if (!addFile || !isOcrSupportedImageFile(addFile)) {
+      addToast('AI extraction supports JPG, PNG, or WEBP images only', 'warning');
+      return;
+    }
     setAiExtracting(true);
     try {
       const fd = new FormData();
-      fd.append('file', addFile);
+      fd.append('file', fileForOcrUpload(addFile));
       fd.append('categories', JSON.stringify(categories.map((c) => c.name)));
       fd.append('paymentTypes', JSON.stringify(paymentTypes.map((p) => p.name)));
       const res = await axios.post('/api/ai/ocr', fd);
@@ -564,6 +565,23 @@ export default function TransactionsPage() {
   const totalDebit = filteredTransactions.filter((t) => t.type === 'DEBIT').reduce((sum, t) => sum + t.amount, 0);
   const totalCredit = filteredTransactions.filter((t) => t.type === 'CREDIT').reduce((sum, t) => sum + t.amount, 0);
 
+  const resolveCategoryForForm = (value: string, type: TransactionType): string => {
+    if (type === 'CREDIT') {
+      const depositMatch = depositTypes.find(
+        (d) => d.name === value || d.name.toLowerCase() === value.toLowerCase(),
+      );
+      return depositMatch?.name ?? value;
+    }
+
+    const categoryMatch = categories.find(
+      (c) =>
+        c.name === value ||
+        c.name.toLowerCase() === value.toLowerCase() ||
+        c.name.toUpperCase().replace(/\s+/g, '_') === value.toUpperCase(),
+    );
+    return categoryMatch?.name ?? value;
+  };
+
   const handleOpenEdit = (t: Transaction) => {
     setEditingTransaction(t);
     setEditFile(null);
@@ -572,7 +590,7 @@ export default function TransactionsPage() {
       type: t.type,
       title: t.title,
       merchant: t.merchant || '',
-      category: t.category,
+      category: resolveCategoryForForm(t.category, t.type),
       amount: t.amount.toString(),
       date: dateToInputFormat(t.date),
       currency: t.currency,
@@ -671,7 +689,13 @@ export default function TransactionsPage() {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-outline-variant/30 pb-6">
         <div>
           <h2 className="font-headline-lg text-headline-lg text-primary font-black tracking-tight">Personal Transactions</h2>
-          <p className="font-body-lg text-body-lg text-on-surface-variant mt-1">Track your debits and credits in one place.</p>
+          <p className="font-body-lg text-body-lg text-on-surface-variant mt-1">
+            Your private debit and credit ledger. Group expenses are managed separately under{' '}
+            <Link href="/customer/groups" className="text-primary font-bold hover:underline">
+              Groups
+            </Link>
+            .
+          </p>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <Button onClick={() => setIsImportOpen(true)} variant="tertiary" className="self-start sm:self-auto">
@@ -680,7 +704,7 @@ export default function TransactionsPage() {
           </Button>
           <Button onClick={handleOpenAdd} className="self-start sm:self-auto">
             <span className="material-symbols-outlined text-sm">add</span>
-            Add
+            Add Transaction
           </Button>
         </div>
       </div>
@@ -756,7 +780,7 @@ export default function TransactionsPage() {
                 </TableRow>
               ) : paginatedTransactions.length > 0 ? (
                 paginatedTransactions.map((t) => (
-                  <TableRow key={t.id}>
+                  <TableRow key={t.id} onClick={() => setViewingTransaction(t)} className="cursor-pointer">
                     <TableCell>
                       <span className="text-primary font-bold">{t.title}</span>
                       {t.merchant && t.merchant !== t.title && (
@@ -775,14 +799,15 @@ export default function TransactionsPage() {
                       <span className={getTypeBadge(t.type)}>{t.type}</span>
                     </TableCell>
                     <TableCell className="text-on-surface-variant font-medium">{t.date}</TableCell>
-                    <TableCell align="right">
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" onClick={() => handleOpenEdit(t)}>
-                          <span className="material-symbols-outlined text-sm">edit</span>
-                        </Button>
-                        <Button variant="ghost" onClick={() => handleDelete(t.id)}>
-                          <span className="material-symbols-outlined text-sm">delete</span>
-                        </Button>
+                    <TableCell align="right" onClick={(event) => event.stopPropagation()}>
+                      <div className="flex justify-end">
+                        <PersonalTransactionActionsMenu
+                          transaction={t}
+                          onView={setViewingTransaction}
+                          onEdit={handleOpenEdit}
+                          onDelete={handleDelete}
+                          onConverted={() => fetchTransactions()}
+                        />
                       </div>
                     </TableCell>
                   </TableRow>
@@ -805,6 +830,19 @@ export default function TransactionsPage() {
           onPageChange={setCurrentPage}
           onItemsPerPageChange={handleItemsPerPageChange}
         />
+      </Card>
+
+      <Card className="bg-surface-container-lowest p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4" glass={false}>
+        <div>
+          <h4 className="font-title-md text-title-md font-bold text-primary">Add a transaction</h4>
+          <p className="font-body-md text-on-surface-variant mt-1">
+            Record a personal debit or credit. This ledger does not include group expenses.
+          </p>
+        </div>
+        <Button onClick={handleOpenAdd} className="self-start sm:self-auto">
+          <span className="material-symbols-outlined text-sm">add</span>
+          Add Transaction
+        </Button>
       </Card>
 
       {/* ---------------- ADD TRANSACTION MODAL ---------------- */}
@@ -907,7 +945,7 @@ export default function TransactionsPage() {
 
           <DocumentUploader file={addFile} onFileChange={setAddFile} />
 
-          {addFile && addFile.type.startsWith('image/') && (
+          {addFile && isOcrSupportedImageFile(addFile) && (
             <div className="flex items-center gap-3">
               <Button type="button" variant="secondary" onClick={handleExtractWithAI} disabled={aiExtracting}>
                 <span className="material-symbols-outlined text-sm">auto_awesome</span>
@@ -915,6 +953,12 @@ export default function TransactionsPage() {
               </Button>
               <span className="text-xs text-on-surface-variant">Auto-fill fields from the receipt image</span>
             </div>
+          )}
+
+          {addFile && !isOcrSupportedImageFile(addFile) && (
+            <p className="text-xs text-on-surface-variant">
+              AI receipt scan works on JPG, PNG, or WEBP images. PDFs can still be attached when you save.
+            </p>
           )}
 
           <div className="flex justify-end gap-3 pt-4 border-t border-outline-variant">
@@ -1055,6 +1099,12 @@ export default function TransactionsPage() {
           fetchTransactions();
           fetchRecurring();
         }}
+      />
+
+      <TransactionDetailModal
+        transaction={viewingTransaction}
+        open={viewingTransaction !== null}
+        onClose={() => setViewingTransaction(null)}
       />
     </div>
   );

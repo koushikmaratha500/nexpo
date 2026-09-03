@@ -7,6 +7,7 @@ import { useAuth } from '@/components/auth/AuthContext';
 import { parseDate } from '@/lib/date';
 import { DashboardMetrics, RecentTransactions } from '@/components/features/dashboard';
 import { InsightCard } from '@/components/features/assistant';
+import { UpcomingReminders } from '@/components/features/notifications';
 
 export default function CustomerDashboard() {
   const { user } = useAuth();
@@ -166,6 +167,8 @@ export default function CustomerDashboard() {
 
       {/* AI Proactive Insights */}
       <InsightCard />
+
+      <UpcomingReminders />
 
       {/* Bento Grid Content */}
       <section className="grid grid-cols-12 gap-6">

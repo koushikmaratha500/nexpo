@@ -1,0 +1,12 @@
+# Expo local state (source is tracked; build artifacts are not)
+.expo/
+dist/
+web-build/
+
+# Native build folders
+ios/
+android/
+
+# Env (use .env.example as template)
+.env
+.env.local

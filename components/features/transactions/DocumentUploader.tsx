@@ -111,7 +111,7 @@ export function DocumentUploader({
             Drag & drop or <span className="text-primary font-semibold">browse</span>
           </span>
           <span className="font-label-md text-label-md text-on-surface-variant">
-            PDF, JPG, PNG, CSV (Max 10 MB)
+            PDF, JPG, PNG, WEBP (Max 10 MB) · AI scan: JPG/PNG/WEBP
           </span>
         </label>
       )}

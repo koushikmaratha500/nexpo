@@ -8,7 +8,10 @@ import { useForm } from 'react-hook-form';
 import { useToast } from '@/hooks/useToast';
 import Link from 'next/link';
 import { useAuth } from '@/components/auth/AuthContext';
+import { BrandLogo } from '@/components/brand/BrandLogo';
+import { BRAND_SUBTITLE } from '@/lib/brand/constants';
 import { PasswordInput } from '@/components/forms/PasswordInput';
+import { AuthSocialDivider, GoogleSignInButton } from '@/components/features/auth/GoogleSignInButton';
 
 interface LoginFormProps {
   isAdmin?: boolean;
@@ -46,13 +49,14 @@ export function LoginForm({ isAdmin = false, onLoginSuccess }: LoginFormProps) {
   });
 
   useEffect(() => {
+    // Remove legacy plaintext password storage from older builds
+    localStorage.removeItem('nexpo_saved_password');
+
     const savedRememberMe = localStorage.getItem('nexpo_remember_me');
     if (savedRememberMe === 'true') {
       setValue('rememberMe', true);
       const savedEmail = localStorage.getItem('nexpo_saved_email');
-      const savedPassword = localStorage.getItem('nexpo_saved_password');
       if (savedEmail) setValue('email', savedEmail);
-      if (savedPassword) setValue('password', savedPassword);
     }
   }, [setValue]);
 
@@ -83,12 +87,11 @@ export function LoginForm({ isAdmin = false, onLoginSuccess }: LoginFormProps) {
         if (data.rememberMe) {
           localStorage.setItem('nexpo_remember_me', 'true');
           localStorage.setItem('nexpo_saved_email', data.email);
-          localStorage.setItem('nexpo_saved_password', data.password);
         } else {
           localStorage.removeItem('nexpo_remember_me');
           localStorage.removeItem('nexpo_saved_email');
-          localStorage.removeItem('nexpo_saved_password');
         }
+        localStorage.removeItem('nexpo_saved_password');
       } else {
         const errMsg = result.error || 'Authentication failed.';
         if (result.pendingVerification) {
@@ -204,6 +207,17 @@ export function LoginForm({ isAdmin = false, onLoginSuccess }: LoginFormProps) {
 }
 
 export function LoginPageWrapper({ isAdmin = false }: { isAdmin?: boolean }) {
+  const { addToast } = useToast();
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const error = params.get('error');
+    if (error === 'google_auth_failed') {
+      addToast('Google sign-in failed. Please try again.', 'error');
+    }
+  }, [addToast]);
+
   return (
     <div className="flex flex-1 items-center justify-center min-h-screen bg-background p-4 relative overflow-hidden">
       <div className="absolute top-0 left-0 w-full h-full opacity-5 pointer-events-none">
@@ -213,14 +227,11 @@ export function LoginPageWrapper({ isAdmin = false }: { isAdmin?: boolean }) {
 
       <div className="w-full max-w-md z-10">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary text-on-primary mb-4 shadow-sm">
-            <span className="material-symbols-outlined text-lg">
-              {isAdmin ? 'shield_person' : 'corporate_fare'}
-            </span>
+          <div className="flex justify-center mb-4">
+            <BrandLogo variant="full" theme="mono" size="lg" />
           </div>
-          <h1 className="font-headline-lg text-headline-lg font-black tracking-tight text-primary">Corporate Pro Ledger</h1>
           <p className="font-body-md text-body-md text-on-surface-variant mt-1">
-            {isAdmin ? 'Administrative Access Portal' : 'Enterprise Expense Governance'}
+            {isAdmin ? 'Administrative Access Portal' : BRAND_SUBTITLE}
           </p>
         </div>
 
@@ -230,45 +241,32 @@ export function LoginPageWrapper({ isAdmin = false }: { isAdmin?: boolean }) {
               {isAdmin ? 'Admin Sign In' : 'Sign in to account'}
             </h2>
             <p className="font-label-md text-label-md text-on-surface-variant mt-1">
-              {isAdmin
-                ? 'Enter your credentials to access the governance dashboard.'
-                : 'Enter your details to access reports & dashboards.'}
+              Sign in with Google or your email and password.
             </p>
           </div>
+
+          {!isAdmin && (
+            <>
+              <GoogleSignInButton />
+              <AuthSocialDivider />
+            </>
+          )}
 
           <LoginForm isAdmin={isAdmin} />
 
           {!isAdmin && (
-            <>
-              <div className="text-center text-label-md text-on-surface-variant">
-                Need an account?{' '}
-                <Link href="/auth/register" className="text-primary font-bold hover:underline">
-                  Register here
-                </Link>
-              </div>
-
-              <div className="relative flex items-center gap-3 my-1">
-                <div className="flex-1 h-px bg-outline-variant/50"></div>
-                <span className="text-label-sm text-on-surface-variant font-bold uppercase tracking-wider">or</span>
-                <div className="flex-1 h-px bg-outline-variant/50"></div>
-              </div>
-
-              <div className="text-center">
-                <Link
-                  href="/admin/login"
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-outline-variant bg-surface-container-low text-on-surface font-title-md text-title-md hover:bg-surface-container-high transition-all duration-200 w-full justify-center"
-                >
-                  <span className="material-symbols-outlined text-sm scale-90">shield_person</span>
-                  Admin Portal Login
-                </Link>
-              </div>
-            </>
+            <div className="text-center text-label-md text-on-surface-variant">
+              Need an account?{' '}
+              <Link href="/auth/register" className="text-primary font-bold hover:underline">
+                Register here
+              </Link>
+            </div>
           )}
 
           {isAdmin && (
             <div className="text-center text-label-md text-on-surface-variant">
               Return to{' '}
-              <Link href="/" className="text-primary font-bold hover:underline">
+              <Link href="/auth/login" className="text-primary font-bold hover:underline">
                 Customer Login
               </Link>
             </div>

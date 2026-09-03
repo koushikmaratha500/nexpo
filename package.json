@@ -2,6 +2,10 @@
   "name": "nexpo",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "mobile",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -13,7 +17,19 @@
     "db:studio": "prisma studio",
     "db:format": "prisma format",
     "db:seed": "prisma db seed",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:unit": "vitest run tests/unit release4.0/tests release3.0/tests",
+    "test:integration": "vitest run tests/integration",
+    "test:security": "vitest run tests/security",
+    "test:all": "vitest run",
+    "trigger:dev": "trigger dev",
+    "trigger:deploy": "trigger deploy",
+    "mobile": "npm run start --workspace=mobile",
+    "mobile:ios": "npm run ios --workspace=mobile",
+    "mobile:android": "npm run android --workspace=mobile",
+    "mobile:typecheck": "npm run typecheck --workspace=mobile",
+    "mobile:build:preview": "npm run build:preview --workspace=mobile",
+    "mobile:build:production": "npm run build:production --workspace=mobile"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"
@@ -26,11 +42,12 @@
     "@prisma/client": "^7.8.0",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.1",
+    "@trigger.dev/sdk": "^4.5.16",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.0",
     "@vercel/kv": "^3.0.0",
     "ai": "^7.0.55",
-    "axios": "^1.17.0",
+    "axios": "^1.18.0",
     "dayjs": "^1.11.21",
     "jose": "^6.2.3",
     "next": "16.2.7",
@@ -47,6 +64,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@trigger.dev/build": "^4.5.16",
     "@types/node": "^20",
     "@types/pg": "^8.20.0",
     "@types/react": "^19",
@@ -55,6 +73,7 @@
     "eslint-config-next": "16.2.7",
     "prisma": "^7.8.0",
     "tailwindcss": "^4",
+    "trigger.dev": "^4.5.16",
     "typescript": "^5",
     "vitest": "^4.1.10"
   }

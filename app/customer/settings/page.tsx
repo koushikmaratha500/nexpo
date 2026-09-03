@@ -8,6 +8,8 @@ import { useToast } from '@/hooks/useToast';
 import Image from 'next/image';
 import axios from 'axios';
 import { PasswordInput } from '@/components/forms/PasswordInput';
+import { NotificationPreferencesCard } from '@/components/features/notifications';
+import Link from 'next/link';
 
 interface CountryOption {
   id: string;
@@ -29,6 +31,7 @@ export default function CustomerSettingsPage() {
 
   const [firstName, setFirstName] = useState(() => user?.firstName || '');
   const [lastName, setLastName] = useState(() => user?.lastName || '');
+  const [username, setUsername] = useState(() => user?.username || '');
   const email = user?.email || '';
   const mobile = user?.mobile || user?.phone || '';
   const [countryId, setCountryId] = useState(() => user?.countryId || '');
@@ -97,6 +100,7 @@ export default function CustomerSettingsPage() {
 
     try {
       const payload = {
+        username: username.trim() || undefined,
         firstName,
         lastName: lastName || null,
         profileImageUrl: avatar || null,
@@ -109,6 +113,7 @@ export default function CustomerSettingsPage() {
       if (response.data) {
         // Sync context state
         updateUser({
+          username,
           firstName,
           lastName,
           avatar,
@@ -214,6 +219,21 @@ export default function CustomerSettingsPage() {
                     onChange={(e) => setLastName(e.target.value)}
                     className="px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary text-on-surface w-full"
                   />
+                </div>
+
+                <div className="flex flex-col gap-1 md:col-span-2">
+                  <label className="font-label-md text-label-md text-on-surface font-bold uppercase">Username</label>
+                  <input
+                    type="text"
+                    required
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value.toLowerCase())}
+                    placeholder="alex_sterling"
+                    className="px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary text-on-surface w-full font-mono-data"
+                  />
+                  <p className="font-label-md text-label-md text-on-surface-variant">
+                    Used for group invites. 3-30 characters, letters, numbers, or underscores.
+                  </p>
                 </div>
 
                 <div className="flex flex-col gap-1">
@@ -349,6 +369,23 @@ export default function CustomerSettingsPage() {
                 <span>{isSubmitting ? 'Updating...' : 'Update Password'}</span>
               </Button>
             </form>
+          </Card>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="lg:col-span-8 flex flex-col gap-6">
+          <NotificationPreferencesCard />
+          <Card className="bg-surface-container-lowest p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4" glass={false}>
+            <div>
+              <h3 className="font-title-md text-title-md font-bold text-primary">Personal reminders</h3>
+              <p className="font-body-md text-on-surface-variant mt-1">
+                Create and manage payment reminders on the dedicated Reminders page.
+              </p>
+            </div>
+            <Link href="/customer/reminders">
+              <Button variant="secondary">Open Reminders</Button>
+            </Link>
           </Card>
         </div>
       </div>

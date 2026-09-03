@@ -1,0 +1,34 @@
+import { NextRequest } from 'next/server';
+import { GroupController } from '@/lib/api/controllers/group.controller';
+import { authGuard } from '@/lib/api/middleware/authGuard';
+import { handleApiError } from '@/lib/api/middleware/errorHandler';
+
+export async function GET(req: NextRequest, segmentData: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await segmentData.params;
+    const user = await authGuard(req, 'CUSTOMER');
+    return await GroupController.getById(req, id, user.id);
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
+
+export async function PATCH(req: NextRequest, segmentData: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await segmentData.params;
+    const user = await authGuard(req, 'CUSTOMER');
+    return await GroupController.update(req, id, user.id);
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
+
+export async function DELETE(req: NextRequest, segmentData: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await segmentData.params;
+    const user = await authGuard(req, 'CUSTOMER');
+    return await GroupController.delete(req, id, user.id);
+  } catch (error) {
+    return handleApiError(error);
+  }
+}

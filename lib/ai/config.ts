@@ -1,7 +1,12 @@
 export type ModelKind = 'ocr' | 'chat' | 'structured';
 
 const MODEL_MAP: Record<ModelKind, string> = {
-  ocr: 'google/gemma-4-26b-a4b-it:free',
+  // Comma-separated fallbacks: auto-switch on 429/5xx (see withModelFallback in provider.ts)
+  ocr: [
+    'google/gemma-4-26b-a4b-it:free',
+    'google/gemini-2.0-flash-exp:free',
+    'google/gemini-2.0-flash-001',
+  ].join(','),
   chat: 'openrouter/free',
   structured: 'openrouter/free',
 };

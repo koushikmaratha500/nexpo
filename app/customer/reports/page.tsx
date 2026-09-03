@@ -48,9 +48,10 @@ export default function CustomerReportsPage() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 100;
+  const itemsPerPage = 20;
 
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
+  const [reportTotal, setReportTotal] = useState(0);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [categoryBreakdown, setCategoryBreakdown] = useState<CategoryBreakdownItem[]>([]);
   const [totalSpend, setTotalSpend] = useState(0);
@@ -65,8 +66,8 @@ export default function CustomerReportsPage() {
     categoriesFetchedRef.current = true;
     async function loadCategories() {
       try {
-        const res = await axios.get('/api/user/category');
-        setCategories(res.data || []);
+        const res = await axios.get('/api/user/metadata');
+        setCategories(res.data?.categories || []);
       } catch (err) {
         console.error('Failed to load categories:', err);
         categoriesFetchedRef.current = false;
@@ -75,9 +76,9 @@ export default function CustomerReportsPage() {
     loadCategories();
   }, []);
 
-  // Fetch report data when filters change
+  // Fetch report data when filters or pagination change
   useEffect(() => {
-    const cacheKey = `${typeFilter}-${selectedCategory}-${startDate}-${endDate}`;
+    const cacheKey = `${typeFilter}-${selectedCategory}-${startDate}-${endDate}-${currentPage}-${itemsPerPage}`;
     if (lastFetchedRef.current === cacheKey) return;
     lastFetchedRef.current = cacheKey;
 
@@ -88,9 +89,11 @@ export default function CustomerReportsPage() {
         const startParam = startDate ? `&startDate=${startDate}` : '';
         const endParam = endDate ? `&endDate=${endDate}` : '';
         const typeParam = `&type=${typeFilter}`;
-        const res = await axios.get(`/api/user/reports?pageSize=1000${typeParam}${catParam}${startParam}${endParam}`);
-        
+        const pageParam = `&page=${currentPage}&pageSize=${itemsPerPage}`;
+        const res = await axios.get(`/api/user/reports?${typeParam}${pageParam}${catParam}${startParam}${endParam}`);
+
         setExpenses(res.data.expenses || []);
+        setReportTotal(res.data.total ?? 0);
         setCategoryBreakdown(res.data.categoryBreakdown || []);
         setTotalSpend(res.data.totalAmount || 0);
       } catch (err) {
@@ -101,20 +104,22 @@ export default function CustomerReportsPage() {
       }
     }
     fetchReportData();
+  }, [typeFilter, selectedCategory, startDate, endDate, currentPage, itemsPerPage]);
+
+  useEffect(() => {
     setCurrentPage(1);
+    lastFetchedRef.current = null;
   }, [typeFilter, selectedCategory, startDate, endDate]);
 
-  // Client-side text search filtering
   const filteredExpenses = expenses.filter(e => {
     const titleVal = e.title || e.merchant || '';
     const descVal = e.description || '';
-    return titleVal.toLowerCase().includes(search.toLowerCase()) || 
+    return titleVal.toLowerCase().includes(search.toLowerCase()) ||
            descVal.toLowerCase().includes(search.toLowerCase());
   });
 
-  const totalItems = filteredExpenses.length;
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedExpenses = filteredExpenses.slice(startIndex, startIndex + itemsPerPage);
+  const totalItems = search ? filteredExpenses.length : reportTotal;
+  const paginatedExpenses = search ? filteredExpenses : expenses;
 
   const handleExportCSV = () => {
     if (filteredExpenses.length === 0) {

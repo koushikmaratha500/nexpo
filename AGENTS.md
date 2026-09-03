@@ -13,12 +13,13 @@ Server code follows a strict layered pattern under `lib/api/`. Never access `pri
 - **`lib/api/controllers/`** — HTTP layer: parse/validate input via DTO middleware, call a service, serialize responses. Use helpers from `base.controller.ts` (`success`, `error`, `safeExecute`).
 - **`lib/api/services/`** — Business logic & orchestration. One service per domain (e.g. `admin.service.ts`, `transaction.service.ts`). Services depend on repositories, not on `prisma`.
 - **`lib/api/repositories/`** — Data access. The ONLY layer allowed to import `prisma`. Per-domain repositories + shared `base.repository.ts` and `interfaces/`.
-- **`lib/api/dtos/`** — Zod schemas + inferred DTO types (e.g. `admin.dto.ts` exports `CreateUserDto`, `UpdateUserDto`, ...). Validation middleware lives in `lib/api/middleware/validationMiddleware.ts`.
-- **`lib/api/shared/di/`** — Dependency injection container wiring services/repositories.
+- **`lib/api/dtos/`** — Zod schemas + inferred DTO types (e.g. `admin.dto.ts` exports `CreateUserDto`, `UpdateUserDto`, ...). Controllers parse DTOs inline with Zod (`schema.parse(body)` / `schema.parse(searchParams)`).
 - **`lib/api/domain/`** — Domain types/models.
 
 ## Conventions
 - Controllers must not import `prisma`; repositories must not import controllers/services.
+- Controllers extend `BaseController` and use `safeExecuteJson()` + exported `getZodMessage` / `getErrorMessage` for consistent `{ error }` responses.
+- Services/repositories use static class methods (no DI container).
 - Auth/OTP: `otp.service.ts` owns OTP lifecycle (in-memory Map, 15min TTL, max 5 attempts) — no hardcoded codes.
 - Amounts are serialized to strings via repository helpers (e.g. `TransactionRepository.serializeItems`/`serializeAmount`) to avoid Decimal precision issues.
 - Audit writes go through repository helpers (`UserRepository.createAudit`, `TransactionRepository.createAudit`), never `prisma.<x>Audit.create` in services.
@@ -27,10 +28,10 @@ Server code follows a strict layered pattern under `lib/api/`. Never access `pri
 
 # Frontend Feature Pattern
 
-Reusable UI lives in `components/features/<domain>/` with a barrel `index.ts`; data access lives in `hooks/`. Pages wire them together.
-- `hooks/useTransactions.ts`, `hooks/useReports.ts` use `lib/useApi` (`apiGet/apiPost/apiPatch/apiDelete`) against API routes.
-- Feature components take typed props (e.g. `TransactionFormProps`, `RecentTransactionsProps`) and own their UI + toast feedback.
-- Note: the customer transactions/dashboard pages currently use `useTransactionStore` (`/api/user/...` endpoints) — the newer `useTransactions` hook targets `/api/transactions`. Keep this divergence in mind when refactoring; verify which endpoint a page should use.
+Reusable UI lives in `components/features/<domain>/` with a barrel `index.ts`; data access lives in `hooks/` and Zustand stores under `store/`. Pages wire them together.
+- Customer transaction/dashboard pages use `useTransactionStore` against `/api/user/transactions` and `/api/user/transaction*`.
+- Shared API helpers: `hooks/useApi.ts` (`apiGet`/`apiPost`/`apiPatch`/`apiDelete`).
+- Feature components take typed props (e.g. `RecentTransactionsProps`, `DocumentUploaderProps`) and own their UI + toast feedback.
 - `useToast` API: `addToast(message: string, type?: 'success' | 'error' | 'warning' | 'info')`.
 - `Button` has no `loading` prop; `TablePagination` uses `itemsPerPage` (not `pageSize`).
 - Avoid `any` — type react-hook-form usage with `UseFormRegister`/`UseFormWatch`/`FieldError`/`UseFormRegisterReturn`.
@@ -42,4 +43,20 @@ Server-only AI helpers (Release 3.0) built on the **Vercel AI SDK v7** + **OpenR
 - `provider.ts` — `createOpenRouter` singleton + `getModel(kind)` returning an AI SDK `LanguageModel`; throws `HttpError(503)` when unconfigured.
 - `agents/receipt.agent.ts` — image → structured extraction via `generateObject` + `ReceiptExtractionSchema` (auto-retry, zod-validated).
 - Routes live under `app/api/ai/...`, always `authGuard` + `handleApiError`. Keep keys server-side; scope tools/data per authenticated user.
+
+# Groups & splits (`lib/api/services/group*.ts`, `split.service.ts`)
+
+- Group ACL (`assertMember`, `assertAdmin`) lives in `GroupService` — never in route handlers.
+- Group transactions reuse the shared `Transaction` table with `groupId` set; personal APIs filter `groupId IS NULL`.
+- Split math is pure in `SplitService.calculate()` — equal/custom amount/custom percent; penny remainder to payer.
+- Balances: `GET /api/user/groups/[id]/balances`; settlement CSV: `GET /api/user/groups/[id]/settlements/export`.
+
+# Notifications & reminders (Release 4.1)
+
+- **NotificationService** orchestrates in-app, email, and push channels — controllers never call Resend or OneSignal directly.
+- **PushService** — server-only OneSignal REST (`ONESIGNAL_APP_ID`, `ONESIGNAL_REST_API_KEY`).
+- **EmailService** — Resend; gated by `ENABLE_RESEND` via `lib/api/utils/emailConfig.ts`.
+- Effective delivery = admin global policy AND user preference AND channel-specific rules (email also requires Resend).
+- Due reminder dispatch: `ReminderDispatchService` via `POST /api/internal/reminders/dispatch` + `REMINDER_DISPATCH_SECRET`.
+- Customer UI: `components/features/notifications/` (bell, preferences, OneSignal provider); reminders in `components/features/reminders/`.
 <!-- END:layered-architecture -->

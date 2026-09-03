@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table';
@@ -135,9 +136,11 @@ export default function AdminDashboard() {
             </div>
           </div>
           <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider font-bold">Open Tickets / Approvals</p>
-          <h3 className="font-headline-md text-headline-md text-primary font-black mt-1">
-            {isLoading ? '...' : pendingApprovalsCount}
-          </h3>
+          <Link href="/admin/support" className="block mt-1 hover:opacity-90 transition-opacity">
+            <h3 className="font-headline-md text-headline-md text-primary font-black">
+              {isLoading ? '...' : pendingApprovalsCount}
+            </h3>
+          </Link>
         </Card>
       </div>
 

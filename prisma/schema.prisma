@@ -39,6 +39,50 @@ enum TransactionType {
   CREDIT
 }
 
+enum GroupMemberRole {
+  ADMIN
+  MEMBER
+}
+
+enum GroupInviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+}
+
+enum SplitMode {
+  EQUAL_INCLUDED
+  CUSTOM_AMOUNT
+  CUSTOM_PERCENT
+}
+
+enum ReminderRecurrence {
+  NONE
+  WEEKLY
+  MONTHLY
+}
+
+enum ReminderStatus {
+  ACTIVE
+  COMPLETED
+  SNOOZED
+  CANCELLED
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  PUSH
+  WHATSAPP
+}
+
+enum PushPlatform {
+  WEB
+  IOS
+  ANDROID
+}
+
 model Country {
   id         String    @id @default(uuid())
   name       String    @unique
@@ -66,6 +110,7 @@ model Currency {
 
 model User {
   id              String       @id @default(uuid())
+  username        String?      @unique
   email           String?      @unique
   passwordHash    String?
   mobile          String?      @unique
@@ -88,6 +133,17 @@ model User {
   sessions        Session[]
   userAudits      UserAudit[]
   passwordResetTokens PasswordResetToken[]
+  groupMembers    GroupMember[]
+  groupInvitesSent GroupInvite[] @relation("InvitedBy")
+  createdGroups   Group[] @relation("GroupCreator")
+  createdGroupTransactions Transaction[] @relation("GroupTransactionCreator")
+  groupExpenseSplits GroupExpenseSplit[]
+  paymentReminders PaymentReminder[] @relation("PersonalReminders")
+  createdReminders PaymentReminder[] @relation("ReminderCreator")
+  inAppNotifications InAppNotification[]
+  notificationPreference UserNotificationPreference?
+  pushSubscriptions UserPushSubscription[]
+  transactionShares TransactionShare[]
 }
 
 model Admin {
@@ -150,6 +206,9 @@ model BudgetDepositType {
 model Transaction {
   id                  String           @id @default(uuid())
   userId              String
+  groupId             String?
+  createdByUserId     String?
+  splitMode           SplitMode?
   type                TransactionType
   currencyId          String?
   categoryId          String?
@@ -157,6 +216,8 @@ model Transaction {
   budgetDepositTypeId String?
   budgetTypeId        String?
   user                User             @relation(fields: [userId], references: [id])
+  group               Group?           @relation(fields: [groupId], references: [id])
+  createdBy           User?            @relation("GroupTransactionCreator", fields: [createdByUserId], references: [id])
   currency            Currency?        @relation(fields: [currencyId], references: [id])
   category            Category?        @relation(fields: [categoryId], references: [id])
   paymentType         PaymentType?     @relation(fields: [paymentTypeId], references: [id])
@@ -179,8 +240,12 @@ model Transaction {
   updatedAt           DateTime         @updatedAt
   transactionAudits   TransactionAudit[]
   recurringActions    RecurringTransactionAction[]
+  splits              GroupExpenseSplit[]
+  shares              TransactionShare[]
 
   @@index([userId])
+  @@index([groupId])
+  @@index([createdByUserId])
   @@index([type])
   @@index([transactionDate])
   @@index([isRecurring])
@@ -319,4 +384,185 @@ model SupportTicketAudit {
   updatedAt       DateTime      @updatedAt
 
   @@index([supportTicketId])
+}
+
+model SystemSetting {
+  key              String   @id
+  value            Json
+  updatedByAdminId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Group {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  createdById String
+  createdBy   User     @relation("GroupCreator", fields: [createdById], references: [id])
+  status      Status   @default(A)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members     GroupMember[]
+  invites     GroupInvite[]
+  transactions Transaction[]
+  reminders   PaymentReminder[]
+
+  @@index([createdById])
+}
+
+model GroupExpenseSplit {
+  id             String   @id @default(uuid())
+  transactionId  String
+  userId         String
+  included       Boolean  @default(true)
+  shareAmount    Decimal? @db.Decimal(18, 2)
+  sharePercent   Decimal? @db.Decimal(5, 2)
+  computedAmount Decimal  @db.Decimal(18, 2)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id])
+
+  @@unique([transactionId, userId])
+  @@index([userId])
+}
+
+model GroupMember {
+  id        String          @id @default(uuid())
+  groupId   String
+  userId    String
+  role      GroupMemberRole @default(MEMBER)
+  joinedAt  DateTime        @default(now())
+  group     Group           @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User            @relation(fields: [userId], references: [id])
+
+  @@unique([groupId, userId])
+  @@index([userId])
+}
+
+model GroupInvite {
+  id            String            @id @default(uuid())
+  groupId       String
+  invitedById   String
+  email         String?
+  phone         String?
+  username      String?
+  inviteeUserId String?
+  status        GroupInviteStatus @default(PENDING)
+  expiresAt     DateTime
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  group         Group             @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  invitedBy     User              @relation("InvitedBy", fields: [invitedById], references: [id])
+
+  @@index([groupId])
+  @@index([email])
+  @@index([phone])
+  @@index([username])
+}
+
+model PaymentReminder {
+  id              String             @id @default(uuid())
+  userId          String?
+  groupId         String?
+  createdByUserId String
+  title           String
+  amount          Decimal?           @db.Decimal(18, 2)
+  dueDate         DateTime
+  recurrence      ReminderRecurrence @default(NONE)
+  channels        String[]           @default(["IN_APP"])
+  status          ReminderStatus     @default(ACTIVE)
+  snoozedUntil    DateTime?
+  notes           String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  user       User?  @relation("PersonalReminders", fields: [userId], references: [id])
+  group      Group? @relation(fields: [groupId], references: [id])
+  createdBy  User   @relation("ReminderCreator", fields: [createdByUserId], references: [id])
+  deliveries NotificationDelivery[]
+
+  @@index([userId, dueDate])
+  @@index([groupId, dueDate])
+  @@index([status, dueDate])
+}
+
+model InAppNotification {
+  id        String    @id @default(uuid())
+  userId    String
+  type      String
+  title     String
+  body      String
+  payload   Json?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+}
+
+model UserNotificationPreference {
+  userId         String  @id
+  inAppEnabled   Boolean @default(true)
+  emailEnabled   Boolean @default(true)
+  pushEnabled    Boolean @default(true)
+  groupActivity  Boolean @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserPushSubscription {
+  id                 String       @id @default(uuid())
+  userId             String
+  onesignalPlayerId  String       @unique
+  platform           PushPlatform @default(WEB)
+  lastSeenAt         DateTime     @default(now())
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model NotificationDelivery {
+  id         String              @id @default(uuid())
+  reminderId String?
+  userId     String?
+  channel    NotificationChannel
+  status     String              @default("SENT")
+  error      String?
+  sentAt     DateTime            @default(now())
+
+  reminder PaymentReminder? @relation(fields: [reminderId], references: [id], onDelete: SetNull)
+
+  @@index([reminderId])
+  @@index([userId])
+}
+
+model TransactionShare {
+  id            String    @id @default(uuid())
+  token         String    @unique
+  transactionId String
+  createdById   String
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  createdBy   User        @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([transactionId])
+  @@index([createdById])
+  @@index([expiresAt])
 }

@@ -1,12 +1,11 @@
 import { NextRequest } from 'next/server';
 import { AuthController } from '@/lib/api/controllers/auth.controller';
 import { handleApiError } from '@/lib/api/middleware/errorHandler';
-import { checkRateLimit } from '@/lib/api/middleware/rateLimiter';
+import { checkRateLimit, getRequestIp, RATE_LIMIT_PRESETS } from '@/lib/api/middleware/rateLimiter';
 
 export async function POST(req: NextRequest) {
   try {
-    const ip = req.headers.get('x-forwarded-for') || 'anonymous';
-    await checkRateLimit(req, `admin_login_${ip}`);
+    await checkRateLimit(req, `admin_login_${getRequestIp(req)}`, RATE_LIMIT_PRESETS.login);
     return await AuthController.loginAdmin(req);
   } catch (error) {
     return handleApiError(error);

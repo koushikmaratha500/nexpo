@@ -30,6 +30,7 @@ export function createFinanceTools(userId: string, today = new Date()) {
         const end = to ? new Date(`${to}T23:59:59.999`) : undefined;
         const { items, total } = await TransactionRepository.findAll({
           userId,
+          groupId: null,
           type,
           startDate: start,
           endDate: end,

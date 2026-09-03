@@ -56,12 +56,12 @@ describe('provider error classification', () => {
     expect(toProviderHttpError(Object.assign(new Error('x'), { statusCode: 400 }))).toBeNull();
   });
 
-  it('surfaces the actual provider message instead of a generic one', () => {
+  it('surfaces a user-friendly rate-limit message', () => {
     const raw = 'Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000 free model requests per day';
     const mapped = toProviderHttpError(retryWrapper(Object.assign(new Error(raw), { statusCode: 429 })));
     expect(mapped!.status).toBe(429);
-    expect(mapped!.message).toContain(raw);
-    expect(mapped!.message).not.toContain('Failed after');
+    expect(mapped!.message).toContain('AI receipt scan is rate limited');
+    expect(mapped!.message).toContain('openrouter.ai/settings/integrations');
   });
 
   it('unwraps AI SDK RetryError wrappers to the underlying cause', () => {
@@ -78,7 +78,11 @@ describe('provider error classification', () => {
 
 describe('modelListFor', () => {
   it('returns the per-feature default model list', () => {
-    expect(modelListFor('ocr')).toContain('google/gemma-4-26b-a4b-it:free');
+    expect(modelListFor('ocr')).toEqual([
+      'google/gemma-4-26b-a4b-it:free',
+      'google/gemini-2.0-flash-exp:free',
+      'google/gemini-2.0-flash-001',
+    ]);
     expect(modelListFor('chat')).toContain('openrouter/free');
   });
 

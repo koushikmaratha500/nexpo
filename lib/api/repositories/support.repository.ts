@@ -8,18 +8,21 @@ export class SupportRepository {
     });
   }
 
-  static async findAll(page = 1, pageSize = 5) {
+  static async findAll(page = 1, pageSize = 5, status?: string) {
     const skip = (page - 1) * pageSize;
+    const where =
+      status && status !== 'ALL'
+        ? { status: status as SupportTicket['status'] }
+        : { status: { not: 'D' as const } };
+
     const [items, total] = await Promise.all([
       prisma.supportTicket.findMany({
-        where: { status: { not: 'D' } },
+        where,
         skip,
         take: pageSize,
         orderBy: { createdAt: 'desc' },
       }),
-      prisma.supportTicket.count({
-        where: { status: { not: 'D' } },
-      }),
+      prisma.supportTicket.count({ where }),
     ]);
     return { items, total };
   }
@@ -49,5 +52,9 @@ export class SupportRepository {
       where: { id },
       data: { status: 'D' },
     });
+  }
+
+  static async createAudit(data: Prisma.SupportTicketAuditUncheckedCreateInput) {
+    return prisma.supportTicketAudit.create({ data });
   }
 }

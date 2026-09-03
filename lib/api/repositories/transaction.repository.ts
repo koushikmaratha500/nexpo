@@ -4,7 +4,9 @@ import { AuditAction } from '@prisma/client';
 
 export interface TransactionQueryParams {
   userId?: string;
+  groupId?: string | null;
   type?: 'DEBIT' | 'CREDIT';
+  types?: ('DEBIT' | 'CREDIT')[];
   categoryId?: string;
   category?: string;
   startDate?: Date;
@@ -14,25 +16,27 @@ export interface TransactionQueryParams {
 }
 
 export class TransactionRepository {
-  static async findById(id: string, userId?: string): Promise<Transaction | null> {
+  static async findById(id: string, userId?: string, personalOnly = false): Promise<Transaction | null> {
     return prisma.transaction.findFirst({
       where: {
         id,
         status: { not: 'D' },
         ...(userId && { userId }),
+        ...(personalOnly ? { groupId: null } : {}),
       },
       include: { category: true, currency: true, paymentType: true, budgetDepositType: true, budgetType: true },
     });
   }
 
   static async findAll(params: TransactionQueryParams) {
-    const { userId, type, categoryId, category, startDate, endDate, page = 1, pageSize = 5 } = params;
+    const { userId, groupId, type, types, categoryId, category, startDate, endDate, page = 1, pageSize = 20 } = params;
     const skip = (page - 1) * pageSize;
 
     const where: Prisma.TransactionWhereInput = {
       status: { not: 'D' },
       ...(userId && { userId }),
-      ...(type && { type }),
+      ...(groupId !== undefined ? { groupId } : {}),
+      ...(types?.length ? { type: { in: types } } : type ? { type } : {}),
       ...(categoryId && { categoryId }),
     };
 
@@ -79,6 +83,48 @@ export class TransactionRepository {
     });
   }
 
+  static async findRecentForUser(userId: string, take = 5) {
+    return prisma.transaction.findMany({
+      where: { userId, groupId: null, status: { not: 'D' } },
+      orderBy: { transactionDate: 'desc' },
+      take,
+      include: {
+        category: true,
+        currency: true,
+        paymentType: true,
+        budgetDepositType: true,
+      },
+    });
+  }
+
+  static async findForUserReport(params: {
+    userId: string;
+    types: ('DEBIT' | 'CREDIT')[];
+    categoryId?: string;
+    startDate?: Date;
+    endDate?: Date;
+  }) {
+    const where: Prisma.TransactionWhereInput = {
+      userId: params.userId,
+      groupId: null,
+      status: { not: 'D' },
+      type: { in: params.types },
+      ...(params.categoryId && { categoryId: params.categoryId }),
+    };
+
+    if (params.startDate || params.endDate) {
+      where.transactionDate = {};
+      if (params.startDate) where.transactionDate.gte = params.startDate;
+      if (params.endDate) where.transactionDate.lte = params.endDate;
+    }
+
+    return prisma.transaction.findMany({
+      where,
+      orderBy: { transactionDate: 'desc' },
+      include: { category: true, currency: true, budgetDepositType: true },
+    });
+  }
+
   static async findRecentByType(type: 'DEBIT' | 'CREDIT', take = 5, where: Prisma.TransactionWhereInput = {}) {
     return prisma.transaction.findMany({
       where: { status: { not: 'D' }, type, ...where },
@@ -121,7 +167,7 @@ export class TransactionRepository {
 
   static async findRecurring(userId: string) {
     return prisma.transaction.findMany({
-      where: { userId, isRecurring: true, status: { not: 'D' } },
+      where: { userId, groupId: null, isRecurring: true, status: { not: 'D' } },
       orderBy: { transactionDate: 'asc' },
       include: { category: true, currency: true, paymentType: true, budgetDepositType: true, budgetType: true },
     });
@@ -273,7 +319,7 @@ export class TransactionRepository {
 
   static async findDistinctMonths(userId: string): Promise<string[]> {
     const rows = await prisma.transaction.findMany({
-      where: { userId, status: { not: 'D' } },
+      where: { userId, groupId: null, status: { not: 'D' } },
       select: { transactionDate: true },
     });
     const months = new Set<string>();

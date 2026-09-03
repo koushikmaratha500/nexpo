@@ -4,7 +4,7 @@ import React, { useState, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Header } from '@/components/layout/Header';
-import { SidebarNav, NavLink } from '@/components/layout/SidebarNav';
+import { SidebarNav, NavLink, getActiveNavPath } from '@/components/layout/SidebarNav';
 import { LogoutConfirmModal } from '@/components/layout/LogoutConfirmModal';
 
 export interface AppLayoutProps {
@@ -15,6 +15,7 @@ export interface AppLayoutProps {
   roleLabel: string;
   searchPlaceholder?: string;
   showHelpCenter?: boolean;
+  showNotifications?: boolean;
   showFab?: boolean;
   fabLabel?: string;
   fabIcon?: string;
@@ -32,6 +33,7 @@ export function AppLayout({
   roleLabel,
   searchPlaceholder = 'Search data...',
   showHelpCenter = true,
+  showNotifications = false,
   showFab = false,
   fabLabel,
   fabIcon = 'add',
@@ -40,6 +42,7 @@ export function AppLayout({
   onLogout,
 }: AppLayoutProps) {
   const pathname = usePathname();
+  const activeNavPath = getActiveNavPath(pathname, navLinks);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
 
@@ -73,6 +76,7 @@ export function AppLayout({
         <Header
           onMenuToggle={() => setIsMobileMenuOpen(true)}
           searchPlaceholder={searchPlaceholder}
+          showNotifications={showNotifications}
         />
         <main className="flex-1 p-6 max-w-[1440px] mx-auto w-full">
           {children}
@@ -82,7 +86,7 @@ export function AppLayout({
       {/* Mobile Bottom Navbar */}
       <nav className="lg:hidden fixed bottom-0 left-0 w-full z-40 flex justify-around items-center px-4 py-2 pb-safe bg-surface-container-lowest border-t border-outline-variant shadow-2xl">
         {bottomNavLinks.map((link) => {
-          const isActive = pathname === link.path;
+          const isActive = activeNavPath === link.path;
           return (
             <Link
               key={link.path}

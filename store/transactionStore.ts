@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import axios from 'axios';
 import { formatDate } from '@/lib/date';
+import type { PaginatedResponse } from '@/types/api';
 
 export type TransactionType = 'DEBIT' | 'CREDIT';
 
@@ -60,7 +61,7 @@ const mapDbTransactionToTransaction = (dbTxn: any): Transaction => {
     description: dbTxn.description || dbTxn.merchant || undefined,
     category: isCredit
       ? (dbTxn.budgetDepositType?.name || 'Other')
-      : (dbTxn.category?.code || dbTxn.category?.name || 'FOOD'),
+      : (dbTxn.category?.name || dbTxn.category?.code || 'Food'),
     date: formatDate(dbTxn.transactionDate || dbTxn.date),
     status: (isCredit ? 'VERIFIED' : 'PENDING') as 'VERIFIED' | 'PENDING' | 'DECLINED',
     amount: typeof dbTxn.amount === 'string' ? parseFloat(dbTxn.amount) : dbTxn.amount,
@@ -85,6 +86,36 @@ const mapDbTransactionToTransaction = (dbTxn: any): Transaction => {
 };
 
 const LOCAL_STORAGE_KEY = 'nexpo_transactions_local';
+const FETCH_PAGE_SIZE = 100;
+const MAX_FETCH_PAGES = 50;
+
+async function fetchAllTransactionPages(
+  filters?: { type?: 'DEBIT' | 'CREDIT'; categoryId?: string; category?: string; startDate?: string; endDate?: string },
+): Promise<unknown[]> {
+  const { type, categoryId, category, startDate, endDate } = filters || {};
+  const params = new URLSearchParams();
+  params.set('pageSize', String(FETCH_PAGE_SIZE));
+  if (type) params.set('type', type);
+  if (categoryId) params.set('categoryId', categoryId);
+  if (category) params.set('category', category);
+  if (startDate) params.set('startDate', startDate);
+  if (endDate) params.set('endDate', endDate);
+
+  const allItems: unknown[] = [];
+  let page = 1;
+  let total = 0;
+
+  do {
+    params.set('page', String(page));
+    const response = await axios.get<PaginatedResponse<unknown>>(`/api/user/transactions?${params.toString()}`);
+    const { items, total: reportedTotal } = response.data;
+    total = reportedTotal;
+    allItems.push(...items);
+    page += 1;
+  } while (allItems.length < total && page <= MAX_FETCH_PAGES);
+
+  return allItems;
+}
 
 const getLocalStorageTransactions = (): Transaction[] => {
   if (typeof window === 'undefined') return [];
@@ -130,21 +161,11 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     if (get().isLoading) return;
     set({ isLoading: true, error: null });
     try {
-      const { type, categoryId, category, startDate, endDate } = filters || {};
-      const params = new URLSearchParams();
-      params.set('pageSize', '1000');
-      if (type) params.set('type', type);
-      if (categoryId) params.set('categoryId', categoryId);
-      if (category) params.set('category', category);
-      if (startDate) params.set('startDate', startDate);
-      if (endDate) params.set('endDate', endDate);
-
-      const response = await axios.get(`/api/user/transactions?${params.toString()}`);
-      const items = response.data.items || response.data || [];
+      const items = await fetchAllTransactionPages(filters);
       const mapped = items.map(mapDbTransactionToTransaction);
       set({ transactions: mapped, isLoading: false });
       setLocalStorageTransactions(mapped);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.warn('API fetchTransactions failed, falling back to local storage:', err);
       const local = getLocalStorageTransactions();
       set({ transactions: local, isLoading: false });

@@ -31,7 +31,7 @@ export function isRetryableModelError(error: unknown): boolean {
   if (status !== null) {
     return status === 429 || (status >= 500 && status <= 599);
   }
-  return /rate limit|too many requests|overloaded|capacity|temporarily unavailable|5\d\d/i.test(
+  return /rate limit|rate-limited|too many requests|overloaded|capacity|temporarily unavailable|temporarily rate-limited|5\d\d/i.test(
     root.message
   );
 }
@@ -40,13 +40,18 @@ export function isProviderRateLimitError(error: unknown): boolean {
   const root = unwrapProviderError(error);
   const status = providerStatus(root);
   if (status === 429) return true;
-  return /rate limit|too many requests|free-models-per-day/i.test(root.message);
+  return /rate limit|rate-limited|too many requests|free-models-per-day|temporarily rate-limited/i.test(
+    root.message
+  );
 }
 
 export function toProviderHttpError(error: unknown): HttpError | null {
   const root = unwrapProviderError(error);
   if (isProviderRateLimitError(root)) {
-    return new HttpError(429, `AI service is rate limited: ${root.message}`);
+    return new HttpError(
+      429,
+      'AI receipt scan is rate limited. Wait a few minutes and retry, set AI_MODEL_OCR to alternate vision models in .env, or link Google AI Studio at openrouter.ai/settings/integrations for higher shared free limits.'
+    );
   }
   const status = providerStatus(root);
   if (status !== null && status >= 500 && status <= 599) {

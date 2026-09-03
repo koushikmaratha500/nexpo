@@ -90,13 +90,13 @@ export function ActivateForm() {
 
       <div className="flex flex-col gap-1">
         <label htmlFor="activate-code" className="font-label-md text-label-md text-on-surface font-bold uppercase tracking-wide">
-          Activation OTP (Try &quot;123456&quot;)
+          Activation OTP
         </label>
         <input
           id="activate-code"
           type="text"
           required
-          placeholder="123456"
+          placeholder="Enter 6-digit code"
           value={code}
           onChange={(e) => setCode(e.target.value)}
           className={`${inputClassName} uppercase text-center tracking-widest font-bold font-mono`}
@@ -118,7 +118,7 @@ export function ActivatePageWrapper() {
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary text-on-primary mb-4 shadow-sm">
             <span className="material_symbols-outlined text-lg">verified_user</span>
           </div>
-          <h1 className="font-headline-lg text-headline-lg font-black tracking-tight text-primary">Corporate Pro Ledger</h1>
+          <h1 className="font-headline-lg text-headline-lg font-black tracking-tight text-primary">PaysaSuchan</h1>
           <p className="font-body-md text-body-md text-on-surface-variant mt-1">Activation Gateway</p>
         </div>
 
