@@ -52,8 +52,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <AppLayout
       navLinks={ADMIN_NAV_LINKS}
-      appTitle="Corporate Pro Ledger"
-      appSubtitle="Administrative Hub"
+      appTitle="PaysaSuchan"
+      appSubtitle="Admin Console"
       roleLabel="Admin Hub"
       searchPlaceholder="Search governance details..."
       bottomNavCount={5}

@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 
 export interface NavLink {
   name: string;
@@ -119,8 +120,8 @@ export function SidebarNav({
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex flex-col h-screen fixed left-0 top-0 border-r border-outline-variant bg-surface-container-low p-4 gap-2 w-64 z-50">
         <div className="mb-6 px-2 py-4 border-b border-outline-variant/50">
-          <h1 className="font-headline-sm text-headline-sm font-black text-primary leading-tight">{appTitle}</h1>
-          <p className="font-label-md text-[10px] text-on-surface-variant uppercase tracking-wider font-bold opacity-70">
+          <BrandLogo variant="wordmark" theme="mono" size="sm" />
+          <p className="font-label-md text-[10px] text-on-surface-variant uppercase tracking-wider font-bold opacity-70 mt-1">
             {appSubtitle}
           </p>
         </div>
@@ -144,8 +145,8 @@ export function SidebarNav({
           <div className="relative w-64 bg-surface-container-low border-r border-outline-variant h-full flex flex-col p-4 gap-2 animate-in slide-in-from-left duration-200">
             <div className="mb-6 px-2 py-4 border-b border-outline-variant/50 flex justify-between items-center">
               <div>
-                <h1 className="font-headline-sm text-headline-sm font-black text-primary leading-tight">{appTitle}</h1>
-                <p className="font-label-md text-[10px] text-on-surface-variant uppercase tracking-wider font-bold">
+                <BrandLogo variant="wordmark" theme="mono" size="sm" />
+                <p className="font-label-md text-[10px] text-on-surface-variant uppercase tracking-wider font-bold mt-1">
                   {roleLabel}
                 </p>
               </div>

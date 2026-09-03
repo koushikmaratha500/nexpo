@@ -5,6 +5,7 @@ import {
   getDevOtpCode,
   isResendEnabled,
   logOtpDevMode,
+  assertOtpAllowedInProduction,
 } from '../utils/emailConfig';
 import {
   isProductionEnv,
@@ -45,6 +46,7 @@ export class OtpService {
 
   static async createOtp(email: string, sendEmail = true): Promise<string> {
     assertOtpStoreAvailable();
+    assertOtpAllowedInProduction();
 
     const code = this.resolveOtpCode();
     const record: OtpRecord = {
@@ -72,6 +74,7 @@ export class OtpService {
 
   static async verifyOtp(email: string, code: string): Promise<boolean> {
     assertOtpStoreAvailable();
+    assertOtpAllowedInProduction();
 
     const key = otpKey(email);
     const record = await kvGetJson<OtpRecord>(key);

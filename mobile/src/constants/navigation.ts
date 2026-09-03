@@ -8,5 +8,5 @@ export const CUSTOMER_NAV = [
   { name: 'Settings', path: 'settings', icon: 'settings' as const, label: 'Settings' },
 ] as const;
 
-export const APP_TITLE = 'Expensify Pro';
-export const APP_SUBTITLE = 'Corporate Tier';
+export const APP_TITLE = 'PaysaSuchan';
+export const APP_SUBTITLE = 'Personal & Group Ledger';

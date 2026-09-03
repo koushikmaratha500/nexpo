@@ -84,7 +84,7 @@ function ResetPasswordContent() {
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary text-on-primary mb-4 shadow-sm">
             <span className="material-symbols-outlined text-lg">lock_reset</span>
           </div>
-          <h1 className="font-headline-lg text-headline-lg font-black tracking-tight text-primary">Corporate Pro Ledger</h1>
+          <h1 className="font-headline-lg text-headline-lg font-black tracking-tight text-primary">PaysaSuchan</h1>
           <p className="font-body-md text-body-md text-on-surface-variant mt-1">Admin Password Reset</p>
         </div>
 

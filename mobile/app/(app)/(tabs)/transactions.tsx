@@ -5,6 +5,7 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  Share,
   Switch,
   Text,
   View,
@@ -14,6 +15,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import {
   API_ROUTES,
   apiGet,
+  apiPost,
   dateToInputFormat,
   formatCurrency,
   type Transaction,
@@ -177,6 +179,50 @@ export default function TransactionsScreen() {
     }
   };
 
+  const handleShare = async (txn: Transaction) => {
+    try {
+      const res = await apiPost<{ url: string }>(API_ROUTES.transactions.share(txn.id), { expiresInDays: 7 });
+      await Share.share({ message: `Receipt from PaysaSuchan: ${res.url}`, url: res.url });
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'Share failed', 'error');
+    }
+  };
+
+  const handleMoveToGroup = async (txn: Transaction) => {
+    try {
+      const groupsRes = await apiGet<{ items: { id: string; name: string }[] }>(API_ROUTES.groups.list);
+      const groups = groupsRes.items || [];
+      if (groups.length === 0) {
+        addToast('Join or create a group first', 'warning');
+        return;
+      }
+      Alert.alert(
+        'Move to group',
+        'Choose a group. This removes the personal entry and creates an equal split expense.',
+        [
+          ...groups.map((group) => ({
+            text: group.name,
+            onPress: async () => {
+              try {
+                await apiPost(API_ROUTES.transactions.convert(txn.id), {
+                  target: 'group',
+                  groupId: group.id,
+                });
+                addToast('Moved to group ledger', 'success');
+                await fetchTransactions();
+              } catch (err) {
+                addToast(err instanceof Error ? err.message : 'Move failed', 'error');
+              }
+            },
+          })),
+          { text: 'Cancel', style: 'cancel' },
+        ],
+      );
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'Could not load groups', 'error');
+    }
+  };
+
   const handleDelete = (txn: Transaction) => {
     Alert.alert('Delete transaction', `Remove "${txn.title}"?`, [
       { text: 'Cancel', style: 'cancel' },
@@ -273,6 +319,10 @@ export default function TransactionsScreen() {
                   <Text className="mt-0.5 text-sm text-on-surface-variant">
                     {item.date} · {item.category}
                   </Text>
+                  <View className="mt-sm flex-row gap-sm">
+                    <Button title="Share" variant="secondary" onPress={() => handleShare(item)} />
+                    <Button title="To group" variant="secondary" onPress={() => handleMoveToGroup(item)} />
+                  </View>
                 </View>
                 <View className="items-end gap-1">
                   <Badge label={item.type} variant={item.type === 'DEBIT' ? 'debit' : 'credit'} />

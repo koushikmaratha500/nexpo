@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   ScrollView,
+  Share,
   Switch,
   Text,
   View,
@@ -202,6 +203,38 @@ export default function GroupDetailScreen() {
     }
   };
 
+  const handleShareTxn = async (txnId: string) => {
+    try {
+      const res = await apiPost<{ url: string }>(API_ROUTES.transactions.share(txnId), { expiresInDays: 7 });
+      await Share.share({ message: `Receipt from PaysaSuchan: ${res.url}`, url: res.url });
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'Share failed', 'error');
+    }
+  };
+
+  const handleMoveToPersonal = (txnId: string) => {
+    Alert.alert(
+      'Move to personal ledger',
+      'This removes the group expense and creates a personal transaction.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm',
+          onPress: async () => {
+            try {
+              await apiPost(API_ROUTES.transactions.convert(txnId), { target: 'personal' });
+              addToast('Moved to personal ledger', 'success');
+              await loadTransactions();
+              await loadBalances();
+            } catch (err) {
+              addToast(err instanceof Error ? err.message : 'Move failed', 'error');
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const handleDeleteTxn = (txnId: string) => {
     Alert.alert('Delete expense', 'Remove this group expense?', [
       { text: 'Cancel', style: 'cancel' },
@@ -326,7 +359,11 @@ export default function GroupDetailScreen() {
                   </Text>
                 </View>
                 {(group.myRole === 'ADMIN' || txn.createdByUserId === currentUserId) && (
-                  <Button title="Delete" variant="danger" onPress={() => handleDeleteTxn(txn.id)} className="mt-sm" />
+                  <View className="mt-sm flex-row flex-wrap gap-sm">
+                    <Button title="Share" variant="secondary" onPress={() => handleShareTxn(txn.id)} />
+                    <Button title="To personal" variant="secondary" onPress={() => handleMoveToPersonal(txn.id)} />
+                    <Button title="Delete" variant="danger" onPress={() => handleDeleteTxn(txn.id)} />
+                  </View>
                 )}
               </Card>
             ))

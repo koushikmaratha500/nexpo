@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { HttpError } from '../middleware/errorHandler';
 
 export function assertReminderDispatchAuthorized(req: Request) {
@@ -10,7 +11,13 @@ export function assertReminderDispatchAuthorized(req: Request) {
     req.headers.get('x-reminder-dispatch-secret') ||
     req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
 
-  if (!headerSecret || headerSecret !== secret) {
+  if (!headerSecret) {
+    throw new HttpError(401, 'Unauthorized');
+  }
+
+  const expected = Buffer.from(secret);
+  const provided = Buffer.from(headerSecret);
+  if (expected.length !== provided.length || !crypto.timingSafeEqual(expected, provided)) {
     throw new HttpError(401, 'Unauthorized');
   }
 }

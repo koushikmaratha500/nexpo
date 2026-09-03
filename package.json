@@ -27,7 +27,9 @@
     "mobile": "npm run start --workspace=mobile",
     "mobile:ios": "npm run ios --workspace=mobile",
     "mobile:android": "npm run android --workspace=mobile",
-    "mobile:typecheck": "npm run typecheck --workspace=mobile"
+    "mobile:typecheck": "npm run typecheck --workspace=mobile",
+    "mobile:build:preview": "npm run build:preview --workspace=mobile",
+    "mobile:build:production": "npm run build:production --workspace=mobile"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"

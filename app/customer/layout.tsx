@@ -28,8 +28,8 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
     <OneSignalProvider>
       <AppLayout
         navLinks={CUSTOMER_NAV_LINKS}
-        appTitle="Expensify Pro"
-        appSubtitle="Corporate Tier"
+        appTitle="PaysaSuchan"
+        appSubtitle="Personal & Group Ledger"
         roleLabel="Customer Hub"
         searchPlaceholder="Search personal ledger..."
         showNotifications

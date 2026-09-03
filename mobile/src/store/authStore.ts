@@ -10,6 +10,7 @@ interface AuthState {
   setAuth: (user: User, token: string) => void;
   clearAuth: () => void;
   setHydrated: (value: boolean) => void;
+  setToken: (token: string | null) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -21,10 +22,12 @@ export const useAuthStore = create<AuthState>()(
       setAuth: (user, token) => set({ user, token }),
       clearAuth: () => set({ user: null, token: null }),
       setHydrated: (value) => set({ hydrated: value }),
+      setToken: (token) => set({ token }),
     }),
     {
       name: 'nexpo_mobile_auth',
       storage: createJSONStorage(() => AsyncStorage),
+      partialize: (state) => ({ user: state.user }),
       onRehydrateStorage: () => (state) => {
         state?.setHydrated(true);
       },

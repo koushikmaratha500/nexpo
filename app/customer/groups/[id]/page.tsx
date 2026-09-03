@@ -324,6 +324,7 @@ export default function CustomerGroupDetailPage() {
               currentUserId={currentUserId}
               currencySymbol={currencySymbol}
               onDelete={handleDeleteTransaction}
+              onConverted={loadTransactions}
             />
           )}
 

@@ -8,6 +8,10 @@ import { SplitService, type SplitMode } from '@/lib/api/services/split.service';
 import type { GroupMemberItem } from './GroupMembersPanel';
 import { MemberProfileLink, balanceMemberToUserRef, memberToUserRef } from './memberLinks';
 import { UserProfileLink } from '@/components/features/users';
+import {
+  GroupTransactionActionsMenu,
+  GroupTransactionDetailModal,
+} from './GroupTransactionActionsMenu';
 
 export function formatGroupAmount(amount: number, symbol = '₹'): string {
   return `${symbol}${amount.toFixed(2)}`;
@@ -163,6 +167,7 @@ interface GroupTransactionListProps {
   currentUserId?: string;
   currencySymbol?: string;
   onDelete: (transactionId: string) => Promise<void>;
+  onConverted?: () => void;
 }
 
 function canModifyTransaction(
@@ -184,8 +189,19 @@ export function GroupTransactionList({
   currentUserId,
   currencySymbol = '₹',
   onDelete,
+  onConverted,
 }: GroupTransactionListProps) {
+  const [viewingTransaction, setViewingTransaction] = useState<GroupTransactionItem | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDelete = async (transactionId: string) => {
+    setDeletingId(transactionId);
+    try {
+      await onDelete(transactionId);
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   if (transactions.length === 0) {
     return (
@@ -196,57 +212,72 @@ export function GroupTransactionList({
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      {transactions.map((txn) => (
-        <Card key={txn.id} className="bg-surface-container-lowest p-4 flex flex-col gap-3" glass={false}>
-          <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
-            <div>
-              <h4 className="font-title-md text-title-md font-bold text-primary">{txn.title}</h4>
-              <p className="font-body-md text-on-surface-variant mt-1">
-                {new Date(txn.transactionDate).toLocaleDateString()} · Paid by{' '}
-                {memberName(members, txn.userId)}
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="font-headline-sm font-black text-primary">
-                {formatGroupAmount(Number(txn.amount), txn.currency?.symbol || currencySymbol)}
-              </span>
-              {canModifyTransaction(txn, myRole, currentUserId) && (
-                <Button
-                  variant="secondary"
-                  disabled={deletingId === txn.id}
-                  onClick={async () => {
-                    setDeletingId(txn.id);
-                    try {
-                      await onDelete(txn.id);
-                    } finally {
-                      setDeletingId(null);
-                    }
-                  }}
+    <>
+      <div className="flex flex-col gap-4">
+        {transactions.map((txn) => {
+          const canModify = canModifyTransaction(txn, myRole, currentUserId);
+          return (
+            <Card
+              key={txn.id}
+              className="bg-surface-container-lowest p-4 flex flex-col gap-3 cursor-pointer hover:border-primary/20 border border-transparent transition-colors"
+              glass={false}
+              onClick={() => setViewingTransaction(txn)}
+            >
+              <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
+                <div>
+                  <h4 className="font-title-md text-title-md font-bold text-primary">{txn.title}</h4>
+                  <p className="font-body-md text-on-surface-variant mt-1">
+                    {new Date(txn.transactionDate).toLocaleDateString()} · Paid by{' '}
+                    {memberName(members, txn.userId)}
+                  </p>
+                </div>
+                <div
+                  className="flex items-center gap-2 flex-wrap justify-end"
+                  onClick={(event) => event.stopPropagation()}
                 >
-                  {deletingId === txn.id ? 'Deleting...' : 'Delete'}
-                </Button>
-              )}
-            </div>
-          </div>
-          {txn.splits && txn.splits.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {txn.splits
-                .filter((split) => split.included && split.computedAmount > 0)
-                .map((split) => (
-                  <span
-                    key={split.userId}
-                    className="px-3 py-1 rounded-full bg-surface-container-low text-label-md font-bold text-on-surface-variant"
-                  >
-                    {memberName(members, split.userId)}:{' '}
-                    {formatGroupAmount(split.computedAmount, txn.currency?.symbol || currencySymbol)}
+                  <span className="font-headline-sm font-black text-primary">
+                    {formatGroupAmount(Number(txn.amount), txn.currency?.symbol || currencySymbol)}
                   </span>
-                ))}
-            </div>
-          )}
-        </Card>
-      ))}
-    </div>
+                  <GroupTransactionActionsMenu
+                    transaction={txn}
+                    canModify={canModify}
+                    onView={setViewingTransaction}
+                    onDelete={handleDelete}
+                    onConverted={onConverted}
+                  />
+                </div>
+              </div>
+              {txn.splits && txn.splits.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {txn.splits
+                    .filter((split) => split.included && split.computedAmount > 0)
+                    .map((split) => (
+                      <span
+                        key={split.userId}
+                        className="px-3 py-1 rounded-full bg-surface-container-low text-label-md font-bold text-on-surface-variant"
+                      >
+                        {memberName(members, split.userId)}:{' '}
+                        {formatGroupAmount(split.computedAmount, txn.currency?.symbol || currencySymbol)}
+                      </span>
+                    ))}
+                </div>
+              )}
+              {deletingId === txn.id ? (
+                <p className="font-label-md text-on-surface-variant">Deleting...</p>
+              ) : null}
+            </Card>
+          );
+        })}
+      </div>
+
+      <GroupTransactionDetailModal
+        transaction={viewingTransaction}
+        members={members}
+        currencySymbol={currencySymbol}
+        open={viewingTransaction !== null}
+        onClose={() => setViewingTransaction(null)}
+      />
+    </>
   );
 }
 

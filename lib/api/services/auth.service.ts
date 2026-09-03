@@ -8,7 +8,9 @@ import { EmailService } from './email.service';
 import { OtpService } from './otp.service';
 import * as jose from 'jose';
 import { AuditAction } from '@prisma/client';
-import { assertValidUsername } from '../utils/username';
+import { assertValidUsername, isValidUsername } from '../utils/username';
+import { verifySupabaseAccessToken } from '@/lib/supabase/verifyAccessToken';
+import { AuthProvider } from '@prisma/client';
 
 function getJwtSecretBytes(): Uint8Array {
   const secret = process.env.JWT_SECRET?.trim();
@@ -208,6 +210,109 @@ export class AuthService {
     });
 
     return { user, token: jwt };
+  }
+
+  private static async generateUniqueUsername(email: string): Promise<string> {
+    const localPart = email.split('@')[0] ?? 'user';
+    const sanitized = localPart.replace(/[^a-z0-9_]/gi, '').toLowerCase();
+    let base = sanitized.length >= 3 ? sanitized.slice(0, 24) : `user${sanitized}`.slice(0, 24);
+    if (!isValidUsername(base)) {
+      base = `user${crypto.randomBytes(3).toString('hex')}`.slice(0, 24);
+    }
+
+    let candidate = assertValidUsername(base);
+    let suffix = 0;
+    while (await UserRepository.findByUsername(candidate)) {
+      suffix += 1;
+      candidate = assertValidUsername(`${base.slice(0, 20)}_${suffix}`);
+    }
+    return candidate;
+  }
+
+  private static async issueCustomerSession(
+    user: Awaited<ReturnType<typeof UserRepository.findByEmail>>,
+    meta: { ip?: string; ua?: string },
+    auditNote?: string,
+  ) {
+    if (!user?.email) {
+      throw new Error('User email is missing');
+    }
+
+    const jwt = await signJwt({ id: user.id, email: user.email, role: 'CUSTOMER' });
+    const expiryTime = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    await SessionRepository.create({
+      jwt,
+      userId: user.id,
+      expiryTime,
+    });
+
+    await UserRepository.createAudit({
+      userId: user.id,
+      action: AuditAction.LOGIN,
+      newValue: {
+        email: user.email,
+        note: auditNote ?? 'Customer login',
+        sessionJwt: jwt.slice(0, 20) + '...',
+      },
+      ipAddress: meta.ip || null,
+      userAgent: meta.ua || null,
+      status: 'A',
+    });
+
+    return { user, token: jwt };
+  }
+
+  static async loginWithGoogle(accessToken: string, meta = { ip: '', ua: '' }) {
+    const googleUser = await verifySupabaseAccessToken(accessToken);
+    let user = await UserRepository.findByEmail(googleUser.email);
+
+    if (!user) {
+      const countryRecord = await MetaRepository.findCountryByName('India');
+      const username = await this.generateUniqueUsername(googleUser.email);
+
+      user = await UserRepository.create({
+        username,
+        firstName: googleUser.firstName,
+        lastName: googleUser.lastName,
+        email: googleUser.email,
+        profileImageUrl: googleUser.avatarUrl,
+        provider: AuthProvider.GOOGLE,
+        status: 'A',
+        emailVerified: true,
+        countryId: countryRecord?.id ?? null,
+        currencyId: countryRecord?.currencyId ?? null,
+      });
+
+      await UserRepository.createAudit({
+        userId: user.id,
+        action: AuditAction.CREATE,
+        newValue: { email: user.email, provider: 'GOOGLE', source: 'google_oauth' },
+        ipAddress: meta.ip || null,
+        userAgent: meta.ua || null,
+        status: 'A',
+      });
+    } else {
+      if (user.status === 'B') {
+        throw new Error('Account has been blocked');
+      }
+
+      const updates: Parameters<typeof UserRepository.update>[1] = {
+        emailVerified: true,
+        provider: AuthProvider.GOOGLE,
+      };
+
+      if (user.status === 'P') {
+        updates.status = 'A';
+      }
+
+      if (googleUser.avatarUrl && !user.profileImageUrl) {
+        updates.profileImageUrl = googleUser.avatarUrl;
+      }
+
+      user = await UserRepository.update(user.id, updates);
+    }
+
+    return this.issueCustomerSession(user, meta, 'Google OAuth login');
   }
 
   static async completeForcedPasswordReset(userId: string, newPassword: string, meta = { ip: '', ua: '' }) {

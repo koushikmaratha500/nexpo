@@ -8,7 +8,11 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:preview": "eas build --profile preview --platform all",
+    "build:production": "eas build --profile production --platform all",
+    "submit:ios": "eas submit --profile production --platform ios",
+    "submit:android": "eas submit --profile production --platform android"
   },
   "dependencies": {
     "@expo-google-fonts/figtree": "^0.4.1",
@@ -16,9 +20,11 @@
     "@nexpo/shared": "*",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-navigation/bottom-tabs": "^7.18.17",
+    "@supabase/supabase-js": "^2.115.0",
     "axios": "^1.18.0",
     "dayjs": "^1.11.21",
     "expo": "~57.0.16",
+    "expo-auth-session": "~57.0.11",
     "expo-constants": "~18.0.13",
     "expo-document-picker": "~14.0.8",
     "expo-font": "~57.0.1",
@@ -27,6 +33,7 @@
     "expo-router": "~6.0.23",
     "expo-secure-store": "~15.0.8",
     "expo-status-bar": "~57.0.1",
+    "expo-web-browser": "~57.0.2",
     "nativewind": "^4.2.6",
     "react": "19.2.3",
     "react-native": "0.86.2",

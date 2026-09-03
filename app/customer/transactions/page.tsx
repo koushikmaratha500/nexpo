@@ -13,6 +13,8 @@ import { useToast } from '@/hooks/useToast';
 import { dateToInputFormat } from '@/lib/date';
 import axios from 'axios';
 import { DocumentUploader, RecurringApprovalPanel, ImportExpensesModal } from '@/components/features/transactions';
+import { PersonalTransactionActionsMenu } from '@/components/features/transactions/PersonalTransactionActionsMenu';
+import { TransactionDetailModal } from '@/components/features/transactions/TransactionDetailModal';
 import type { ReceiptExtraction } from '@/lib/ai/types';
 import { fileForOcrUpload, isOcrSupportedImageFile } from '@/lib/files/receiptImage';
 
@@ -386,6 +388,7 @@ export default function TransactionsPage() {
   const [removeExistingDoc, setRemoveExistingDoc] = useState(false);
   const [aiExtracting, setAiExtracting] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [viewingTransaction, setViewingTransaction] = useState<Transaction | null>(null);
 
   const {
     register: registerAdd,
@@ -777,7 +780,7 @@ export default function TransactionsPage() {
                 </TableRow>
               ) : paginatedTransactions.length > 0 ? (
                 paginatedTransactions.map((t) => (
-                  <TableRow key={t.id}>
+                  <TableRow key={t.id} onClick={() => setViewingTransaction(t)} className="cursor-pointer">
                     <TableCell>
                       <span className="text-primary font-bold">{t.title}</span>
                       {t.merchant && t.merchant !== t.title && (
@@ -796,14 +799,15 @@ export default function TransactionsPage() {
                       <span className={getTypeBadge(t.type)}>{t.type}</span>
                     </TableCell>
                     <TableCell className="text-on-surface-variant font-medium">{t.date}</TableCell>
-                    <TableCell align="right">
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" onClick={() => handleOpenEdit(t)}>
-                          <span className="material-symbols-outlined text-sm">edit</span>
-                        </Button>
-                        <Button variant="ghost" onClick={() => handleDelete(t.id)}>
-                          <span className="material-symbols-outlined text-sm">delete</span>
-                        </Button>
+                    <TableCell align="right" onClick={(event) => event.stopPropagation()}>
+                      <div className="flex justify-end">
+                        <PersonalTransactionActionsMenu
+                          transaction={t}
+                          onView={setViewingTransaction}
+                          onEdit={handleOpenEdit}
+                          onDelete={handleDelete}
+                          onConverted={() => fetchTransactions()}
+                        />
                       </div>
                     </TableCell>
                   </TableRow>
@@ -1095,6 +1099,12 @@ export default function TransactionsPage() {
           fetchTransactions();
           fetchRecurring();
         }}
+      />
+
+      <TransactionDetailModal
+        transaction={viewingTransaction}
+        open={viewingTransaction !== null}
+        onClose={() => setViewingTransaction(null)}
       />
     </div>
   );

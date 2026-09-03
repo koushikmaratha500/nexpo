@@ -41,6 +41,9 @@ export const RATE_LIMIT_PRESETS = {
   aiOcr: { limit: 10, windowSeconds: 60 },
   aiInsights: { limit: 10, windowSeconds: 60 },
   groupInvite: { limit: 20, windowSeconds: 60 },
+  shareCreate: { limit: 20, windowSeconds: 86400 },
+  sharePublic: { limit: 60, windowSeconds: 60 },
+  upload: { limit: 20, windowSeconds: 60 },
 } as const;
 
 export interface RateLimitOptions {

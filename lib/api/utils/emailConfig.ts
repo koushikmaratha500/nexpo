@@ -13,12 +13,30 @@ export function getResendFromEmail(): string {
   if (from) {
     return from.includes('<') ? from : `Nexpo Ledger <${from}>`;
   }
-  return 'Nexpo Ledger <noreply@nexpo.com>';
+  return 'PaysaSuchan <noreply@paysasuchan.com>';
 }
 
 export function assertResendConfigured(): void {
   if (isResendEnabled() && !process.env.RESEND_API_KEY?.trim()) {
     throw new Error('ENABLE_RESEND=true requires RESEND_API_KEY to be set');
+  }
+}
+
+export function assertProductionOtpConfig(): void {
+  if (!isProductionEnv()) return;
+
+  if (!isResendEnabled() && process.env.ALLOW_DEV_OTP_IN_PRODUCTION !== 'true') {
+    throw new Error(
+      'Production requires ENABLE_RESEND=true or explicit ALLOW_DEV_OTP_IN_PRODUCTION=true',
+    );
+  }
+}
+
+export function assertOtpAllowedInProduction(): void {
+  if (!isProductionEnv()) return;
+  assertProductionOtpConfig();
+  if (!isResendEnabled()) {
+    throw new Error('OTP verification is disabled in production unless email delivery is enabled');
   }
 }
 

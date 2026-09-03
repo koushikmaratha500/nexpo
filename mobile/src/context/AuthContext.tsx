@@ -10,12 +10,15 @@ import {
 } from '@nexpo/shared';
 import { useAuthStore } from '../store/authStore';
 import { mobileTokenStorage } from '../lib/tokenStorage';
+import { isSupabaseConfigured } from '../lib/supabase';
+import { signInWithGoogleOAuth } from '../lib/googleAuth';
 
 interface AuthContextValue {
   user: User | null;
   token: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  loginWithGoogle: () => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   updateUser: (fields: Partial<User & { avatar?: string }>) => void;
 }
@@ -46,13 +49,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!hydrated) return;
 
-    if (token && isTokenExpired(token)) {
-      void (async () => {
+    void (async () => {
+      const secureToken = await mobileTokenStorage.getToken();
+      const current = useAuthStore.getState();
+      if (secureToken && current.user && !current.token) {
+        useAuthStore.getState().setToken(secureToken);
+      }
+      if (secureToken && isTokenExpired(secureToken)) {
         await mobileTokenStorage.setToken(null);
         clearAuth();
-      })();
-    }
-  }, [hydrated, token, clearAuth]);
+      }
+    })();
+  }, [hydrated, clearAuth]);
 
   const updateUser = useCallback((fields: Partial<User & { avatar?: string }>) => {
     const current = useAuthStore.getState().user;
@@ -91,6 +99,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [setAuth]);
 
+  const loginWithGoogle = useCallback(async () => {
+    if (!isSupabaseConfigured()) {
+      return { success: false, error: 'Google sign-in is not configured on this build.' };
+    }
+
+    try {
+      const oauth = await signInWithGoogleOAuth();
+      if ('error' in oauth) {
+        return { success: false, error: oauth.error };
+      }
+
+      const response = await apiPost<LoginResponse>(API_ROUTES.auth.google, {
+        accessToken: oauth.accessToken,
+      });
+
+      if (!response.success || !response.token || !response.user) {
+        return { success: false, error: 'Google sign-in failed' };
+      }
+
+      const loggedInUser = mapCustomerUser(response.user);
+      await mobileTokenStorage.setToken(response.token);
+      setAuth(loggedInUser, response.token);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: getApiErrorMessage(err, 'Google sign-in failed') };
+    }
+  }, [setAuth]);
+
   const logout = useCallback(async () => {
     if (token) {
       try {
@@ -104,8 +140,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [token, clearAuth]);
 
   const value = useMemo(
-    () => ({ user, token, isLoading, login, logout, updateUser }),
-    [user, token, isLoading, login, logout, updateUser]
+    () => ({ user, token, isLoading, login, loginWithGoogle, logout, updateUser }),
+    [user, token, isLoading, login, loginWithGoogle, logout, updateUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

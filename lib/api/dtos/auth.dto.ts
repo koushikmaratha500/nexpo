@@ -44,3 +44,7 @@ export const updateProfileSchema = z.object({
 export const completeForcedResetSchema = z.object({
   newPassword: z.string().min(7, 'New password must be at least 7 characters long'),
 });
+
+export const googleAuthSchema = z.object({
+  accessToken: z.string().min(20, 'Access token is required'),
+});

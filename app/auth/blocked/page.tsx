@@ -20,7 +20,7 @@ export default function BlockedPage() {
           <p className="font-label-md text-label-md text-on-surface-variant/70 border-t border-outline-variant pt-4 w-full">
             If you believe this is an error, please contact your company IT administrator.
           </p>
-          <Link href="/" className="mt-4 w-full">
+          <Link href="/auth/login" className="mt-4 w-full">
             <Button variant="secondary" className="w-full">Back to Login</Button>
           </Link>
         </Card>

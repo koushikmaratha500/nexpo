@@ -12,6 +12,7 @@ import {
   forgotPasswordSchema,
   resetPasswordSchema,
   completeForcedResetSchema,
+  googleAuthSchema,
 } from '../dtos/auth.dto';
 import { comparePassword, hashPassword } from '../services/auth.service';
 import { assertValidUsername } from '../utils/username';
@@ -75,6 +76,20 @@ export class AuthController extends BaseController {
         user: serializeCustomerUser(result.user),
       };
     }, { fallbackMessage: 'Login failed' });
+  }
+
+  static async loginWithGoogle(req: NextRequest) {
+    return this.safeExecuteJson(async () => {
+      const body = await req.json();
+      const validated = googleAuthSchema.parse(body);
+      const meta = this.requestMeta(req);
+      const result = await AuthService.loginWithGoogle(validated.accessToken, meta);
+      return {
+        success: true,
+        token: result.token,
+        user: serializeCustomerUser(result.user),
+      };
+    }, { fallbackMessage: 'Google sign-in failed' });
   }
 
   static async completeForcedPasswordReset(req: NextRequest, userId: string) {

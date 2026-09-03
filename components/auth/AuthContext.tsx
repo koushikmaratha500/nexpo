@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import axios from 'axios';
 import { useAuthStore, UserState } from '@/store/authStore';
 import { useToast } from '@/hooks/useToast';
+import { createClient } from '@/lib/supabase/client';
 
 export interface User {
   username?: string;
@@ -23,6 +24,7 @@ export interface User {
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string, isAdmin?: boolean) => Promise<{ success: boolean; error?: string; pendingVerification?: boolean; forcePasswordReset?: boolean }>;
+  completeGoogleLogin: () => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   isLoading: boolean;
   updateUser: (updatedFields: Partial<User>) => void;
@@ -91,7 +93,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isLoading) return;
 
-    const isAuthPage = pathname.startsWith('/auth') || pathname === '/';
+    const isPublicPage =
+      pathname === '/' || pathname.startsWith('/r/') || pathname.startsWith('/auth/callback');
+    const isAuthPage = pathname.startsWith('/auth') || isPublicPage;
     const isAdminAuthPage = pathname.startsWith('/admin/login') ||
       pathname.startsWith('/admin/forgot-password') ||
       pathname.startsWith('/admin/reset-password');
@@ -101,7 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (pathname.startsWith('/admin')) {
           router.push('/admin/login');
         } else if (!isAuthPage) {
-          router.push('/');
+          router.push('/auth/login');
         }
       }
     } else {
@@ -168,7 +172,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (pathname.startsWith('/admin')) {
       router.push('/admin/login');
     } else {
-      router.push('/');
+      router.push('/auth/login');
     }
 
     // De-duplicate toast warnings if triggered concurrently
@@ -247,6 +251,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { success: false, error: 'Login request failed. Verify your connection or credentials.' };
   };
 
+  const completeGoogleLogin = async (): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase.auth.getSession();
+      if (error || !data.session?.access_token) {
+        return { success: false, error: 'Google sign-in session not found' };
+      }
+
+      const response = await axios.post('/api/user/auth/google', {
+        accessToken: data.session.access_token,
+      });
+
+      if (!response.data.success) {
+        return { success: false, error: response.data.error || 'Google sign-in failed' };
+      }
+
+      const rawUser = response.data.user;
+      const loggedInUser: User = {
+        username: rawUser.username || '',
+        firstName: rawUser.firstName,
+        lastName: rawUser.lastName || '',
+        phone: rawUser.phone || rawUser.mobile || '',
+        email: rawUser.email,
+        countryId: rawUser.countryId || null,
+        currencyId: rawUser.currencyId || null,
+        role: 'CUSTOMER',
+      };
+
+      setAuth(loggedInUser, response.data.token);
+      axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
+      await supabase.auth.signOut();
+      router.push('/customer');
+      return { success: true };
+    } catch (err: unknown) {
+      const errorMsg =
+        (err as { response?: { data?: { error?: string } } }).response?.data?.error ||
+        (err as { message?: string }).message ||
+        'Google sign-in failed';
+      return { success: false, error: errorMsg };
+    }
+  };
+
   const logout = () => {
     const adminUrl = '/api/admin/logout';
     const customerUrl = '/api/user/logout';
@@ -260,7 +306,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     clearAuth();
     delete axios.defaults.headers.common['Authorization'];
-    router.push('/');
+    router.push('/auth/login');
   };
 
   if (isLoading) {
@@ -273,7 +319,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading, updateUser }}>
+    <AuthContext.Provider value={{ user, login, completeGoogleLogin, logout, isLoading, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,9 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table';
+import { TransactionDetailModal } from '@/components/features/transactions/TransactionDetailModal';
 import type { Transaction } from '@/store/transactionStore';
 
 export interface RecentTransactionsProps {
@@ -18,6 +19,8 @@ function getIconName(item: Transaction): string {
 }
 
 export function RecentTransactions({ transactions }: RecentTransactionsProps) {
+  const [viewingTransaction, setViewingTransaction] = useState<Transaction | null>(null);
+
   return (
     <div className="col-span-12">
       <Card className="bg-surface-container-lowest p-0 overflow-hidden" glass={false}>
@@ -43,7 +46,11 @@ export function RecentTransactions({ transactions }: RecentTransactionsProps) {
             </TableHeader>
             <TableBody>
               {transactions.map((item) => (
-                <TableRow key={item.id}>
+                <TableRow
+                  key={item.id}
+                  onClick={() => setViewingTransaction(item)}
+                  className="cursor-pointer"
+                >
                   <TableCell>
                     <div className="flex items-center gap-4">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center border border-outline-variant/30 ${
@@ -92,6 +99,12 @@ export function RecentTransactions({ transactions }: RecentTransactionsProps) {
           </Table>
         </div>
       </Card>
+
+      <TransactionDetailModal
+        transaction={viewingTransaction}
+        open={viewingTransaction !== null}
+        onClose={() => setViewingTransaction(null)}
+      />
     </div>
   );
 }

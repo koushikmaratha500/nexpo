@@ -76,7 +76,7 @@ export function ForgotPasswordForm() {
             If an account exists for <strong>{success.email}</strong>, we sent a password reset link to that inbox.
           </p>
           <ol className="list-decimal list-inside space-y-1">
-            <li>Open the email from Expensify Pro</li>
+            <li>Open the email from PaysaSuchan</li>
             <li>Click the reset link (valid for 1 hour)</li>
             <li>Choose a new password on the reset page</li>
           </ol>
@@ -85,7 +85,7 @@ export function ForgotPasswordForm() {
           </p>
         </div>
         <div className="flex flex-col gap-2 w-full mt-2">
-          <Link href="/" className="w-full">
+          <Link href="/auth/login" className="w-full">
             <Button variant="secondary" className="w-full">
               Return to Login
             </Button>
@@ -146,7 +146,7 @@ export function ForgotPasswordForm() {
 
       <div className="text-center text-label-md text-on-surface-variant mt-4">
         Remember your credentials?{' '}
-        <Link href="/" className="text-primary font-bold hover:underline">
+        <Link href="/auth/login" className="text-primary font-bold hover:underline">
           Sign in
         </Link>
       </div>
@@ -167,7 +167,7 @@ export function ForgotPasswordPageWrapper() {
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary text-on-primary mb-4 shadow-sm">
             <span className="material-symbols-outlined text-lg">corporate_fare</span>
           </div>
-          <h1 className="font-headline-lg text-headline-lg font-black tracking-tight text-primary">Corporate Pro Ledger</h1>
+          <h1 className="font-headline-lg text-headline-lg font-black tracking-tight text-primary">PaysaSuchan</h1>
           <p className="font-body-md text-body-md text-on-surface-variant mt-1">Credentials Recovery</p>
         </div>
 

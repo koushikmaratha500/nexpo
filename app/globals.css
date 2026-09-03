@@ -1,45 +1,50 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f7f9fb;
+  --background: #ffffff;
   --foreground: #191c1e;
+  --brand-gradient: linear-gradient(135deg, #7c3aed 0%, #5b21b6 50%, #4338ca 100%);
 }
 
 @theme {
-  /* Design System Colors */
-  --color-primary: #000000;
+  /* Design System Colors — PaysaSuchan violet theme */
+  --color-primary: #7c3aed;
+  --color-primary-dark: #5b21b6;
+  --color-primary-light: #f3f0ff;
+  --color-accent-gold: #f6ad55;
+  --color-surface-dark: #1a202c;
   --color-on-primary: #ffffff;
   --color-inverse-on-surface: #eff1f3;
-  --color-surface-container-low: #f2f4f6;
-  --color-inverse-primary: #bec6e0;
+  --color-surface-container-low: #f8f7fc;
+  --color-inverse-primary: #c4b5fd;
   --color-inverse-surface: #2d3133;
-  --color-surface: #f7f9fb;
+  --color-surface: #ffffff;
   --color-on-secondary-fixed: #002113;
   --color-on-secondary-container: #00714d;
   --color-on-error-container: #93000a;
   --color-on-secondary: #ffffff;
-  --color-on-primary-container: #7c839b;
-  --color-tertiary-container: #07006c;
-  --color-surface-container-high: #e6e8ea;
-  --color-primary-container: #131b2e;
+  --color-on-primary-container: #5b21b6;
+  --color-tertiary-container: #4338ca;
+  --color-surface-container-high: #ede9fe;
+  --color-primary-container: #ede9fe;
   --color-outline: #76777d;
   --color-error-container: #ffdad6;
-  --color-primary-fixed: #dae2fd;
-  --color-background: #f7f9fb;
+  --color-primary-fixed: #ede9fe;
+  --color-background: #ffffff;
   --color-on-surface: #191c1e;
   --color-surface-variant: #e0e3e5;
-  --color-surface-container: #eceef0;
-  --color-on-tertiary-container: #7073ff;
+  --color-surface-container: #f3f0ff;
+  --color-on-tertiary-container: #4338ca;
   --color-secondary: #006c49;
-  --color-primary-fixed-dim: #bec6e0;
+  --color-primary-fixed-dim: #c4b5fd;
   --color-tertiary-fixed: #e1e0ff;
-  --color-on-primary-fixed: #131b2e;
+  --color-on-primary-fixed: #5b21b6;
   --color-surface-container-highest: #e0e3e5;
   --color-on-surface-variant: #45464d;
   --color-outline-variant: #c6c6cd;
-  --color-surface-tint: #565e74;
-  --color-tertiary: #000000;
-  --color-on-primary-fixed-variant: #3f465c;
+  --color-surface-tint: #7c3aed;
+  --color-tertiary: #4338ca;
+  --color-on-primary-fixed-variant: #5b21b6;
   --color-secondary-fixed-dim: #4edea3;
   --color-error: #ba1a1a;
   --color-on-tertiary: #ffffff;
@@ -122,7 +127,18 @@ body {
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(12px);
   border: 1px solid var(--color-outline-variant);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 4px 6px -1px rgba(124, 58, 237, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+}
+
+.bg-brand-gradient {
+  background: var(--brand-gradient);
+}
+
+.text-gradient-brand {
+  background: var(--brand-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .scrollbar-hide::-webkit-scrollbar {

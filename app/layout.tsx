@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Corporate Pro Ledger",
-  description: "Real-time enterprise expenditure governance metrics.",
+  title: 'PaysaSuchan',
+  description: 'Smart expense tracking for you and your groups.',
 };
 
 export default function RootLayout({
