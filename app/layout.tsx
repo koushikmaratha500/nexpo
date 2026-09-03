@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Figtree, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/components/auth/AuthContext";
 import { ToastProvider } from "@/components/providers/ToastProvider";
+import { BRAND_DESCRIPTION, BRAND_NAME } from "@/lib/brand/constants";
+import { getBrandOgImagePath } from "@/lib/brand/logos";
 import "./globals.css";
 
 const figtree = Figtree({
@@ -15,8 +17,28 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'PaysaSuchan',
-  description: 'Smart expense tracking for you and your groups.',
+  title: BRAND_NAME,
+  description: BRAND_DESCRIPTION,
+  icons: {
+    icon: [
+      { url: '/favicon-16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/favicon-32.png', sizes: '32x32', type: 'image/png' },
+    ],
+    apple: '/apple-touch-icon.png',
+  },
+  openGraph: {
+    type: 'website',
+    siteName: BRAND_NAME,
+    title: BRAND_NAME,
+    description: BRAND_DESCRIPTION,
+    images: [{ url: getBrandOgImagePath(), width: 1200, height: 630, alt: BRAND_NAME }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: BRAND_NAME,
+    description: BRAND_DESCRIPTION,
+    images: [getBrandOgImagePath()],
+  },
 };
 
 export default function RootLayout({

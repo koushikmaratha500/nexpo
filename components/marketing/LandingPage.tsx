@@ -46,8 +46,10 @@ export function LandingPage() {
   const { user, isLoading } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const primaryCtaHref = !isLoading && user ? '/customer' : '/auth/register';
-  const primaryCtaLabel = !isLoading && user ? 'Open Dashboard' : 'Get Started Free';
+  const isAuthenticated = !isLoading && !!user;
+  const dashboardHref = user?.role === 'ADMIN' ? '/admin' : '/customer';
+  const primaryCtaHref = isAuthenticated ? dashboardHref : '/auth/register';
+  const primaryCtaLabel = isAuthenticated ? 'Go to Dashboard' : 'Get Started Free';
 
   return (
     <div className="min-h-screen bg-background text-on-background">
@@ -70,11 +72,13 @@ export function LandingPage() {
           </nav>
 
           <div className="hidden items-center gap-sm md:flex">
-            <Link href="/auth/login">
-              <Button variant="secondary" className="rounded-full px-lg">
-                Sign In
-              </Button>
-            </Link>
+            {!isAuthenticated ? (
+              <Link href="/auth/login">
+                <Button variant="secondary" className="rounded-full px-lg">
+                  Sign In
+                </Button>
+              </Link>
+            ) : null}
             <Link href={primaryCtaHref}>
               <Button className="rounded-full px-lg bg-brand-gradient border-0 shadow-lg shadow-primary/25">
                 {primaryCtaLabel}
@@ -105,11 +109,13 @@ export function LandingPage() {
                   {link.label}
                 </a>
               ))}
-              <Link href="/auth/login" className="mt-sm" onClick={() => setMobileOpen(false)}>
-                <Button variant="secondary" className="w-full rounded-full">
-                  Sign In
-                </Button>
-              </Link>
+              {!isAuthenticated ? (
+                <Link href="/auth/login" className="mt-sm" onClick={() => setMobileOpen(false)}>
+                  <Button variant="secondary" className="w-full rounded-full">
+                    Sign In
+                  </Button>
+                </Link>
+              ) : null}
               <Link href={primaryCtaHref} onClick={() => setMobileOpen(false)}>
                 <Button className="mt-sm w-full rounded-full bg-brand-gradient border-0">{primaryCtaLabel}</Button>
               </Link>
@@ -143,11 +149,13 @@ export function LandingPage() {
                   {primaryCtaLabel}
                 </Button>
               </Link>
-              <Link href="/auth/login">
-                <Button variant="secondary" className="rounded-full border-white/30 bg-white/10 text-white hover:bg-white/20">
-                  Sign In
-                </Button>
-              </Link>
+              {!isAuthenticated ? (
+                <Link href="/auth/login">
+                  <Button variant="secondary" className="rounded-full border-white/30 bg-white/10 text-white hover:bg-white/20">
+                    Sign In
+                  </Button>
+                </Link>
+              ) : null}
             </div>
 
             <div className="mt-xl flex flex-wrap items-center gap-lg opacity-90">
@@ -294,16 +302,26 @@ export function LandingPage() {
                   Features
                 </a>
               </li>
-              <li>
-                <Link href="/auth/register" className="hover:text-white">
-                  Register
-                </Link>
-              </li>
-              <li>
-                <Link href="/auth/login" className="hover:text-white">
-                  Sign In
-                </Link>
-              </li>
+              {isAuthenticated ? (
+                <li>
+                  <Link href={dashboardHref} className="hover:text-white">
+                    Dashboard
+                  </Link>
+                </li>
+              ) : (
+                <>
+                  <li>
+                    <Link href="/auth/register" className="hover:text-white">
+                      Register
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="/auth/login" className="hover:text-white">
+                      Sign In
+                    </Link>
+                  </li>
+                </>
+              )}
             </ul>
           </div>
           <div>

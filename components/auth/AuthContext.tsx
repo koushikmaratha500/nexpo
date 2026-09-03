@@ -109,13 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
     } else {
-      if (pathname === '/') {
-        if (user.role === 'ADMIN') {
-          router.push('/admin');
-        } else {
-          router.push('/customer');
-        }
-      } else if (isAdminAuthPage && user.role === 'ADMIN') {
+      if (isAdminAuthPage && user.role === 'ADMIN') {
         router.push('/admin');
       } else if (pathname.startsWith('/admin') && user.role !== 'ADMIN') {
         router.push('/customer');
