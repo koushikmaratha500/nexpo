@@ -74,13 +74,24 @@ export function LandingPage() {
           <div className="hidden items-center gap-sm md:flex">
             {!isAuthenticated ? (
               <Link href="/auth/login">
-                <Button variant="secondary" className="rounded-full px-lg">
+                <Button
+                  variant="secondary"
+                  className="rounded-full px-lg"
+                  trackId="marketing_header_sign_in"
+                  trackLabel="Sign In"
+                  trackSection="marketing_header"
+                >
                   Sign In
                 </Button>
               </Link>
             ) : null}
             <Link href={primaryCtaHref}>
-              <Button className="rounded-full px-lg bg-brand-gradient border-0 shadow-lg shadow-primary/25">
+              <Button
+                className="rounded-full px-lg bg-brand-gradient border-0 shadow-lg shadow-primary/25"
+                trackId={isAuthenticated ? 'marketing_header_go_dashboard' : 'marketing_header_get_started'}
+                trackLabel={primaryCtaLabel}
+                trackSection="marketing_header"
+              >
                 {primaryCtaLabel}
               </Button>
             </Link>
@@ -145,13 +156,24 @@ export function LandingPage() {
 
             <div className="mt-xl flex flex-wrap items-center gap-md">
               <Link href={primaryCtaHref}>
-                <Button className="rounded-full bg-surface-dark px-xl py-md text-on-primary shadow-xl">
+                <Button
+                  className="rounded-full bg-surface-dark px-xl py-md text-on-primary shadow-xl"
+                  trackId={isAuthenticated ? 'marketing_hero_go_dashboard' : 'marketing_hero_get_started'}
+                  trackLabel={primaryCtaLabel}
+                  trackSection="marketing_hero"
+                >
                   {primaryCtaLabel}
                 </Button>
               </Link>
               {!isAuthenticated ? (
                 <Link href="/auth/login">
-                  <Button variant="secondary" className="rounded-full border-white/30 bg-white/10 text-white hover:bg-white/20">
+                  <Button
+                    variant="secondary"
+                    className="rounded-full border-white/30 bg-white/10 text-white hover:bg-white/20"
+                    trackId="marketing_hero_sign_in"
+                    trackLabel="Sign In"
+                    trackSection="marketing_hero"
+                  >
                     Sign In
                   </Button>
                 </Link>
@@ -279,7 +301,12 @@ export function LandingPage() {
           Join {BRAND_NAME} — personal tracking, group splits, and shareable receipts in one place.
         </p>
         <Link href={primaryCtaHref} className="mt-xl inline-block">
-          <Button className="rounded-full bg-surface-dark px-2xl py-md text-on-primary shadow-xl">
+          <Button
+            className="rounded-full bg-surface-dark px-2xl py-md text-on-primary shadow-xl"
+            trackId={isAuthenticated ? 'marketing_footer_go_dashboard' : 'marketing_footer_get_started'}
+            trackLabel={primaryCtaLabel}
+            trackSection="marketing_footer_cta"
+          >
             {primaryCtaLabel}
           </Button>
         </Link>

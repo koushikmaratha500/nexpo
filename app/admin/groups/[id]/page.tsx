@@ -12,6 +12,7 @@ import {
   type GroupMemberItem,
   type GroupBalanceMember,
 } from '@/components/features/groups';
+import { useTrackTab } from '@/components/analytics/AnalyticsProvider';
 import { UserProfileLink } from '@/components/features/users';
 import { useToast } from '@/hooks/useToast';
 
@@ -43,6 +44,7 @@ export default function AdminGroupDetailPage() {
     currencySymbol: string;
   } | null>(null);
   const [activeTab, setActiveTab] = useState<AdminGroupTab>('members');
+  const trackTab = useTrackTab('admin_group_detail');
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingBalances, setIsLoadingBalances] = useState(false);
 
@@ -166,7 +168,10 @@ export default function AdminGroupDetailPage() {
           <button
             key={tab.id}
             type="button"
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => {
+              setActiveTab(tab.id);
+              trackTab(tab.id, tab.label);
+            }}
             className={`px-4 py-2 rounded-full font-label-md font-bold ${
               activeTab === tab.id
                 ? 'bg-primary text-on-primary'

@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useOptionalAnalytics } from '@/components/analytics/AnalyticsProvider';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 
 export interface NavLink {
@@ -62,7 +63,16 @@ export function SidebarNav({
   onLinkClick,
 }: SidebarNavProps) {
   const pathname = usePathname();
+  const analytics = useOptionalAnalytics();
   const activeNavPath = getActiveNavPath(pathname, navLinks);
+
+  const trackNav = (link: NavLink, navSurface: 'sidebar' | 'bottom_nav') => {
+    analytics?.trackNavEvent({
+      navItem: link.name,
+      navPath: link.path,
+      navSurface,
+    });
+  };
 
   const renderNavLinks = (mobile = false) =>
     navLinks.map((link) => {
@@ -83,7 +93,10 @@ export function SidebarNav({
         <Link
           key={link.path}
           href={link.path}
-          onClick={mobile ? onLinkClick : undefined}
+          onClick={() => {
+            trackNav(link, 'sidebar');
+            if (mobile) onLinkClick?.();
+          }}
           className={baseClassName}
         >
           <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
@@ -99,6 +112,13 @@ export function SidebarNav({
       {showHelpCenter && (
         <Link
           href="/customer/support"
+          onClick={() =>
+            analytics?.trackNavEvent({
+              navItem: 'Help Center',
+              navPath: '/customer/support',
+              navSurface: 'sidebar',
+            })
+          }
           className={`flex items-center gap-4 px-4 py-2 transition-colors ${
             mobile
               ? 'text-on-surface-variant hover:text-primary hover:bg-surface-container rounded-lg'
@@ -114,6 +134,10 @@ export function SidebarNav({
       <button
         onClick={onLogoutClick}
         type="button"
+        data-track="auth_logout"
+        data-track-type="button"
+        data-track-label="Logout"
+        data-track-section="sidebar_footer"
         className={`flex items-center gap-4 px-4 py-2 text-on-surface-variant hover:text-error hover:bg-error-container/10 rounded-lg text-left transition-colors cursor-pointer ${mobile ? '' : ''}`}
       >
         <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">

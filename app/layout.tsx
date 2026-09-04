@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Figtree, Geist_Mono } from "next/font/google";
+import { Suspense } from 'react';
 import { AuthProvider } from "@/components/auth/AuthContext";
+import { AnalyticsProvider } from "@/components/analytics/AnalyticsProvider";
+import { GoogleTagManagerBody, GoogleTagManagerHead } from "@/components/analytics/GoogleTagManager";
 import { ToastProvider } from "@/components/providers/ToastProvider";
 import { BRAND_DESCRIPTION, BRAND_NAME } from "@/lib/brand/constants";
 import { getBrandOgImagePath } from "@/lib/brand/logos";
@@ -62,10 +65,16 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col bg-background text-on-background">
+        <GoogleTagManagerHead />
+        <GoogleTagManagerBody />
         <AuthProvider>
-          <ToastProvider>
-            {children}
-          </ToastProvider>
+          <Suspense fallback={null}>
+            <AnalyticsProvider>
+              <ToastProvider>
+                {children}
+              </ToastProvider>
+            </AnalyticsProvider>
+          </Suspense>
         </AuthProvider>
       </body>
     </html>
