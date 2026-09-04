@@ -35,6 +35,7 @@ Brand assets ship in `public/brand/` and `mobile/assets/` (run `npm run brand:ch
 | `UPSTASH_REDIS_REST_TOKEN` | If rate limits | |
 | `TRIGGER_SECRET_KEY` | If Trigger | Background jobs |
 | `NEXT_PUBLIC_BRAND_LOGO_URL` | Optional | Swap logo without redeploy |
+| `NEXT_PUBLIC_GTM_ID` | Optional | Google Tag Manager container ID (e.g. `GTM-MVSSX5X5`) — see `docs/analytics/TRACKING_PLAN.md` |
 
 **Do not set in production:**
 

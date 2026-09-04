@@ -2,12 +2,13 @@ import { NextResponse } from 'next/server';
 
 const BASELINE_CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com",
   // Google Fonts CSS (Material Symbols + legacy link tags in layout)
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data: https://fonts.gstatic.com",
   "connect-src 'self' https:",
+  "frame-src 'self' https://www.googletagmanager.com",
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",

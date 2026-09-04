@@ -4,10 +4,15 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   children: React.ReactNode;
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'tertiary';
   className?: string;
+  /** Stable analytics id — sets data-track for GTM click events */
+  trackId?: string;
+  trackLabel?: string;
+  trackSection?: string;
+  trackType?: 'button' | 'link' | 'tab' | 'nav' | 'fab' | 'menu' | 'modal' | 'form';
 }
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { children, variant = 'primary', className = '', ...props },
+  { children, variant = 'primary', className = '', trackId, trackLabel, trackSection, trackType = 'button', ...props },
   ref,
 ) {
   const baseStyle = 'flex items-center justify-center gap-1 px-4 py-2 rounded-lg font-title-md text-title-md transition-all active:scale-95 duration-200 select-none cursor-pointer';
@@ -24,6 +29,14 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
     <button
       ref={ref}
       className={`${baseStyle} ${variants[variant]} ${className}`}
+      {...(trackId
+        ? {
+            'data-track': trackId,
+            'data-track-label': trackLabel,
+            'data-track-section': trackSection,
+            'data-track-type': trackType,
+          }
+        : {})}
       {...props}
     >
       {children}

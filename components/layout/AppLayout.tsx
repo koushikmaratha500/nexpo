@@ -3,6 +3,7 @@
 import React, { useState, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { useOptionalAnalytics } from '@/components/analytics/AnalyticsProvider';
 import { Header } from '@/components/layout/Header';
 import { SidebarNav, NavLink, getActiveNavPath } from '@/components/layout/SidebarNav';
 import { LogoutConfirmModal } from '@/components/layout/LogoutConfirmModal';
@@ -42,6 +43,7 @@ export function AppLayout({
   onLogout,
 }: AppLayoutProps) {
   const pathname = usePathname();
+  const analytics = useOptionalAnalytics();
   const activeNavPath = getActiveNavPath(pathname, navLinks);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
@@ -91,6 +93,13 @@ export function AppLayout({
             <Link
               key={link.path}
               href={link.path}
+              onClick={() =>
+                analytics?.trackNavEvent({
+                  navItem: link.name,
+                  navPath: link.path,
+                  navSurface: 'bottom_nav',
+                })
+              }
               className={`flex flex-col items-center justify-center rounded-xl px-4 py-1 transition-transform active:scale-95 ${
                 isActive
                   ? 'bg-primary-container text-on-primary-container font-bold shadow-sm'
@@ -108,6 +117,10 @@ export function AppLayout({
       {showFab && (
         <button
           onClick={onFabClick}
+          data-track="customer_add_transaction_fab"
+          data-track-type="fab"
+          data-track-label={fabLabel || 'Add Transaction'}
+          data-track-section="customer_shell"
           className="fixed right-[50px] bottom-[50px] z-50 w-14 h-14 bg-black hover:bg-neutral-800 text-white rounded-full flex items-center justify-center shadow-xl active:scale-95 hover:scale-105 transition-all duration-200 cursor-pointer"
           title={fabLabel || 'Add'}
         >
