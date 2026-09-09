@@ -1,0 +1,110 @@
+// Release 6.0 — Proposed bot platform models (draft)
+// Merge into prisma/schema.prisma during Phase 1
+
+enum BotChannel {
+  WHATSAPP
+  TELEGRAM
+}
+
+enum ChannelAccountStatus {
+  PENDING
+  LINKED
+  REVOKED
+}
+
+enum BotRequestStatus {
+  RECEIVED
+  PROCESSING
+  COMPLETED
+  FAILED
+  DUPLICATE
+}
+
+enum ConversationState {
+  IDLE
+  AWAITING_AMOUNT
+  AWAITING_DESCRIPTION
+  AWAITING_CATEGORY
+  AWAITING_CONFIRM
+}
+
+model ChannelAccount {
+  id              String               @id @default(uuid())
+  userId          String
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel         BotChannel
+  externalUserId  String               // Telegram chat id or WhatsApp phone/jid
+  externalPhone   String?              // E.164 when available (WhatsApp)
+  displayName     String?
+  status          ChannelAccountStatus @default(PENDING)
+  linkedAt        DateTime?
+  lastSeenAt      DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@unique([channel, externalUserId])
+  @@index([userId])
+}
+
+model ChannelLinkToken {
+  id         String     @id @default(uuid())
+  userId     String?    // set after web login confirms
+  channel    BotChannel
+  externalUserId String
+  tokenHash  String     @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime   @default(now())
+
+  @@index([expiresAt])
+}
+
+model BotRequest {
+  id                String           @id @default(uuid())
+  idempotencyKey    String           @unique // channel + externalMessageId
+  channel           BotChannel
+  externalMessageId String
+  userId            String?
+  command           String?
+  status            BotRequestStatus @default(RECEIVED)
+  error             String?
+  payload           Json?
+  result            Json?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([channel, createdAt])
+}
+
+model ConversationSession {
+  id              String            @id @default(uuid())
+  userId          String
+  channel         BotChannel
+  externalUserId  String
+  state           ConversationState @default(IDLE)
+  pendingCommand  Json?             // partial BotCommand payload
+  expiresAt       DateTime
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  messages ConversationMessage[]
+
+  @@unique([channel, externalUserId])
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model ConversationMessage {
+  id        String   @id @default(uuid())
+  sessionId String
+  session   ConversationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      String   // user | bot | system
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([sessionId, createdAt])
+}
+
+// Add to User model:
+// channelAccounts ChannelAccount[]
