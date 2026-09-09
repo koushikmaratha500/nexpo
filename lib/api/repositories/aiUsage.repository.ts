@@ -26,4 +26,14 @@ export class AiUsageRepository {
       },
     });
   }
+
+  static async countSuccessfulByFeatures(userId: string, features: string[]): Promise<number> {
+    return prisma.aiUsage.count({
+      where: {
+        userId,
+        feature: { in: features },
+        status: 'OK',
+      },
+    });
+  }
 }

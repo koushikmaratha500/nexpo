@@ -15,6 +15,7 @@ Transport: **`window.dataLayer`** (Google Tag Manager → GA4)
 | `ps_tab_select` | In-page tab switch | Group detail tabs |
 | `ps_form_submit` | *(reserved)* | Auth / forms |
 | `ps_auth` | *(reserved)* | Login / register / logout |
+| `ps_billing` | Upgrade wall, checkout, plan limits | Conversion funnel |
 
 All events include:
 
@@ -66,6 +67,7 @@ All events include:
 | `admin_support` | `/admin/support` | admin | ✅ auto |
 | `admin_support_detail` | `/admin/support/[id]` | admin | ✅ auto |
 | `admin_settings` | `/admin/settings` | admin | ✅ auto |
+| `admin_billing` | `/admin/billing` | admin | ✅ auto |
 
 Source of truth: `lib/analytics/pageRegistry.ts`
 
@@ -152,8 +154,22 @@ Summary after import:
 | CE - ps_click | `ps_click` |
 | CE - ps_nav_select | `ps_nav_select` |
 | CE - ps_tab_select | `ps_tab_select` |
+| CE - ps_billing | `ps_billing` |
 
 Set **`CONST - GA4 Measurement ID`** to your `G-XXXXXXXXXX`, Preview, then **Publish**.
+
+### Billing (`ps_billing`)
+
+| `billing_action` | When |
+|------------------|------|
+| `upgrade_view` | Upgrade modal opens |
+| `checkout_start` | User starts checkout (SKU selected) |
+| `checkout_success` | Razorpay verify or Stripe return `?checkout=success` |
+| `checkout_cancel` | Stripe return `?checkout=cancel` |
+| `write_locked` | API returns 402 write lock |
+| `plan_limit_hit` | API returns 402 feature/limit |
+
+Optional params: `billing_sku`, `billing_provider`, `plan`, `error_code`.
 
 ---
 

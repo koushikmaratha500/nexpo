@@ -7,6 +7,7 @@ import { getAiConfig } from '@/lib/ai/config';
 import { extractReceipt } from '@/lib/ai/agents/receipt.agent';
 import { inferOcrImageMimeType, OCR_IMAGE_MIME_TYPES } from '@/lib/files/receiptImage';
 import { toProviderHttpError, unwrapProviderError } from '@/lib/ai/errors';
+import { PlanService } from '@/lib/api/services/plan.service';
 
 const SUPPORTED_MIME_TYPES: readonly string[] = OCR_IMAGE_MIME_TYPES;
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -31,6 +32,7 @@ export async function POST(req: NextRequest) {
   try {
     const user = await authGuard(req, 'CUSTOMER');
     userId = user.id;
+    await PlanService.assertCanRunOcr(user.id);
 
     await checkRateLimit(req, `ai_ocr:${user.id}`, {
       limit: OCR_DAILY_LIMIT,

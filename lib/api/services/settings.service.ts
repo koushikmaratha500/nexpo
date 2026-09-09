@@ -2,6 +2,7 @@ import { SettingsRepository } from '../repositories/settings.repository';
 import { isResendEnabled } from '../utils/emailConfig';
 import type { SystemSettingsResponse, UpdateSystemSettingsDto } from '../dtos/settings.dto';
 import { Prisma } from '@prisma/client';
+import { isRazorpayConfigured, isStripeConfigured } from '@/lib/billing/config';
 
 const POLICY_KEYS = {
   baseCurrency: 'baseCurrency',
@@ -17,6 +18,10 @@ const NOTIFICATION_KEYS = {
   defaultChannels: 'notifications.defaultChannels',
 } as const;
 
+const BILLING_KEYS = {
+  checkoutProvider: 'billing.checkoutProvider',
+} as const;
+
 export const DEFAULT_SYSTEM_SETTINGS: Omit<SystemSettingsResponse, 'resendEnabled'> = {
   baseCurrency: 'INR',
   matchingRate: 90,
@@ -27,6 +32,11 @@ export const DEFAULT_SYSTEM_SETTINGS: Omit<SystemSettingsResponse, 'resendEnable
     emailRemindersEnabled: true,
     inAppEnabled: true,
     defaultChannels: ['IN_APP'],
+  },
+  billing: {
+    checkoutProvider: 'razorpay',
+    razorpayConfigured: false,
+    stripeConfigured: false,
   },
 };
 
@@ -77,6 +87,12 @@ function mapStoredSettings(rows: Array<{ key: string; value: unknown }>): Omit<S
         defaults.notifications.defaultChannels,
       ),
     },
+    billing: {
+      checkoutProvider:
+        byKey.get(BILLING_KEYS.checkoutProvider) === 'stripe' ? 'stripe' : 'razorpay',
+      razorpayConfigured: isRazorpayConfigured(),
+      stripeConfigured: isStripeConfigured(),
+    },
   };
 }
 
@@ -121,6 +137,13 @@ export class SettingsService {
       entries.push({
         key: NOTIFICATION_KEYS.defaultChannels,
         value: data.notifications.defaultChannels,
+      });
+    }
+
+    if (data.billing?.checkoutProvider !== undefined) {
+      entries.push({
+        key: BILLING_KEYS.checkoutProvider,
+        value: data.billing.checkoutProvider,
       });
     }
 

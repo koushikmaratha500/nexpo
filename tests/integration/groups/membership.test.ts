@@ -5,6 +5,14 @@ import { GroupService } from '@/lib/api/services/group.service';
 import { GroupRepository } from '@/lib/api/repositories/group.repository';
 import { UserRepository } from '@/lib/api/repositories/user.repository';
 
+vi.mock('@/lib/api/services/plan.service', () => ({
+  PlanService: {
+    assertWritesAllowed: vi.fn(),
+    assertCanCreateGroup: vi.fn(),
+    assertCanAddGroupMember: vi.fn(),
+  },
+}));
+
 vi.mock('@/lib/api/repositories/group.repository', () => ({
   GroupRepository: {
     createWithAdminMember: vi.fn(),

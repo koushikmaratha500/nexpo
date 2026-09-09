@@ -9,7 +9,11 @@ import Image from 'next/image';
 import axios from 'axios';
 import { PasswordInput } from '@/components/forms/PasswordInput';
 import { NotificationPreferencesCard } from '@/components/features/notifications';
+import { BillingInvoices, BillingSubscription, UsageMeters, usePlan } from '@/components/features/billing';
+import { formatInr } from '@/lib/billing/catalog';
 import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { trackBilling } from '@/lib/analytics/track';
 
 interface CountryOption {
   id: string;
@@ -28,6 +32,9 @@ interface CurrencyOption {
 export default function CustomerSettingsPage() {
   const { user, updateUser } = useAuth();
   const { addToast } = useToast();
+  const { plan, setUpgradeOpen, refresh } = usePlan();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
 
   const [firstName, setFirstName] = useState(() => user?.firstName || '');
   const [lastName, setLastName] = useState(() => user?.lastName || '');
@@ -47,6 +54,27 @@ export default function CustomerSettingsPage() {
   const [isUploading, setIsUploading] = useState(false);
 
   const metadataFetchedRef = useRef(false);
+  const checkoutHandledRef = useRef(false);
+
+  useEffect(() => {
+    if (checkoutHandledRef.current) return;
+    const checkout = searchParams.get('checkout');
+    if (!checkout) return;
+    checkoutHandledRef.current = true;
+    const pageSearch = searchParams.toString() ? `?${searchParams.toString()}` : '';
+    if (checkout === 'success') {
+      trackBilling(pathname, pageSearch, {
+        action: 'checkout_success',
+        provider: 'stripe',
+        plan: plan?.plan,
+      });
+      addToast('Payment received. Your plan will update shortly.', 'success');
+      void refresh();
+    } else if (checkout === 'cancel') {
+      trackBilling(pathname, pageSearch, { action: 'checkout_cancel', provider: 'stripe' });
+      addToast('Checkout was cancelled.', 'info');
+    }
+  }, [searchParams, addToast, refresh, pathname, plan?.plan]);
 
   // Load countries & currencies on mount
   useEffect(() => {
@@ -165,6 +193,32 @@ export default function CustomerSettingsPage() {
           <p className="font-body-lg text-body-lg text-on-surface-variant mt-1">Update your credentials, profile details, and avatars.</p>
         </div>
       </div>
+
+      {plan && (
+        <Card className="bg-surface-container-lowest" glass={false}>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h3 className="font-title-md font-bold text-primary">Current plan</h3>
+              <p className="text-sm text-on-surface-variant mt-1">
+                {plan.plan === 'PRO' && 'Pro · lifetime'}
+                {plan.plan === 'STARTER' && `Starter · ${plan.billingInterval === 'YEAR' ? 'yearly' : 'monthly'}`}
+                {plan.plan === 'FREEMIUM' && plan.writesLocked && 'Freemium trial ended — writes locked'}
+                {plan.plan === 'FREEMIUM' && !plan.writesLocked && `Freemium trial · ${plan.trialDaysLeft} days left`}
+              </p>
+            </div>
+            {plan.plan !== 'PRO' && (
+              <Button type="button" onClick={() => setUpgradeOpen(true)}>
+                {plan.writesLocked ? 'Upgrade to continue' : `Plans from ${formatInr(100)}/mo`}
+              </Button>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {plan && <UsageMeters plan={plan} />}
+
+      <BillingSubscription />
+      <BillingInvoices />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Profile Details Form */}

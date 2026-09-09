@@ -74,7 +74,10 @@ export class BaseController {
       const zodMsg = getZodMessage(error);
       if (zodMsg) return NextResponse.json({ error: zodMsg }, { status: 400 });
       if (error instanceof HttpError) {
-        return NextResponse.json({ error: error.message }, { status: error.status });
+        return NextResponse.json(
+          { error: error.message, ...(error.extra ?? {}) },
+          { status: error.status },
+        );
       }
       const message = getErrorMessage(error, options?.fallbackMessage);
       const status = options?.errorStatus ?? resolveErrorStatus(error, 500);
@@ -91,7 +94,10 @@ export class BaseController {
       return this.success(data);
     } catch (error: unknown) {
       if (error instanceof HttpError) {
-        return this.error(error.message, error.status);
+        return NextResponse.json(
+          { success: false, error: error.message, ...(error.extra ?? {}) } as ApiResponse,
+          { status: error.status },
+        );
       }
       if (getZodMessage(error)) {
         return this.badRequest(getZodMessage(error)!);

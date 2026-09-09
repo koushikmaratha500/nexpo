@@ -25,7 +25,7 @@ export function getBrandLogoSrcSet(variant: BrandLogoVariant, theme: BrandLogoTh
 
 export function getBrandEmailLogoUrl(): string {
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
-  return `${appUrl}${BRAND_ASSET_BASE_PATH}/email-header-560x160.png`;
+  return `${appUrl}${BRAND_ASSET_BASE_PATH}/email-header.png`;
 }
 
 export function getBrandOgImagePath(): string {
@@ -33,13 +33,13 @@ export function getBrandOgImagePath(): string {
 }
 
 export function getBrandPublicReceiptLogoPath(): string {
-  return `${BRAND_ASSET_BASE_PATH}/public-receipt-logo-720x192.png`;
+  return `${BRAND_ASSET_BASE_PATH}/public-receipt-logo.png`;
 }
 
 export const BRAND_LOGO_DIMENSIONS = {
   full: { width: 1080, height: 288, aspect: 1080 / 288 },
   icon: { width: 1024, height: 1024, aspect: 1 },
-  wordmark: { width: 900, height: 220, aspect: 900 / 220 },
+  wordmark: { width: 1000, height: 240, aspect: 1000 / 240 },
 } as const;
 
 export function getBrandLogoDisplaySize(

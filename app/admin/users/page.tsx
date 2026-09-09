@@ -10,6 +10,7 @@ import { TablePagination } from '@/components/ui/TablePagination';
 import axios from 'axios';
 import { useToast } from '@/hooks/useToast';
 import { PasswordInput } from '@/components/forms/PasswordInput';
+import { formatSignupSource } from '@/lib/auth/signupSource';
 
 interface APIUser {
   id: string;
@@ -21,8 +22,13 @@ interface APIUser {
   status: string;
   forcedResetPassword?: boolean;
   lastPasswordChangedDate?: string | null;
+  plan?: string;
+  planStatus?: string;
+  billingInterval?: string;
+  trialEndsAt?: string | null;
   country: { name: string } | null;
   currency: { code: string } | null;
+  provider?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -280,6 +286,8 @@ export default function UserManagementPage() {
               <TableRow>
                 <TableHead>Customer Profile</TableHead>
                 <TableHead>Role</TableHead>
+                <TableHead>Signup source</TableHead>
+                <TableHead>Plan</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead align="right">Actions</TableHead>
               </TableRow>
@@ -312,6 +320,20 @@ export default function UserManagementPage() {
                     <TableCell>
                       <span className="px-2 py-0.5 rounded-md font-label-md text-[10px] font-bold bg-surface-variant text-on-surface-variant">
                         CUSTOMER
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span className={`px-2 py-0.5 rounded-md font-label-md text-[10px] font-bold ${
+                        u.provider === 'GOOGLE'
+                          ? 'bg-primary-container/20 text-on-primary-container'
+                          : 'bg-surface-variant text-on-surface-variant'
+                      }`}>
+                        {formatSignupSource(u.provider)}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span className="px-2 py-0.5 rounded-md font-label-md text-[10px] font-bold bg-surface-variant text-on-surface-variant">
+                        {u.plan === 'PRO' ? 'Pro' : u.plan === 'STARTER' ? 'Starter' : 'Freemium'}
                       </span>
                     </TableCell>
                     <TableCell>

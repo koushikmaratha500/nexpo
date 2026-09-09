@@ -4,6 +4,7 @@ import {
   ANALYTICS_EVENTS,
   type AnalyticsUserRole,
   type PageContext,
+  type TrackBillingInput,
   type TrackClickInput,
   type TrackNavInput,
   type TrackTabInput,
@@ -75,6 +76,25 @@ export function trackTabSelect(
     tab_id: input.tabId,
     tab_label: input.tabLabel,
     section: input.section,
+  });
+}
+
+export function trackBilling(
+  pathname: string,
+  search: string,
+  input: TrackBillingInput,
+  userRole?: 'ADMIN' | 'CUSTOMER' | null,
+): void {
+  pushToDataLayer({
+    event: ANALYTICS_EVENTS.billing,
+    ...buildPageContext(pathname, search),
+    user_role: getUserRole(userRole),
+    timestamp: nowIso(),
+    billing_action: input.action,
+    billing_sku: input.sku,
+    billing_provider: input.provider,
+    plan: input.plan,
+    error_code: input.errorCode,
   });
 }
 

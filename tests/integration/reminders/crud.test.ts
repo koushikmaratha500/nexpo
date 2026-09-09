@@ -7,6 +7,13 @@ import { NotificationService } from '@/lib/api/services/notification.service';
 import { ReminderRepository } from '@/lib/api/repositories/reminder.repository';
 import { SettingsService } from '@/lib/api/services/settings.service';
 
+vi.mock('@/lib/api/services/plan.service', () => ({
+  PlanService: {
+    assertWritesAllowed: vi.fn(),
+    assertCanCreateReminder: vi.fn(),
+  },
+}));
+
 vi.mock('@/lib/api/repositories/reminder.repository', () => ({
   ReminderRepository: {
     create: vi.fn(),

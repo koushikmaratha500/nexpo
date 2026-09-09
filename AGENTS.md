@@ -57,6 +57,7 @@ Server-only AI helpers (Release 3.0) built on the **Vercel AI SDK v7** + **OpenR
 - **PushService** — server-only OneSignal REST (`ONESIGNAL_APP_ID`, `ONESIGNAL_REST_API_KEY`).
 - **EmailService** — Resend; gated by `ENABLE_RESEND` via `lib/api/utils/emailConfig.ts`.
 - Effective delivery = admin global policy AND user preference AND channel-specific rules (email also requires Resend).
-- Due reminder dispatch: `ReminderDispatchService` via `POST /api/internal/reminders/dispatch` + `REMINDER_DISPATCH_SECRET`.
+- Due reminder dispatch: `ReminderDispatchService` via Trigger.dev `reminder-due-dispatch` (daily) or `POST /api/internal/reminders/dispatch` + `REMINDER_DISPATCH_SECRET`.
+- Billing lifecycle dispatch: `BillingDispatchService` via Trigger.dev `billing-lifecycle-dispatch` (daily) or `POST /api/internal/billing/dispatch` + `BILLING_DISPATCH_SECRET` (falls back to `REMINDER_DISPATCH_SECRET`).
 - Customer UI: `components/features/notifications/` (bell, preferences, OneSignal provider); reminders in `components/features/reminders/`.
 <!-- END:layered-architecture -->

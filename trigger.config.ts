@@ -15,6 +15,9 @@ const HEALTH_ENV_KEYS = [
   'ONESIGNAL_REST_API_KEY',
   'OPENROUTER_API_KEY',
   'AI_ENABLED',
+  'BILLING_DISPATCH_SECRET',
+  'REMINDER_DISPATCH_SECRET',
+  'NEXT_PUBLIC_APP_URL',
 ] as const;
 
 export default defineConfig({
@@ -22,7 +25,7 @@ export default defineConfig({
   // Prisma 7 rejects Trigger.dev's default Node 21.7.3 runtime.
   runtime: 'node-22',
   dirs: ['./trigger'],
-  maxDuration: 60,
+  maxDuration: 120,
   retries: {
     enabledInDev: false,
     default: {

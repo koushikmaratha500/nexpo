@@ -1,5 +1,6 @@
 import { TransactionRepository } from '../repositories/transaction.repository';
 import { MetaResolutionService } from './meta-resolution.service';
+import { PlanService } from './plan.service';
 import { AuditAction } from '@prisma/client';
 import { createTransactionSchema } from '../dtos/transaction.dto';
 import type { z } from 'zod';
@@ -23,6 +24,7 @@ interface TransactionMeta {
 
 export class TransactionService {
   static async createTransaction(userId: string, data: TransactionData, meta: TransactionMeta = {}) {
+    await PlanService.assertCanCreatePersonalTransactions(userId, 1);
     const resolved = await MetaResolutionService.resolveForTransaction(data);
 
     const transaction = await TransactionRepository.create({
@@ -81,6 +83,7 @@ export class TransactionService {
   }
 
   static async updateTransaction(id: string, userId: string, data: Partial<TransactionData>, meta: TransactionMeta = {}) {
+    await PlanService.assertWritesAllowed(userId);
     const original = await TransactionRepository.findById(id, userId, true);
     if (!original) {
       throw new Error('Transaction not found or unauthorized');
@@ -128,6 +131,7 @@ export class TransactionService {
   }
 
   static async deleteTransaction(id: string, userId: string, meta: TransactionMeta = {}) {
+    await PlanService.assertWritesAllowed(userId);
     const original = await TransactionRepository.findById(id, userId, true);
     if (!original) {
       throw new Error('Transaction not found or unauthorized');
@@ -239,6 +243,7 @@ export class TransactionService {
     items: { transactionId: string; dueDate: Date }[],
     _meta: TransactionMeta = {}
   ) {
+    await PlanService.assertCanCreatePersonalTransactions(userId, items.length);
     const normalized = items.map((item) => ({
       transactionId: item.transactionId,
       dueDate: new Date(item.dueDate),

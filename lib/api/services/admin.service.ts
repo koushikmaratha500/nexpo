@@ -5,8 +5,9 @@ import { SessionRepository } from '../repositories/session.repository';
 import { AuditLogRepository } from '../repositories/audit-log.repository';
 import { SupportRepository } from '../repositories/support.repository';
 import { hashPassword } from './auth.service';
-import { AuditAction } from '@prisma/client';
-import { CreateUserDto, UpdateUserDto, CreateAdminDto, UpdateAdminDto, ResetUserPasswordDto } from '../dtos/admin.dto';
+import { AuditAction, AuthProvider, BillingInterval, BillingPlan } from '@prisma/client';
+import { CreateUserDto, UpdateUserDto, CreateAdminDto, UpdateAdminDto, ResetUserPasswordDto, GrantUserPlanDto } from '../dtos/admin.dto';
+import { PlanService } from './plan.service';
 
 export interface RequestMeta {
   ip?: string | null;
@@ -135,11 +136,17 @@ export class AdminService {
         lastName: user.lastName || '',
         email: user.email || '',
         mobile: user.mobile || '',
+        provider: user.provider,
         status: user.status,
         emailVerified: user.emailVerified,
         mobileVerified: user.mobileVerified,
         forcedResetPassword: user.forcedResetPassword,
         lastPasswordChangedDate: user.lastPasswordChangedDate,
+        plan: user.plan,
+        planStatus: user.planStatus,
+        billingInterval: user.billingInterval,
+        trialEndsAt: user.trialEndsAt,
+        currentPeriodEndsAt: user.currentPeriodEndsAt,
         profileImageUrl: user.profileImageUrl || null,
         country: user.country || null,
         currency: user.currency || null,
@@ -219,6 +226,7 @@ export class AdminService {
       countryId: dto.countryId || null,
       currencyId: dto.currencyId || null,
       emailVerified: true,
+      provider: AuthProvider.EMAIL,
     });
 
     await UserRepository.createAudit({
@@ -382,6 +390,37 @@ export class AdminService {
         email: updated.email,
         forcedResetPassword: updated.forcedResetPassword,
         lastPasswordChangedDate: updated.lastPasswordChangedDate,
+      },
+      ipAddress: meta.ip || null,
+      userAgent: meta.ua || null,
+      status: 'A',
+    });
+
+    return updated;
+  }
+
+  static async grantUserPlan(id: string, dto: GrantUserPlanDto, meta: RequestMeta = {}) {
+    const original = await UserRepository.findById(id);
+    if (!original) {
+      throw new Error('User not found');
+    }
+
+    const interval = dto.billingInterval === 'YEAR' ? BillingInterval.YEAR : BillingInterval.MONTH;
+    const updated = await PlanService.grantPlan(id, dto.plan as BillingPlan, interval);
+
+    await UserRepository.createAudit({
+      userId: id,
+      action: AuditAction.UPDATE,
+      oldValue: {
+        plan: original.plan,
+        planStatus: original.planStatus,
+        billingInterval: original.billingInterval,
+      },
+      newValue: {
+        plan: updated.plan,
+        planStatus: updated.planStatus,
+        billingInterval: updated.billingInterval,
+        note: 'Plan granted by admin',
       },
       ipAddress: meta.ip || null,
       userAgent: meta.ua || null,

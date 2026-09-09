@@ -4,9 +4,12 @@ import { router } from 'expo-router';
 import { useAuth } from '../../../src/context/AuthContext';
 import { CustomerTabBar, FabAddTransaction } from '../../../src/components/layout/CustomerTabBar';
 import { AppIcon } from '../../../src/components/ui/AppIcon';
+import { PlanStatusBanner } from '../../../src/components/billing/PlanStatusBanner';
+import { useMobilePlanContext } from '../../../src/context/PlanContext';
 
 export default function TabsLayout() {
   const { user, isLoading } = useAuth();
+  const { plan } = useMobilePlanContext();
 
   if (isLoading) {
     return (
@@ -22,6 +25,7 @@ export default function TabsLayout() {
 
   return (
     <View className="flex-1">
+      <PlanStatusBanner />
       <Tabs
         tabBar={(props) => <CustomerTabBar {...props} />}
         screenOptions={{
@@ -47,7 +51,7 @@ export default function TabsLayout() {
         <Tabs.Screen name="assistant" options={{ title: 'AI Assistant' }} />
         <Tabs.Screen name="settings" options={{ title: 'Settings' }} />
       </Tabs>
-      <FabAddTransaction />
+      {!plan?.writesLocked ? <FabAddTransaction /> : null}
     </View>
   );
 }

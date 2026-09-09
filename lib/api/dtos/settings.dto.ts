@@ -9,12 +9,17 @@ export const notificationSettingsSchema = z.object({
   defaultChannels: z.array(reminderChannelSchema).min(1).optional(),
 });
 
+export const billingSettingsSchema = z.object({
+  checkoutProvider: z.enum(['razorpay', 'stripe']).optional(),
+});
+
 export const updateSystemSettingsSchema = z.object({
   baseCurrency: z.string().trim().length(3, 'Currency code must be 3 letters').optional(),
   matchingRate: z.number().int().min(50).max(100).optional(),
   requireReceipt: z.boolean().optional(),
   autoApproveLimit: z.number().min(0).optional(),
   notifications: notificationSettingsSchema.optional(),
+  billing: billingSettingsSchema.optional(),
 });
 
 export type UpdateSystemSettingsDto = z.infer<typeof updateSystemSettingsSchema>;
@@ -29,6 +34,11 @@ export interface SystemSettingsResponse {
     emailRemindersEnabled: boolean;
     inAppEnabled: boolean;
     defaultChannels: Array<'IN_APP' | 'EMAIL' | 'PUSH' | 'WHATSAPP'>;
+  };
+  billing: {
+    checkoutProvider: 'razorpay' | 'stripe';
+    razorpayConfigured: boolean;
+    stripeConfigured: boolean;
   };
   resendEnabled: boolean;
 }

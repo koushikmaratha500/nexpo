@@ -2,10 +2,10 @@ import { GroupMemberRole } from '@prisma/client';
 import { HttpError } from '../middleware/errorHandler';
 import { GroupRepository } from '../repositories/group.repository';
 import { UserRepository } from '../repositories/user.repository';
+import { PlanService } from './plan.service';
 import { normalizeUsername } from '../utils/username';
 import type { CreateGroupDto, InviteGroupMemberDto, UpdateGroupDto } from '../dtos/group.dto';
 
-const MAX_GROUP_MEMBERS = 50;
 const INVITE_TTL_DAYS = 7;
 
 export class GroupService {
@@ -42,6 +42,7 @@ export class GroupService {
   }
 
   static async createGroup(userId: string, data: CreateGroupDto) {
+    await PlanService.assertCanCreateGroup(userId);
     const { group, member } = await GroupRepository.createWithAdminMember({
       name: data.name.trim(),
       description: data.description?.trim() || null,
@@ -90,6 +91,7 @@ export class GroupService {
   }
 
   static async updateGroup(groupId: string, userId: string, data: UpdateGroupDto) {
+    await PlanService.assertWritesAllowed(userId);
     await this.assertAdmin(groupId, userId);
 
     const group = await GroupRepository.findById(groupId);
@@ -111,6 +113,7 @@ export class GroupService {
   }
 
   static async deleteGroup(groupId: string, userId: string) {
+    await PlanService.assertWritesAllowed(userId);
     await this.assertAdmin(groupId, userId);
 
     const group = await GroupRepository.findById(groupId);
@@ -124,15 +127,11 @@ export class GroupService {
 
   static async inviteMember(groupId: string, userId: string, data: InviteGroupMemberDto) {
     await this.assertAdmin(groupId, userId);
+    await PlanService.assertCanAddGroupMember(userId, groupId);
 
     const group = await GroupRepository.findById(groupId);
     if (!group) {
       throw new HttpError(404, 'Group not found');
-    }
-
-    const memberCount = await GroupRepository.countMembers(groupId);
-    if (memberCount >= MAX_GROUP_MEMBERS) {
-      throw new HttpError(400, `Groups are limited to ${MAX_GROUP_MEMBERS} members`);
     }
 
     const invitee = await this.resolveUserByIdentifier(data);
@@ -190,6 +189,7 @@ export class GroupService {
   }
 
   static async promoteMember(groupId: string, actorUserId: string, memberId: string) {
+    await PlanService.assertWritesAllowed(actorUserId);
     await this.assertAdmin(groupId, actorUserId);
 
     const member = await GroupRepository.findMemberById(memberId);
@@ -206,6 +206,7 @@ export class GroupService {
   }
 
   static async removeMember(groupId: string, actorUserId: string, memberId: string) {
+    await PlanService.assertWritesAllowed(actorUserId);
     const actorMembership = await GroupRepository.findMembership(groupId, actorUserId);
     if (!actorMembership) {
       throw new HttpError(403, 'You do not have access to this group');

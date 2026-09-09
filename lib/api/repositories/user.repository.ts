@@ -70,6 +70,10 @@ export class UserRepository {
       payload.lastPasswordChangedDate = new Date();
     }
 
+    if (payload.trialEndsAt === undefined) {
+      payload.trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    }
+
     return prisma.user.create({ data: payload });
   }
 

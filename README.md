@@ -79,7 +79,7 @@ See `release4.1/plan.md` for the full variable matrix and `release4.1/migration-
 * **API (`/app/api/user/*`, `/app/api/admin/*`, `/app/api/internal/*`):** Layered controllers → services → repositories (see `AGENTS.md`).
 * **Groups:** `/api/user/groups/*` — membership, group transactions/splits, balances, reminders, settlement CSV export.
 * **Notifications:** `/api/user/notifications/*`, `/api/user/notification-preferences`, `/api/user/reminders/*`.
-* **Internal cron:** `POST /api/internal/reminders/dispatch` (header `x-reminder-dispatch-secret`).
+* **Background jobs (Trigger.dev):** scheduled tasks in `/trigger` — reminder dispatch, billing lifecycle, receipt-share cleanup, health check. Internal HTTP routes remain for manual runs.
 * **State (`/store`):** Zustand stores — `authStore`, `transactionStore`, `themeStore`.
 * **Feature Components (`/components/features`):** auth, transactions, dashboard, assistant, groups, notifications, reminders, support.
 * **Layouts (`/app`):** Role paths `/admin` and `/customer`.
@@ -131,13 +131,43 @@ JWT_SECRET=test npm run build
 
 Manual checklist: `release4.1/regression-checklist.md`.
 
-### Reminder dispatch (staging/prod)
+### Trigger.dev (scheduled jobs)
 
-Schedule daily:
+```env
+TRIGGER_PROJECT_REF=proj_...     # from Trigger.dev dashboard
+TRIGGER_SECRET_KEY=tr_dev_...    # DEV key for local trigger dev; use PROD key in Trigger env for deploy
+REMINDER_DISPATCH_SECRET=        # optional manual curl auth for internal routes
+BILLING_DISPATCH_SECRET=         # optional; falls back to REMINDER_DISPATCH_SECRET
+```
+
+Login once, then run the dev worker (registers tasks to your DEV environment):
+
+```bash
+npx trigger.dev@latest login
+npm run trigger:dev
+```
+
+Deploy to production (registers schedules in Trigger dashboard):
+
+```bash
+npm run trigger:deploy
+```
+
+| Task id | Schedule (IST) | Purpose |
+|---------|----------------|---------|
+| `reminder-due-dispatch` | Daily 07:00 | Due payment reminders (in-app, email, push) |
+| `billing-lifecycle-dispatch` | Daily 08:00 | Trial-ending emails + expire lapsed Starter subs |
+| `purge-expired-receipt-shares` | Daily 02:30 | Remove expired public receipt links |
+| `daily-health-check` | Daily 06:00 | DB / Redis / email / AI connectivity |
+
+Manual fallback (same logic as Trigger tasks):
 
 ```bash
 curl -X POST -H "x-reminder-dispatch-secret: $REMINDER_DISPATCH_SECRET" \
   https://your-host/api/internal/reminders/dispatch
+
+curl -X POST -H "x-billing-dispatch-secret: $BILLING_DISPATCH_SECRET" \
+  https://your-host/api/internal/billing/dispatch
 ```
 
 ---

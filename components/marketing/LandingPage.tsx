@@ -6,9 +6,11 @@ import { BrandLogo } from '@/components/brand/BrandLogo';
 import { Button } from '@/components/ui/Button';
 import { BRAND_DESCRIPTION, BRAND_NAME, BRAND_TAGLINE } from '@/lib/brand/constants';
 import { useAuth } from '@/components/auth/AuthContext';
+import { PricingSection } from '@/components/marketing/PricingSection';
 
 const NAV_LINKS = [
   { href: '#features', label: 'Features' },
+  { href: '#pricing', label: 'Pricing' },
   { href: '#partners', label: 'Partners' },
   { href: '#experience', label: 'Experience' },
 ] as const;
@@ -295,6 +297,12 @@ export function LandingPage() {
         </div>
       </section>
 
+      <PricingSection
+        primaryCtaHref={primaryCtaHref}
+        primaryCtaLabel={primaryCtaLabel}
+        showFreemium
+      />
+
       <section className="bg-brand-gradient px-lg py-3xl text-center text-on-primary">
         <h2 className="font-headline-md text-headline-md font-black">Ready to simplify your finances?</h2>
         <p className="mx-auto mt-md max-w-lg font-body-lg text-body-lg text-white/85">
@@ -328,6 +336,11 @@ export function LandingPage() {
                 <a href="#features" className="hover:text-white">
                   Features
                 </a>
+              </li>
+              <li>
+                <Link href="/pricing" className="hover:text-white">
+                  Pricing
+                </Link>
               </li>
               {isAuthenticated ? (
                 <li>

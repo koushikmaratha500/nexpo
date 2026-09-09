@@ -7,10 +7,9 @@ import crypto from 'crypto';
 import { EmailService } from './email.service';
 import { OtpService } from './otp.service';
 import * as jose from 'jose';
-import { AuditAction } from '@prisma/client';
+import { AuditAction, AuthProvider, BillingInterval, BillingPlan, PlanStatus } from '@prisma/client';
 import { assertValidUsername, isValidUsername } from '../utils/username';
 import { verifySupabaseAccessToken } from '@/lib/supabase/verifyAccessToken';
-import { AuthProvider } from '@prisma/client';
 
 function getJwtSecretBytes(): Uint8Array {
   const secret = process.env.JWT_SECRET?.trim();
@@ -95,6 +94,10 @@ export class AuthService {
       lastName: data.lastName || null,
       email: data.email,
       passwordHash: hashedPassword,
+      provider: AuthProvider.EMAIL,
+      plan: BillingPlan.FREEMIUM,
+      planStatus: PlanStatus.TRIALING,
+      billingInterval: BillingInterval.NONE,
       status: 'P',
       countryId: countryRecord ? countryRecord.id : null,
       currencyId: countryRecord ? countryRecord.currencyId : null,
@@ -103,7 +106,7 @@ export class AuthService {
     await UserRepository.createAudit({
       userId: user.id,
       action: AuditAction.CREATE,
-      newValue: { email: user.email, firstName: user.firstName, status: user.status },
+      newValue: { email: user.email, firstName: user.firstName, status: user.status, provider: 'EMAIL' },
       ipAddress: meta.ip || null,
       userAgent: meta.ua || null,
       status: 'A',
@@ -296,6 +299,9 @@ export class AuthService {
         email: googleUser.email,
         profileImageUrl: googleUser.avatarUrl,
         provider: AuthProvider.GOOGLE,
+        plan: BillingPlan.FREEMIUM,
+        planStatus: PlanStatus.TRIALING,
+        billingInterval: BillingInterval.NONE,
         status: 'A',
         emailVerified: true,
         countryId: countryRecord?.id ?? null,
@@ -317,7 +323,6 @@ export class AuthService {
 
       const updates: Parameters<typeof UserRepository.update>[1] = {
         emailVerified: true,
-        provider: AuthProvider.GOOGLE,
       };
 
       if (user.status === 'P') {
