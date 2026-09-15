@@ -3,6 +3,7 @@ import customParseFormat from 'dayjs/plugin/customParseFormat';
 import { parseCsv, buildCsv } from '../utils/csv';
 import { MetaRepository } from '../repositories/meta.repository';
 import { TransactionRepository } from '../repositories/transaction.repository';
+import { PlanService } from './plan.service';
 
 dayjs.extend(customParseFormat);
 
@@ -367,6 +368,7 @@ export class ImportService {
     meta: { ip?: string; ua?: string } = {}
   ) {
     if (!rows.length) throw new Error('No rows to import');
+    await PlanService.assertCanCreatePersonalTransactions(userId, rows.length);
 
     const [categories, paymentTypes, currencies] = await Promise.all([
       MetaRepository.getActiveCategories(),

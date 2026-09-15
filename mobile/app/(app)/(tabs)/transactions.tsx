@@ -21,8 +21,11 @@ import {
   type Transaction,
   type TransactionType,
   type UserMetadata,
+  DEFAULT_CURRENCY_CODE,
+  resolvePreferredCurrencyCode,
 } from '@nexpo/shared';
 import { useTransactionStore } from '../../../src/store/transactionStore';
+import { useAuth } from '../../../src/context/AuthContext';
 import { useToast } from '../../../src/hooks/useToast';
 import { Button } from '../../../src/components/ui/Button';
 import { Card } from '../../../src/components/ui/Card';
@@ -49,14 +52,14 @@ interface FormState {
   recurringDay: string;
 }
 
-const defaultForm = (): FormState => ({
+const createDefaultForm = (currency = DEFAULT_CURRENCY_CODE): FormState => ({
   type: 'DEBIT',
   title: '',
   merchant: '',
   category: '',
   amount: '',
   date: dateToInputFormat(new Date()),
-  currency: 'INR',
+  currency,
   paymentType: 'Credit Card',
   notes: '',
   isRecurring: false,
@@ -65,6 +68,7 @@ const defaultForm = (): FormState => ({
 
 export default function TransactionsScreen() {
   const { openAdd: openAddParam } = useLocalSearchParams<{ openAdd?: string }>();
+  const { user } = useAuth();
   const { addToast } = useToast();
   const {
     transactions,
@@ -82,10 +86,14 @@ export default function TransactionsScreen() {
   const [filter, setFilter] = useState<FilterType>('ALL');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
-  const [form, setForm] = useState<FormState>(defaultForm());
+  const [form, setForm] = useState<FormState>(() => createDefaultForm());
   const [file, setFile] = useState<{ uri: string; name: string; type: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [metadata, setMetadata] = useState<UserMetadata | null>(null);
+  const preferredCurrencyCode = useMemo(
+    () => resolvePreferredCurrencyCode(user?.currencyId, metadata?.currencies ?? []),
+    [user?.currencyId, metadata?.currencies],
+  );
   const [recurringOpen, setRecurringOpen] = useState(false);
   const [selectedRecurring, setSelectedRecurring] = useState<Record<string, boolean>>({});
   const fetched = useRef(false);
@@ -114,7 +122,7 @@ export default function TransactionsScreen() {
 
   const openAdd = () => {
     setEditing(null);
-    setForm(defaultForm());
+    setForm(createDefaultForm(preferredCurrencyCode));
     setFile(null);
     setModalOpen(true);
   };

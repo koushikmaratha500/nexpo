@@ -18,7 +18,16 @@ export const ANALYTICS_EVENTS = {
   navSelect: 'ps_nav_select',
   formSubmit: 'ps_form_submit',
   auth: 'ps_auth',
+  billing: 'ps_billing',
 } as const;
+
+export type BillingAction =
+  | 'upgrade_view'
+  | 'checkout_start'
+  | 'checkout_success'
+  | 'checkout_cancel'
+  | 'write_locked'
+  | 'plan_limit_hit';
 
 export type AnalyticsEventName = (typeof ANALYTICS_EVENTS)[keyof typeof ANALYTICS_EVENTS];
 
@@ -63,11 +72,29 @@ export interface NavSelectPayload extends AnalyticsBasePayload {
   nav_surface: 'sidebar' | 'bottom_nav' | 'header' | 'footer';
 }
 
+export interface BillingPayload extends AnalyticsBasePayload {
+  event: typeof ANALYTICS_EVENTS.billing;
+  billing_action: BillingAction;
+  billing_sku?: string;
+  billing_provider?: string;
+  plan?: string;
+  error_code?: string;
+}
+
 export type AnalyticsPayload =
   | PageViewPayload
   | ClickPayload
   | TabSelectPayload
-  | NavSelectPayload;
+  | NavSelectPayload
+  | BillingPayload;
+
+export interface TrackBillingInput {
+  action: BillingAction;
+  sku?: string;
+  provider?: string;
+  plan?: string;
+  errorCode?: string;
+}
 
 export interface TrackClickInput {
   elementId: string;

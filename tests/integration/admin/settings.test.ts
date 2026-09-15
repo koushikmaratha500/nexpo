@@ -29,6 +29,7 @@ describe('SettingsService', () => {
   it('returns defaults when no rows exist', async () => {
     const settings = await SettingsService.getSettings();
     expect(settings.baseCurrency).toBe(DEFAULT_SYSTEM_SETTINGS.baseCurrency);
+    expect(settings.billing.pricingEnabled).toBe(true);
     expect(settings.notifications.defaultChannels).toEqual(['IN_APP']);
     expect(settings.resendEnabled).toBe(false);
   });
@@ -44,6 +45,23 @@ describe('SettingsService', () => {
     expect(settings.baseCurrency).toBe('USD');
     expect(settings.matchingRate).toBe(80);
     expect(settings.notifications.pushEnabled).toBe(false);
+  });
+
+  it('persists pricing toggle updates', async () => {
+    mockedFindAll.mockResolvedValue([
+      { key: 'billing.pricingEnabled', value: false, updatedByAdminId: 'admin-1', createdAt: new Date(), updatedAt: new Date() },
+    ] as never);
+
+    const settings = await SettingsService.updateSettings(
+      { billing: { pricingEnabled: false } },
+      'admin-1',
+    );
+
+    expect(mockedUpsertMany).toHaveBeenCalledWith(
+      [{ key: 'billing.pricingEnabled', value: false }],
+      'admin-1',
+    );
+    expect(settings.billing.pricingEnabled).toBe(false);
   });
 
   it('persists partial updates and returns merged settings', async () => {

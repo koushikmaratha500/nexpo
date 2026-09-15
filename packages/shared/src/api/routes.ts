@@ -27,6 +27,16 @@ export const API_ROUTES = {
     importValidate: '/api/user/transactions/import/validate',
     import: '/api/user/transactions/import',
   },
+  plan: '/api/user/plan',
+  billing: {
+    checkout: '/api/user/billing/checkout',
+    verify: '/api/user/billing/verify',
+    subscription: '/api/user/billing/subscription',
+    cancel: '/api/user/billing/cancel',
+    profile: '/api/user/billing/profile',
+    invoices: '/api/user/billing/invoices',
+    invoiceById: (id: string) => `/api/user/billing/invoices/${id}`,
+  },
   groups: {
     list: '/api/user/groups',
     byId: (id: string) => `/api/user/groups/${id}`,

@@ -156,6 +156,12 @@ export class GroupRepository {
     });
   }
 
+  static async countActiveMemberships(userId: string): Promise<number> {
+    return prisma.groupMember.count({
+      where: { userId, group: { status: 'A' } },
+    });
+  }
+
   static async addMember(groupId: string, userId: string, role: GroupMemberRole = GroupMemberRole.MEMBER) {
     return prisma.groupMember.create({
       data: { groupId, userId, role },

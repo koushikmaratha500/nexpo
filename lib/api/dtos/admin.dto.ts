@@ -41,6 +41,13 @@ export const resetUserPasswordSchema = z.object({
 
 export type ResetUserPasswordDto = z.infer<typeof resetUserPasswordSchema>;
 
+export const grantUserPlanSchema = z.object({
+  plan: z.enum(['FREEMIUM', 'STARTER', 'PRO']),
+  billingInterval: z.enum(['MONTH', 'YEAR']).optional(),
+});
+
+export type GrantUserPlanDto = z.infer<typeof grantUserPlanSchema>;
+
 export const paginationSchema = z.object({
   page: z.coerce.number().min(1).optional().default(1),
   pageSize: z.coerce.number().min(1).max(200).optional().default(20),

@@ -8,6 +8,7 @@ export interface PageDefinition {
 /** Stable page names for reporting — order matters (first match wins). */
 export const PAGE_REGISTRY: PageDefinition[] = [
   { pattern: /^\/$/, name: 'marketing_home', title: 'Home', section: 'marketing' },
+  { pattern: /^\/pricing$/, name: 'marketing_pricing', title: 'Pricing', section: 'marketing' },
   { pattern: /^\/auth\/login$/, name: 'auth_login', title: 'Sign In', section: 'auth' },
   { pattern: /^\/auth\/register$/, name: 'auth_register', title: 'Register', section: 'auth' },
   { pattern: /^\/auth\/forgot-password$/, name: 'auth_forgot_password', title: 'Forgot Password', section: 'auth' },
@@ -41,6 +42,7 @@ export const PAGE_REGISTRY: PageDefinition[] = [
   { pattern: /^\/admin\/support\/[^/]+$/, name: 'admin_support_detail', title: 'Support Ticket', section: 'admin' },
   { pattern: /^\/admin\/support$/, name: 'admin_support', title: 'Support', section: 'admin' },
   { pattern: /^\/admin\/settings$/, name: 'admin_settings', title: 'Settings', section: 'admin' },
+  { pattern: /^\/admin\/billing$/, name: 'admin_billing', title: 'Billing', section: 'admin' },
   { pattern: /^\/admin$/, name: 'admin_dashboard', title: 'Admin Dashboard', section: 'admin' },
 ];
 

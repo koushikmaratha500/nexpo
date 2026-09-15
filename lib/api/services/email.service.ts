@@ -145,6 +145,218 @@ export class EmailService {
     }
   }
 
+  static async sendTrialEndingEmail(
+    to: string,
+    params: { firstName: string; daysLeft: number; trialDays: number },
+  ) {
+    if (!isResendEnabled()) {
+      console.log(`[Email Simulation] Trial ending To: ${to}, Days left: ${params.daysLeft}`);
+      return { success: true, simulated: true as const };
+    }
+
+    const resend = getResendClient();
+    if (!resend) {
+      return { success: false, error: new Error('Resend client unavailable') };
+    }
+
+    try {
+      const result = await resend.emails.send({
+        from: getResendFromEmail(),
+        to,
+        subject: `${params.daysLeft} day${params.daysLeft === 1 ? '' : 's'} left on your ${BRAND_NAME} trial`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+            <h2 style="color: #111827;">Hi ${params.firstName},</h2>
+            <p>Your ${params.trialDays}-day Freemium trial ends in <strong>${params.daysLeft} day${params.daysLeft === 1 ? '' : 's'}</strong>.</p>
+            <p>After that, your data stays safe but adding or editing will pause until you choose Starter or Pro.</p>
+            <p>Starter is ₹100/month or ₹1,000/year. Pro is ₹10,000 lifetime.</p>
+          </div>
+        `,
+      });
+
+      if (result.error) {
+        return { success: false, error: new Error(formatSendError(result.error)) };
+      }
+
+      return { success: true, id: result.data?.id };
+    } catch (error) {
+      return { success: false, error };
+    }
+  }
+
+  static async sendInvoiceEmail(
+    to: string,
+    params: { invoiceNumber: string; planLabel: string; total: string; pdfBytes: Uint8Array },
+  ) {
+    if (!isResendEnabled()) {
+      console.log(
+        `[Email Simulation] Invoice To: ${to}, No: ${params.invoiceNumber}, Total: ${params.total}`,
+      );
+      return { success: true, simulated: true as const };
+    }
+
+    const resend = getResendClient();
+    if (!resend) {
+      return { success: false, error: new Error('Resend client unavailable') };
+    }
+
+    try {
+      const result = await resend.emails.send({
+        from: getResendFromEmail(),
+        to,
+        subject: `${BRAND_NAME} invoice ${params.invoiceNumber}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+            <h2 style="color: #111827;">Payment receipt</h2>
+            <p>Thank you for subscribing to <strong>${params.planLabel}</strong>.</p>
+            <p>Invoice <strong>${params.invoiceNumber}</strong> — ${params.total} (incl. GST).</p>
+            <p>Your GST invoice PDF is attached.</p>
+          </div>
+        `,
+        attachments: [
+          {
+            filename: `${params.invoiceNumber}.pdf`,
+            content: Buffer.from(params.pdfBytes),
+          },
+        ],
+      });
+
+      if (result.error) {
+        console.error('Failed to send invoice email:', result.error);
+        return { success: false, error: new Error(formatSendError(result.error)) };
+      }
+
+      return { success: true, id: result.data?.id };
+    } catch (error) {
+      console.error('Failed to send invoice email:', error);
+      return { success: false, error };
+    }
+  }
+
+  static async sendPlanWelcomeEmail(
+    to: string,
+    params: { firstName: string; planLabel: string; isLifetime: boolean },
+  ) {
+    if (!isResendEnabled()) {
+      console.log(`[Email Simulation] Plan welcome To: ${to}, Plan: ${params.planLabel}`);
+      return { success: true, simulated: true as const };
+    }
+
+    const resend = getResendClient();
+    if (!resend) {
+      return { success: false, error: new Error('Resend client unavailable') };
+    }
+
+    const renewalNote = params.isLifetime
+      ? 'You have lifetime Pro access — no renewals required.'
+      : 'Your Starter subscription is active. Manage billing anytime in Settings.';
+
+    try {
+      const result = await resend.emails.send({
+        from: getResendFromEmail(),
+        to,
+        subject: `Welcome to ${params.planLabel} on ${BRAND_NAME}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+            <h2 style="color: #111827;">Hi ${params.firstName},</h2>
+            <p>Your <strong>${params.planLabel}</strong> plan is now active.</p>
+            <p>${renewalNote}</p>
+            <p>Your GST invoice is on its way in a separate email.</p>
+          </div>
+        `,
+      });
+
+      if (result.error) {
+        return { success: false, error: new Error(formatSendError(result.error)) };
+      }
+
+      return { success: true, id: result.data?.id };
+    } catch (error) {
+      return { success: false, error };
+    }
+  }
+
+  static async sendPaymentFailedEmail(
+    to: string,
+    params: { firstName: string; currentPeriodEndsAt: string | null },
+  ) {
+    if (!isResendEnabled()) {
+      console.log(`[Email Simulation] Payment failed To: ${to}`);
+      return { success: true, simulated: true as const };
+    }
+
+    const resend = getResendClient();
+    if (!resend) {
+      return { success: false, error: new Error('Resend client unavailable') };
+    }
+
+    const periodNote = params.currentPeriodEndsAt
+      ? `Update billing before ${new Date(params.currentPeriodEndsAt).toLocaleDateString('en-IN')} to keep editing.`
+      : 'Update billing in Settings to restore full access.';
+
+    try {
+      const result = await resend.emails.send({
+        from: getResendFromEmail(),
+        to,
+        subject: `${BRAND_NAME} — Starter payment failed`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+            <h2 style="color: #111827;">Hi ${params.firstName},</h2>
+            <p>We could not process your latest Starter payment.</p>
+            <p>${periodNote}</p>
+            <p>You can still view your data, but adding or editing may be limited until payment succeeds.</p>
+          </div>
+        `,
+      });
+
+      if (result.error) {
+        return { success: false, error: new Error(formatSendError(result.error)) };
+      }
+
+      return { success: true, id: result.data?.id };
+    } catch (error) {
+      return { success: false, error };
+    }
+  }
+
+  static async sendSubscriptionExpiredEmail(
+    to: string,
+    params: { firstName: string },
+  ) {
+    if (!isResendEnabled()) {
+      console.log(`[Email Simulation] Subscription expired To: ${to}`);
+      return { success: true, simulated: true as const };
+    }
+
+    const resend = getResendClient();
+    if (!resend) {
+      return { success: false, error: new Error('Resend client unavailable') };
+    }
+
+    try {
+      const result = await resend.emails.send({
+        from: getResendFromEmail(),
+        to,
+        subject: `Your ${BRAND_NAME} Starter subscription has ended`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+            <h2 style="color: #111827;">Hi ${params.firstName},</h2>
+            <p>Your Starter subscription period has ended.</p>
+            <p>Your data is safe and you can still view everything. Renew Starter or upgrade to Pro lifetime to keep adding and editing.</p>
+          </div>
+        `,
+      });
+
+      if (result.error) {
+        return { success: false, error: new Error(formatSendError(result.error)) };
+      }
+
+      return { success: true, id: result.data?.id };
+    } catch (error) {
+      return { success: false, error };
+    }
+  }
+
   static async sendSupportConfirmation(to: string, ticketId: string, name: string) {
     if (!isResendEnabled()) {
       console.log(`[Email Simulation] Support Confirmation To: ${to}, Ticket ID: ${ticketId}`);

@@ -19,6 +19,12 @@ interface SystemSettings {
     inAppEnabled: boolean;
     defaultChannels: ReminderChannel[];
   };
+  billing: {
+    checkoutProvider: 'razorpay' | 'stripe';
+    pricingEnabled: boolean;
+    razorpayConfigured: boolean;
+    stripeConfigured: boolean;
+  };
   resendEnabled: boolean;
 }
 
@@ -41,6 +47,10 @@ export default function AdminSettingsPage() {
   const [inAppEnabled, setInAppEnabled] = useState(true);
   const [defaultChannels, setDefaultChannels] = useState<ReminderChannel[]>(['IN_APP']);
   const [resendEnabled, setResendEnabled] = useState(false);
+  const [checkoutProvider, setCheckoutProvider] = useState<'razorpay' | 'stripe'>('razorpay');
+  const [pricingEnabled, setPricingEnabled] = useState(true);
+  const [razorpayConfigured, setRazorpayConfigured] = useState(false);
+  const [stripeConfigured, setStripeConfigured] = useState(false);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -65,6 +75,10 @@ export default function AdminSettingsPage() {
         setInAppEnabled(data.notifications.inAppEnabled);
         setDefaultChannels(data.notifications.defaultChannels);
         setResendEnabled(data.resendEnabled);
+        setCheckoutProvider(data.billing.checkoutProvider);
+        setPricingEnabled(data.billing.pricingEnabled);
+        setRazorpayConfigured(data.billing.razorpayConfigured);
+        setStripeConfigured(data.billing.stripeConfigured);
       } catch (err: unknown) {
         const msg =
           axios.isAxiosError(err) && err.response?.data?.error
@@ -108,6 +122,10 @@ export default function AdminSettingsPage() {
           inAppEnabled,
           defaultChannels,
         },
+        billing: {
+          checkoutProvider,
+          pricingEnabled,
+        },
       });
 
       const data = response.data;
@@ -120,6 +138,9 @@ export default function AdminSettingsPage() {
       setInAppEnabled(data.notifications.inAppEnabled);
       setDefaultChannels(data.notifications.defaultChannels);
       setResendEnabled(data.resendEnabled);
+      setCheckoutProvider(data.billing.checkoutProvider);
+      setRazorpayConfigured(data.billing.razorpayConfigured);
+      setStripeConfigured(data.billing.stripeConfigured);
       addToast('Settings saved successfully.', 'success');
     } catch (err: unknown) {
       const msg =
@@ -323,6 +344,56 @@ export default function AdminSettingsPage() {
         </div>
 
         <div className="lg:col-span-4 flex flex-col gap-6">
+          <Card className="bg-surface-container-lowest flex flex-col gap-4" glass={false}>
+            <h3 className="font-title-md text-title-md font-bold text-primary">Billing & pricing</h3>
+            <p className="font-label-md text-label-md text-on-surface-variant">
+              Control whether paid plans, checkout, and upgrade prompts are shown to customers.
+            </p>
+            <label className="flex items-center gap-4 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={pricingEnabled}
+                onChange={(e) => setPricingEnabled(e.target.checked)}
+                className="w-4 h-4 rounded text-primary focus:ring-0 accent-primary cursor-pointer"
+              />
+              <div className="flex flex-col">
+                <span className="font-body-md font-bold text-primary">Pricing module enabled</span>
+                <span className="font-label-md text-on-surface-variant">
+                  When off, all users get full Pro access and pricing UI is hidden across web and mobile.
+                </span>
+              </div>
+            </label>
+            <div className="h-px bg-outline-variant/50" />
+            <p className="font-label-md text-label-md text-on-surface-variant">
+              Choose the default payment provider for new checkouts. Webhooks for both providers stay active when configured.
+            </p>
+            <div className="flex flex-col gap-2">
+              <label className="font-label-md text-on-surface font-bold uppercase">Active provider</label>
+              <select
+                value={checkoutProvider}
+                onChange={(e) => setCheckoutProvider(e.target.value as 'razorpay' | 'stripe')}
+                className="px-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg text-body-md focus:outline-none focus:border-primary text-on-surface w-full font-bold"
+              >
+                <option value="razorpay" disabled={!razorpayConfigured}>Razorpay{!razorpayConfigured ? ' (not configured)' : ''}</option>
+                <option value="stripe" disabled={!stripeConfigured}>Stripe{!stripeConfigured ? ' (not configured)' : ''}</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-2 mt-2 border-t border-outline-variant/30 pt-4 text-body-md">
+              <div className="flex justify-between">
+                <span className="text-on-surface-variant">Razorpay keys</span>
+                <span className={`font-bold ${razorpayConfigured ? 'text-secondary' : 'text-on-surface-variant'}`}>
+                  {razorpayConfigured ? 'Configured' : 'Missing'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-on-surface-variant">Stripe keys</span>
+                <span className={`font-bold ${stripeConfigured ? 'text-secondary' : 'text-on-surface-variant'}`}>
+                  {stripeConfigured ? 'Configured' : 'Missing'}
+                </span>
+              </div>
+            </div>
+          </Card>
+
           <Card className="bg-surface-container-lowest flex flex-col gap-4" glass={false}>
             <h3 className="font-title-md text-title-md font-bold text-primary">Delivery Status</h3>
             <p className="font-label-md text-label-md text-on-surface-variant">

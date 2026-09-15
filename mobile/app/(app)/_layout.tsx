@@ -1,9 +1,13 @@
 import { View } from 'react-native';
 import { Stack } from 'expo-router';
+import { PlanProvider } from '../../src/context/PlanContext';
+import { MobileUpgradeSheet } from '../../src/components/billing/MobileUpgradeSheet';
 
 export default function AppLayout() {
   return (
+    <PlanProvider>
     <View className="flex-1 bg-background">
+      <MobileUpgradeSheet />
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: '#f7f9fb' },
@@ -18,5 +22,6 @@ export default function AppLayout() {
         <Stack.Screen name="support" options={{ title: 'Help Center' }} />
       </Stack>
     </View>
+    </PlanProvider>
   );
 }

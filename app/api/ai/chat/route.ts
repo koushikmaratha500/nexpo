@@ -9,6 +9,7 @@ import { getModel } from '@/lib/ai/provider';
 import { createFinanceTools } from '@/lib/ai/tools/finance.tools';
 import { COPILOT_SYSTEM } from '@/lib/ai/agents/copilot.system';
 import { toProviderHttpError, unwrapProviderError } from '@/lib/ai/errors';
+import { PlanService } from '@/lib/api/services/plan.service';
 
 const CHAT_DAILY_LIMIT = 20;
 const CHAT_WINDOW_SECONDS = 24 * 60 * 60;
@@ -21,6 +22,7 @@ export async function POST(req: NextRequest) {
   try {
     const user = await authGuard(req, 'CUSTOMER');
     userId = user.id;
+    await PlanService.assertCanUseAi(user.id);
 
     await checkRateLimit(req, `ai_chat:${user.id}`, {
       limit: CHAT_DAILY_LIMIT,

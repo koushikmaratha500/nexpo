@@ -26,6 +26,6 @@ describe('brand logos', () => {
 
   it('exposes og and email asset paths', () => {
     expect(getBrandOgImagePath()).toBe('/brand/og-image.png');
-    expect(getBrandEmailLogoUrl()).toContain('/brand/email-header-560x160.png');
+    expect(getBrandEmailLogoUrl()).toContain('/brand/email-header.png');
   });
 });

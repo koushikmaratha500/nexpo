@@ -6,6 +6,7 @@ import {
   API_ROUTES,
   apiGet,
   apiPatch,
+  apiPost,
   apiUpload,
   type CountryOption,
   type CurrencyOption,
@@ -18,6 +19,7 @@ import { Card } from '../../../src/components/ui/Card';
 import { Input } from '../../../src/components/ui/Input';
 import { ScreenHeader } from '../../../src/components/ui/ScreenHeader';
 import { PageShell } from '../../../src/components/layout/PageShell';
+import { MobileBillingSection } from '../../../src/components/billing/MobileBillingSection';
 
 export default function SettingsScreen() {
   const { user, logout, updateUser } = useAuth();
@@ -119,6 +121,8 @@ export default function SettingsScreen() {
   return (
     <PageShell>
       <ScreenHeader title="Settings" subtitle="Profile, security, and preferences" />
+
+      <MobileBillingSection />
 
       <Card className="mb-lg gap-md">
         <Text className="font-title-md font-bold text-primary">Profile</Text>

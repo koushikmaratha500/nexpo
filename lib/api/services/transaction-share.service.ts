@@ -3,6 +3,7 @@ import { HttpError } from '../middleware/errorHandler';
 import { TransactionShareRepository } from '../repositories/transaction-share.repository';
 import { TransactionRepository } from '../repositories/transaction.repository';
 import { GroupService } from './group.service';
+import { PlanService } from './plan.service';
 import { getPublicAppUrl } from '@/lib/brand/constants';
 import type { CreateTransactionShareDto } from '../dtos/transaction-share.dto';
 
@@ -36,6 +37,7 @@ export class TransactionShareService {
   }
 
   static async createShare(userId: string, transactionId: string, dto: CreateTransactionShareDto) {
+    await PlanService.assertCanShare(userId);
     await this.assertCanShare(userId, transactionId);
 
     const token = randomBytes(16).toString('hex');

@@ -83,6 +83,12 @@ export class TransactionRepository {
     });
   }
 
+  static async countPersonalByUser(userId: string): Promise<number> {
+    return prisma.transaction.count({
+      where: { userId, groupId: null, status: { not: 'D' } },
+    });
+  }
+
   static async findRecentForUser(userId: string, take = 5) {
     return prisma.transaction.findMany({
       where: { userId, groupId: null, status: { not: 'D' } },

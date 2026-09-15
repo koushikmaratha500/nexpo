@@ -4,6 +4,13 @@ import { TransactionRepository } from '@/lib/api/repositories/transaction.reposi
 import { MetaResolutionService } from '@/lib/api/services/meta-resolution.service';
 import { AuditAction } from '@prisma/client';
 
+vi.mock('@/lib/api/services/plan.service', () => ({
+  PlanService: {
+    assertWritesAllowed: vi.fn(),
+    assertCanCreatePersonalTransactions: vi.fn(),
+  },
+}));
+
 vi.mock('@/lib/api/repositories/transaction.repository', () => ({
   TransactionRepository: {
     create: vi.fn(),

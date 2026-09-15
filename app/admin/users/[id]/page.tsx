@@ -9,6 +9,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import axios from 'axios';
 import { useToast } from '@/hooks/useToast';
 import { PasswordInput } from '@/components/forms/PasswordInput';
+import { formatSignupSource } from '@/lib/auth/signupSource';
 
 interface UserDetail {
   id: string;
@@ -16,11 +17,16 @@ interface UserDetail {
   lastName: string;
   email: string;
   mobile: string;
+  provider?: string;
   status: string;
   emailVerified: boolean;
   mobileVerified: boolean;
   forcedResetPassword?: boolean;
   lastPasswordChangedDate?: string | null;
+  plan?: string;
+  planStatus?: string;
+  billingInterval?: string;
+  trialEndsAt?: string | null;
   profileImageUrl: string | null;
   country: { name: string; isoCode: string } | null;
   currency: { code: string; symbol: string } | null;
@@ -123,6 +129,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
   const [selectedExpense, setSelectedExpense] = useState<ExpenseItem | null>(null);
   const [isExpenseDetailsOpen, setIsExpenseDetailsOpen] = useState(false);
   const [isPreviewLoading, setIsPreviewLoading] = useState(true);
+  const [invoices, setInvoices] = useState<Array<{ id: string; invoiceNumber: string; planLabel: string; totalInr: string; issuedAt: string }>>([]);
 
   // Edit form state
   const [editFirstName, setEditFirstName] = useState('');
@@ -140,10 +147,11 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
     async function loadData() {
       setIsLoading(true);
       try {
-        const [detailRes, expensesRes, auditRes] = await Promise.all([
+        const [detailRes, expensesRes, auditRes, invoicesRes] = await Promise.all([
           axios.get(`/api/admin/user/${id}`),
           axios.get(`/api/admin/user/${id}/expenses?page=1&pageSize=100`),
           axios.get(`/api/admin/user/${id}/auditlogs?page=1&pageSize=50`),
+          axios.get(`/api/admin/user/${id}/invoices`).catch(() => ({ data: [] })),
         ]);
 
         if (!isMounted) return;
@@ -151,6 +159,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
         setUser(detailRes.data.user);
         setStats(detailRes.data.stats);
         setExpenses(expensesRes.data.items || []);
+        setInvoices(invoicesRes.data || []);
         setAuditLogs(auditRes.data.items || []);
       } catch (err: any) {
         if (!isMounted) return;
@@ -273,6 +282,31 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
     setIsResetOpen(true);
   };
 
+  const handleGrantPlan = async (plan: 'FREEMIUM' | 'STARTER' | 'PRO', billingInterval?: 'MONTH' | 'YEAR') => {
+    if (!user) return;
+    setIsSubmitting(true);
+    try {
+      const response = await axios.post(`/api/admin/user/${user.id}/plan`, { plan, billingInterval });
+      setUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              plan: response.data.user.plan,
+              planStatus: response.data.user.planStatus,
+              billingInterval: response.data.user.billingInterval,
+              trialEndsAt: response.data.user.trialEndsAt,
+            }
+          : prev,
+      );
+      addToast('Plan updated', 'success');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } }).response?.data?.error || 'Failed to update plan';
+      addToast(msg, 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // Confirm Reset Password via API
   const handleSubmitReset = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -393,6 +427,16 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
                     : 'bg-error-container/20 text-error'
                 }`}>
                   {displayStatus}
+                </span>
+                <span className={`px-2 py-0.5 rounded-md font-label-md text-[10px] font-bold ${
+                  user.provider === 'GOOGLE'
+                    ? 'bg-primary-container/20 text-on-primary-container'
+                    : 'bg-surface-variant text-on-surface-variant'
+                }`}>
+                  {formatSignupSource(user.provider)}
+                </span>
+                <span className="px-2 py-0.5 rounded-md font-label-md text-[10px] font-bold bg-primary-container/20 text-on-primary-container">
+                  {user.plan === 'PRO' ? 'Pro' : user.plan === 'STARTER' ? 'Starter' : 'Freemium'}
                 </span>
                 {user.forcedResetPassword && (
                   <span className="px-2 py-0.5 rounded-full font-label-md text-[10px] font-bold bg-warning-container/20 text-on-warning-container" title="Customer must set a new password on next sign in">
@@ -558,6 +602,44 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
                     <span className="px-2 py-0.5 rounded-md font-label-md text-xs font-bold bg-surface-variant text-on-surface-variant">
                       CUSTOMER
                     </span>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-xs">
+                  <span className="text-on-surface-variant font-bold text-xs uppercase tracking-wider">Signup source</span>
+                  <div>
+                    <span className={`px-2 py-0.5 rounded-md font-label-md text-xs font-bold ${
+                      user.provider === 'GOOGLE'
+                        ? 'bg-primary-container/20 text-on-primary-container'
+                        : 'bg-surface-variant text-on-surface-variant'
+                    }`}>
+                      {formatSignupSource(user.provider)}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-xs">
+                  <span className="text-on-surface-variant font-bold text-xs uppercase tracking-wider">Plan</span>
+                  <div className="flex flex-col gap-2">
+                    <span className="text-primary text-body-lg">
+                      {user.plan === 'PRO' ? 'Pro (lifetime)' : user.plan === 'STARTER' ? `Starter (${user.billingInterval === 'YEAR' ? 'yearly' : 'monthly'})` : `Freemium (${user.planStatus === 'EXPIRED' ? 'expired' : 'trial'})`}
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" variant="secondary" className="px-2 py-1 text-xs" disabled={isSubmitting} onClick={() => handleGrantPlan('FREEMIUM')}>Reset trial</Button>
+                      <Button type="button" variant="secondary" className="px-2 py-1 text-xs" disabled={isSubmitting} onClick={() => handleGrantPlan('STARTER', 'MONTH')}>Grant Starter monthly</Button>
+                      <Button type="button" variant="secondary" className="px-2 py-1 text-xs" disabled={isSubmitting} onClick={() => handleGrantPlan('STARTER', 'YEAR')}>Grant Starter yearly</Button>
+                      <Button type="button" variant="secondary" className="px-2 py-1 text-xs" disabled={isSubmitting} onClick={() => handleGrantPlan('PRO')}>Grant Pro lifetime</Button>
+                    </div>
+                    {invoices.length > 0 && (
+                      <div className="mt-2 text-sm text-on-surface-variant">
+                        <p className="font-bold text-xs uppercase tracking-wider mb-1">GST invoices</p>
+                        <ul className="space-y-1">
+                          {invoices.map((inv) => (
+                            <li key={inv.id}>
+                              {inv.invoiceNumber} · {inv.planLabel} · {inv.totalInr}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="flex flex-col gap-xs">

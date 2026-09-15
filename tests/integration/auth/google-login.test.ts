@@ -90,9 +90,36 @@ describe('AuthService.loginWithGoogle', () => {
 
     expect(mockedUpdateUser).toHaveBeenCalledWith(
       'user-2',
-      expect.objectContaining({ status: 'A', provider: AuthProvider.GOOGLE }),
+      expect.objectContaining({ status: 'A', emailVerified: true }),
+    );
+    expect(mockedUpdateUser).not.toHaveBeenCalledWith(
+      'user-2',
+      expect.objectContaining({ provider: AuthProvider.GOOGLE }),
     );
     expect(result.token).toBeTruthy();
+  });
+
+  it('does not overwrite an existing email signup with Google', async () => {
+    mockedFindByEmail.mockResolvedValue({
+      id: 'user-4',
+      email: 'google@example.com',
+      status: 'A',
+      provider: AuthProvider.EMAIL,
+      profileImageUrl: null,
+    } as never);
+    mockedUpdateUser.mockResolvedValue({
+      id: 'user-4',
+      email: 'google@example.com',
+      status: 'A',
+      provider: AuthProvider.EMAIL,
+    } as never);
+
+    await AuthService.loginWithGoogle('supabase-access-token');
+
+    expect(mockedUpdateUser).toHaveBeenCalledWith(
+      'user-4',
+      expect.not.objectContaining({ provider: AuthProvider.GOOGLE }),
+    );
   });
 
   it('rejects blocked accounts', async () => {
