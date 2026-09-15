@@ -14,7 +14,7 @@ export function useMobilePlan() {
 
 export function PlanStatusBanner() {
   const { plan, setUpgradeOpen } = useMobilePlanContext();
-  if (!plan) return null;
+  if (!plan || plan.pricingEnabled === false) return null;
   if (plan.plan !== 'FREEMIUM' && !plan.writesLocked) return null;
 
   const locked = plan.writesLocked;

@@ -73,7 +73,7 @@ Set in **Vercel** (and **Trigger.dev** if dispatch emails must send from workers
 
 | Provider | URL | Events to enable |
 |----------|-----|------------------|
-| **Razorpay** | `https://<host>/api/billing/webhooks/razorpay` | `payment.captured`, `subscription.*`, `invoice.paid` (as configured in gateway) |
+| **Razorpay** | `https://<host>/api/billing/webhooks/razorpay` | `payment.captured`, `subscription.activated`, `subscription.charged`, `subscription.cancelled`, `subscription.completed`, `payment.failed` |
 | **Stripe** | `https://<host>/api/billing/webhooks/stripe` | `checkout.session.completed`, `invoice.paid`, `customer.subscription.*`, `invoice.payment_failed` |
 
 - [ ] Webhook signing secrets copied into env (`RAZORPAY_WEBHOOK_SECRET`, `STRIPE_WEBHOOK_SECRET`)

@@ -20,6 +20,7 @@ const NOTIFICATION_KEYS = {
 
 const BILLING_KEYS = {
   checkoutProvider: 'billing.checkoutProvider',
+  pricingEnabled: 'billing.pricingEnabled',
 } as const;
 
 export const DEFAULT_SYSTEM_SETTINGS: Omit<SystemSettingsResponse, 'resendEnabled'> = {
@@ -35,6 +36,7 @@ export const DEFAULT_SYSTEM_SETTINGS: Omit<SystemSettingsResponse, 'resendEnable
   },
   billing: {
     checkoutProvider: 'razorpay',
+    pricingEnabled: true,
     razorpayConfigured: false,
     stripeConfigured: false,
   },
@@ -90,6 +92,7 @@ function mapStoredSettings(rows: Array<{ key: string; value: unknown }>): Omit<S
     billing: {
       checkoutProvider:
         byKey.get(BILLING_KEYS.checkoutProvider) === 'stripe' ? 'stripe' : 'razorpay',
+      pricingEnabled: asBoolean(byKey.get(BILLING_KEYS.pricingEnabled), defaults.billing.pricingEnabled),
       razorpayConfigured: isRazorpayConfigured(),
       stripeConfigured: isStripeConfigured(),
     },
@@ -146,12 +149,23 @@ export class SettingsService {
         value: data.billing.checkoutProvider,
       });
     }
+    if (data.billing?.pricingEnabled !== undefined) {
+      entries.push({
+        key: BILLING_KEYS.pricingEnabled,
+        value: data.billing.pricingEnabled,
+      });
+    }
 
     if (entries.length > 0) {
       await SettingsRepository.upsertMany(entries, adminId);
     }
 
     return this.getSettings();
+  }
+
+  static async isPricingEnabled(): Promise<boolean> {
+    const settings = await this.getSettings();
+    return settings.billing.pricingEnabled;
   }
 
   static async isNotificationChannelGloballyEnabled(

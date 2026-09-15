@@ -9,6 +9,7 @@ type CheckoutSku = 'STARTER_MONTHLY' | 'STARTER_YEARLY' | 'PRO_LIFETIME';
 export function MobileUpgradeSheet() {
   const { plan, upgradeOpen, setUpgradeOpen, refresh } = useMobilePlanContext();
   const { addToast } = useToast();
+  if (plan?.pricingEnabled === false) return null;
 
   const prices = plan?.catalog?.pricesInr;
   const checkoutAvailable = plan?.catalog?.checkoutAvailable ?? false;

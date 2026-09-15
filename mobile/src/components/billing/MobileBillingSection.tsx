@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Linking, Text, View } from 'react-native';
-import { API_ROUTES, apiGet, apiPatch, apiPost, getApiBaseUrl } from '@nexpo/shared';
+import { Linking, Pressable, Text, View } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { API_ROUTES, apiGet, apiPatch, apiPost, getApiBaseUrl, shouldShowUpgradeCta } from '@nexpo/shared';
 import { useMobilePlanContext } from '../../context/PlanContext';
 import { useToast } from '../../hooks/useToast';
 import { Button } from '../ui/Button';
@@ -24,6 +25,28 @@ interface InvoiceRow {
   issuedAt: string;
 }
 
+function UsageMeterRow({ label, used, limit }: { label: string; used: number; limit: number }) {
+  const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+  const nearLimit = pct >= 80;
+
+  return (
+    <View className="gap-1">
+      <View className="flex-row justify-between">
+        <Text className="text-sm text-on-surface">{label}</Text>
+        <Text className={`text-sm ${nearLimit ? 'font-semibold text-error' : 'text-on-surface-variant'}`}>
+          {used} / {limit}
+        </Text>
+      </View>
+      <View className="h-2 rounded-full bg-surface-container-high overflow-hidden">
+        <View
+          className={`h-full rounded-full ${nearLimit ? 'bg-error' : 'bg-primary'}`}
+          style={{ width: `${pct}%` }}
+        />
+      </View>
+    </View>
+  );
+}
+
 export function MobileBillingSection() {
   const { plan, refresh, setUpgradeOpen } = useMobilePlanContext();
   const { addToast } = useToast();
@@ -32,6 +55,7 @@ export function MobileBillingSection() {
   const [gstin, setGstin] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [usageOpen, setUsageOpen] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -91,7 +115,7 @@ export function MobileBillingSection() {
     }
   };
 
-  if (loading || !plan) return null;
+  if (loading || !plan || plan.pricingEnabled === false) return null;
 
   const prices = plan.catalog?.pricesInr;
 
@@ -109,16 +133,48 @@ export function MobileBillingSection() {
       </Text>
 
       {plan.limits && !plan.isPaid && !plan.writesLocked && (
-        <View className="gap-1">
-          <Text className="text-xs font-bold uppercase text-on-surface-variant">Trial usage</Text>
-          <Text className="text-sm text-on-surface">
-            Txns {plan.usage.personalTransactions}/{plan.limits.personalTransactions} · OCR{' '}
-            {plan.usage.ocr}/{plan.limits.ocr} · AI {plan.usage.aiMessages}/{plan.limits.aiMessages}
-          </Text>
+        <View className="rounded-xl border border-outline-variant/60 overflow-hidden bg-surface-container-lowest">
+          <Pressable
+            onPress={() => setUsageOpen((value) => !value)}
+            className="flex-row items-center justify-between gap-3 p-4"
+            accessibilityRole="button"
+            accessibilityState={{ expanded: usageOpen }}
+          >
+            <View className="flex-1 min-w-0">
+              <Text className="text-sm font-semibold text-on-surface">Trial usage</Text>
+              <Text className="text-xs text-on-surface-variant mt-0.5">
+                {plan.trialDaysLeft > 0
+                  ? `${plan.trialDaysLeft} day${plan.trialDaysLeft === 1 ? '' : 's'} left in your Freemium trial`
+                  : 'Freemium trial limits'}
+              </Text>
+            </View>
+            <MaterialIcons
+              name={usageOpen ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+              size={22}
+              color="#6b7280"
+            />
+          </Pressable>
+          {usageOpen && (
+            <View className="gap-3 px-4 pb-4 border-t border-outline-variant/20 pt-3">
+              <UsageMeterRow
+                label="Transactions"
+                used={plan.usage.personalTransactions}
+                limit={plan.limits.personalTransactions}
+              />
+              <UsageMeterRow label="Receipt scans" used={plan.usage.ocr} limit={plan.limits.ocr} />
+              <UsageMeterRow label="Groups" used={plan.usage.groups} limit={plan.limits.groups} />
+              <UsageMeterRow
+                label="Reminders"
+                used={plan.usage.activeReminders}
+                limit={plan.limits.activeReminders}
+              />
+              <UsageMeterRow label="Finlit messages" used={plan.usage.aiMessages} limit={plan.limits.aiMessages} />
+            </View>
+          )}
         </View>
       )}
 
-      {plan.plan !== 'PRO' && prices && (
+      {shouldShowUpgradeCta(plan) && prices && (
         <View className="gap-sm">
           {!plan.isPaid && (
             <>

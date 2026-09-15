@@ -3,13 +3,17 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { usePathname, useSearchParams } from 'next/navigation';
+import { useSnackbar } from 'notistack';
 import { trackBilling } from '@/lib/analytics/track';
+import { isPlanLimitError, shouldShowUpgradeCta } from '@/lib/billing/planUi';
 import type { PlanEntitlement } from '@/lib/billing/types';
 import { PLAN_ERROR_CODES } from '@/lib/billing/types';
+import { PlanLimitToastAction } from './PlanLimitToastAction';
 import { PLAN_PRICES_INR, TRIAL_DAYS } from '@/lib/billing/catalog';
 import { useAuth } from '@/components/auth/AuthContext';
 
 export interface PlanCatalog {
+  pricingEnabled?: boolean;
   trialDays: number;
   pricesInr: typeof PLAN_PRICES_INR;
   checkoutAvailable: boolean;
@@ -39,6 +43,7 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { user } = useAuth();
+  const { enqueueSnackbar, closeSnackbar } = useSnackbar();
   const prevUpgradeOpen = useRef(false);
 
   const refresh = useCallback(async () => {
@@ -74,7 +79,6 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
             code === PLAN_ERROR_CODES.FEATURE;
 
           if (isPlanError) {
-            setUpgradeOpen(true);
             const search =
               typeof window !== 'undefined' ? window.location.search : searchParams.toString() ? `?${searchParams.toString()}` : '';
             trackBilling(
@@ -88,6 +92,33 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
               },
               user?.role,
             );
+
+            const message =
+              typeof error.response.data?.error === 'string'
+                ? error.response.data.error
+                : 'You have reached a plan limit.';
+
+            if (plan?.pricingEnabled === false) {
+              return Promise.reject(error);
+            }
+
+            if (isPlanLimitError(code) && shouldShowUpgradeCta(plan)) {
+              enqueueSnackbar(message, {
+                variant: 'warning',
+                autoHideDuration: 8000,
+                action: (key) => (
+                  <PlanLimitToastAction
+                    label="Upgrade"
+                    onClick={() => {
+                      setUpgradeOpen(true);
+                      closeSnackbar(key);
+                    }}
+                  />
+                ),
+              });
+            } else if (code === PLAN_ERROR_CODES.WRITE_LOCKED && shouldShowUpgradeCta(plan)) {
+              setUpgradeOpen(true);
+            }
           }
         }
         return Promise.reject(error);
@@ -97,7 +128,7 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
     return () => {
       axios.interceptors.response.eject(interceptor);
     };
-  }, [pathname, searchParams, user?.role]);
+  }, [pathname, searchParams, user?.role, plan, enqueueSnackbar, closeSnackbar]);
 
   useEffect(() => {
     if (upgradeOpen && !prevUpgradeOpen.current) {

@@ -1,14 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { Button } from '@/components/ui/Button';
 import { BRAND_DESCRIPTION, BRAND_NAME, BRAND_TAGLINE } from '@/lib/brand/constants';
 import { useAuth } from '@/components/auth/AuthContext';
 import { PricingSection } from '@/components/marketing/PricingSection';
 
-const NAV_LINKS = [
+const BASE_NAV_LINKS = [
   { href: '#features', label: 'Features' },
   { href: '#pricing', label: 'Pricing' },
   { href: '#partners', label: 'Partners' },
@@ -47,11 +47,24 @@ const PARTNERS = ['Acme Corp', 'NovaPay', 'SplitWise+', 'LedgerOne', 'FinTrack']
 export function LandingPage() {
   const { user, isLoading } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [pricingEnabled, setPricingEnabled] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/public/config')
+      .then((res) => res.json())
+      .then((data: { pricingEnabled?: boolean }) => {
+        setPricingEnabled(data.pricingEnabled !== false);
+      })
+      .catch(() => setPricingEnabled(true));
+  }, []);
 
   const isAuthenticated = !isLoading && !!user;
   const dashboardHref = user?.role === 'ADMIN' ? '/admin' : '/customer';
   const primaryCtaHref = isAuthenticated ? dashboardHref : '/auth/register';
   const primaryCtaLabel = isAuthenticated ? 'Go to Dashboard' : 'Get Started Free';
+  const navLinks = pricingEnabled
+    ? BASE_NAV_LINKS
+    : BASE_NAV_LINKS.filter((link) => link.href !== '#pricing');
 
   return (
     <div className="min-h-screen bg-background text-on-background">
@@ -62,7 +75,7 @@ export function LandingPage() {
           </Link>
 
           <nav className="hidden items-center gap-xl md:flex">
-            {NAV_LINKS.map((link) => (
+            {navLinks.map((link) => (
               <a
                 key={link.href}
                 href={link.href}
@@ -112,7 +125,7 @@ export function LandingPage() {
         {mobileOpen ? (
           <div className="border-t border-outline-variant/40 px-lg py-md md:hidden">
             <nav className="flex flex-col gap-sm">
-              {NAV_LINKS.map((link) => (
+              {navLinks.map((link) => (
                 <a
                   key={link.href}
                   href={link.href}
@@ -297,11 +310,13 @@ export function LandingPage() {
         </div>
       </section>
 
-      <PricingSection
-        primaryCtaHref={primaryCtaHref}
-        primaryCtaLabel={primaryCtaLabel}
-        showFreemium
-      />
+      {pricingEnabled && (
+        <PricingSection
+          primaryCtaHref={primaryCtaHref}
+          primaryCtaLabel={primaryCtaLabel}
+          showFreemium
+        />
+      )}
 
       <section className="bg-brand-gradient px-lg py-3xl text-center text-on-primary">
         <h2 className="font-headline-md text-headline-md font-black">Ready to simplify your finances?</h2>
@@ -337,11 +352,13 @@ export function LandingPage() {
                   Features
                 </a>
               </li>
-              <li>
-                <Link href="/pricing" className="hover:text-white">
-                  Pricing
-                </Link>
-              </li>
+              {pricingEnabled && (
+                <li>
+                  <Link href="/pricing" className="hover:text-white">
+                    Pricing
+                  </Link>
+                </li>
+              )}
               {isAuthenticated ? (
                 <li>
                   <Link href={dashboardHref} className="hover:text-white">

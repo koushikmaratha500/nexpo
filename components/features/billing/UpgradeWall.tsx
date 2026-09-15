@@ -165,6 +165,8 @@ export function UpgradeWall() {
   const isPro = plan?.plan === 'PRO';
   const isStarterActive = plan?.plan === 'STARTER' && plan.isPaid;
 
+  if (plan?.pricingEnabled === false) return null;
+
   return (
     <Modal
       isOpen={upgradeOpen}

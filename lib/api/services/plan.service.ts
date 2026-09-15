@@ -8,6 +8,7 @@ import { AiUsageRepository } from '../repositories/aiUsage.repository';
 import { FREEMIUM_LIMITS, PAID_GROUP_MEMBER_CAP, PLAN_PRICES_INR, TRIAL_DAYS } from '@/lib/billing/catalog';
 import { PLAN_ERROR_CODES, type PlanEntitlement, type PlanUsage } from '@/lib/billing/types';
 import { BillingService } from './billing.service';
+import { SettingsService } from './settings.service';
 
 function addDays(date: Date, days: number): Date {
   const next = new Date(date);
@@ -26,14 +27,25 @@ function trialDaysLeft(trialEndsAt: Date, now: Date): number {
   return Math.max(0, Math.ceil(ms / (24 * 60 * 60 * 1000)));
 }
 
+const FULL_ACCESS_FEATURES = {
+  csvExport: true,
+  ai: true,
+  ocr: true,
+  groups: true,
+  reminders: true,
+  receiptShare: true,
+} as const;
+
 export class PlanService {
   static async catalog() {
+    const pricingEnabled = await SettingsService.isPricingEnabled();
     const checkout = await BillingService.getCheckoutStatus();
     return {
+      pricingEnabled,
       trialDays: TRIAL_DAYS,
       pricesInr: PLAN_PRICES_INR,
       freemiumLimits: FREEMIUM_LIMITS,
-      checkoutAvailable: checkout.checkoutAvailable,
+      checkoutAvailable: pricingEnabled && checkout.checkoutAvailable,
       activeCheckoutProvider: checkout.activeProvider,
       configuredProviders: checkout.configuredProviders,
       razorpayKeyId: checkout.razorpayKeyId,
@@ -41,9 +53,14 @@ export class PlanService {
   }
 
   static async getEntitlement(userId: string, now = new Date()): Promise<PlanEntitlement> {
+    const pricingEnabled = await SettingsService.isPricingEnabled();
     const user = await UserRepository.findById(userId);
     if (!user) {
       throw new HttpError(404, 'User not found');
+    }
+
+    if (!pricingEnabled) {
+      return this.buildUnlimitedEntitlement(user);
     }
 
     let trialEndsAt = user.trialEndsAt;
@@ -111,6 +128,7 @@ export class PlanService {
       trialDaysLeft: inTrial ? trialDaysLeft(trialEndsAt, now) : 0,
       writesLocked,
       isPaid,
+      pricingEnabled: true,
       features: {
         csvExport: isPaid,
         ai: isPaid || inTrial,
@@ -120,6 +138,28 @@ export class PlanService {
         receiptShare: isPaid || inTrial,
       },
       limits: isPaid ? null : FREEMIUM_LIMITS,
+      usage,
+    };
+  }
+
+  private static async buildUnlimitedEntitlement(user: {
+    id: string;
+    trialEndsAt: Date | null;
+    currentPeriodEndsAt: Date | null;
+  }): Promise<PlanEntitlement> {
+    const usage = await this.collectUsage(user.id);
+    return {
+      plan: BillingPlan.PRO,
+      status: PlanStatus.ACTIVE,
+      billingInterval: BillingInterval.LIFETIME,
+      trialEndsAt: user.trialEndsAt?.toISOString() ?? null,
+      currentPeriodEndsAt: user.currentPeriodEndsAt?.toISOString() ?? null,
+      trialDaysLeft: 0,
+      writesLocked: false,
+      isPaid: true,
+      pricingEnabled: false,
+      features: FULL_ACCESS_FEATURES,
+      limits: null,
       usage,
     };
   }

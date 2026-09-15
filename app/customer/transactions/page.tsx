@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useTransactionStore, type TransactionType, type Transaction } from '@/store/transactionStore';
 import { Button } from '@/components/ui/Button';
@@ -17,6 +17,8 @@ import { PersonalTransactionActionsMenu } from '@/components/features/transactio
 import { TransactionDetailModal } from '@/components/features/transactions/TransactionDetailModal';
 import type { ReceiptExtraction } from '@/lib/ai/types';
 import { fileForOcrUpload, isOcrSupportedImageFile } from '@/lib/files/receiptImage';
+import { useAuth } from '@/components/auth/AuthContext';
+import { DEFAULT_CURRENCY_CODE, resolvePreferredCurrencyCode } from '@/lib/currency/preferredCurrency';
 
 interface CategoryOption {
   id: string;
@@ -370,6 +372,7 @@ function RecurringToggle({
 
 export default function TransactionsPage() {
   const { transactions, fetchTransactions, addTransaction, updateTransaction, deleteTransaction, isLoading, recurringItems, recurringLoading, fetchRecurring, approveRecurring } = useTransactionStore();
+  const { user } = useAuth();
   const { addToast } = useToast();
   const [activeFilter, setActiveFilter] = useState<"ALL" | TransactionType>("ALL");
   const [search, setSearch] = useState('');
@@ -390,6 +393,29 @@ export default function TransactionsPage() {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [viewingTransaction, setViewingTransaction] = useState<Transaction | null>(null);
 
+  const preferredCurrencyCode = useMemo(
+    () => resolvePreferredCurrencyCode(user?.currencyId, currencies),
+    [user?.currencyId, currencies],
+  );
+
+  const createAddFormDefaults = useCallback(
+    (type: TransactionType = 'DEBIT') => ({
+      type,
+      title: '',
+      merchant: '',
+      category: '',
+      amount: '',
+      date: dateToInputFormat(new Date()),
+      currency: preferredCurrencyCode || DEFAULT_CURRENCY_CODE,
+      paymentType: '',
+      notes: '',
+      depositType: 'Account',
+      isRecurring: false,
+      recurringDay: String(new Date().getDate()),
+    }),
+    [preferredCurrencyCode],
+  );
+
   const {
     register: registerAdd,
     handleSubmit: handleSubmitAdd,
@@ -405,7 +431,7 @@ export default function TransactionsPage() {
       category: '',
       amount: '',
       date: dateToInputFormat(new Date()),
-      currency: 'INR',
+      currency: DEFAULT_CURRENCY_CODE,
       paymentType: '',
       notes: '',
       depositType: 'Account',
@@ -465,20 +491,7 @@ export default function TransactionsPage() {
   }, []);
 
   const handleOpenAdd = () => {
-    resetAdd({
-      type: 'DEBIT',
-      title: '',
-      merchant: '',
-      category: '',
-      amount: '',
-      date: dateToInputFormat(new Date()),
-      currency: 'INR',
-      paymentType: '',
-      notes: '',
-      depositType: 'Account',
-      isRecurring: false,
-      recurringDay: String(new Date().getDate()),
-    });
+    resetAdd(createAddFormDefaults('DEBIT'));
     setAddFile(null);
     setIsAddOpen(true);
   };

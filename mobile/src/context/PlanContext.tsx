@@ -1,5 +1,13 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { API_ROUTES, apiGet, setPlanLimitHandler } from '@nexpo/shared';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert } from 'react-native';
+import {
+  API_ROUTES,
+  apiGet,
+  isPlanLimitError,
+  PLAN_ERROR_CODES,
+  setPlanLimitHandler,
+  shouldShowUpgradeCta,
+} from '@nexpo/shared';
 
 export interface MobilePlanCatalog {
   trialDays: number;
@@ -21,6 +29,7 @@ export interface MobilePlanPayload {
   trialDaysLeft: number;
   writesLocked: boolean;
   isPaid: boolean;
+  pricingEnabled?: boolean;
   limits: {
     personalTransactions: number;
     ocr: number;
@@ -53,6 +62,8 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
   const [plan, setPlan] = useState<MobilePlanPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const planRef = useRef<MobilePlanPayload | null>(null);
+  planRef.current = plan;
 
   const refresh = useCallback(async () => {
     try {
@@ -70,7 +81,23 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
   }, [refresh]);
 
   useEffect(() => {
-    setPlanLimitHandler(() => setUpgradeOpen(true));
+    setPlanLimitHandler((details) => {
+      const currentPlan = planRef.current;
+      if (!shouldShowUpgradeCta(currentPlan)) return;
+
+      const message = details.message || 'You have reached a plan limit.';
+      if (isPlanLimitError(details.code)) {
+        Alert.alert('Plan limit reached', message, [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Upgrade', onPress: () => setUpgradeOpen(true) },
+        ]);
+        return;
+      }
+
+      if (details.code === PLAN_ERROR_CODES.WRITE_LOCKED) {
+        setUpgradeOpen(true);
+      }
+    });
     return () => setPlanLimitHandler(null);
   }, []);
 

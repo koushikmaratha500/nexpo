@@ -11,6 +11,7 @@ export const notificationSettingsSchema = z.object({
 
 export const billingSettingsSchema = z.object({
   checkoutProvider: z.enum(['razorpay', 'stripe']).optional(),
+  pricingEnabled: z.boolean().optional(),
 });
 
 export const updateSystemSettingsSchema = z.object({
@@ -37,6 +38,7 @@ export interface SystemSettingsResponse {
   };
   billing: {
     checkoutProvider: 'razorpay' | 'stripe';
+    pricingEnabled: boolean;
     razorpayConfigured: boolean;
     stripeConfigured: boolean;
   };

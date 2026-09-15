@@ -1,29 +1,117 @@
-# Release 6.0 — WhatsApp + Telegram Conversational Interface
+# Release 6.0 — WhatsApp + Telegram + Tines Orchestration
 
-> **Purpose:** Add PaySaSuchan as a conversational financial assistant on **WhatsApp (OpenWA)** and **Telegram (grammY)**, with a channel-independent bot/command engine. PaySaSuchan remains the system of record.
+> **Purpose:** Conversational PaySaSuchan on **WhatsApp (OpenWA)** and **Telegram (grammY)**, orchestrated by **Tines**, with PaySaSuchan as the financial system of record.
 >
-> **Builds on:** Release 5.0 billing/entitlements, Release 4.x transactions/reports/AI, layered API (`AGENTS.md`).
+> **Builds on:** Release 5.0 billing, Release 4.x transactions/groups/reports/AI, layered API (`AGENTS.md`), Trigger.dev (existing scheduled jobs).
 >
-> **Ground-zero assumption:** OpenWA and grammY are **not** existing infrastructure — deploy, configure, harden, pair, and integrate from scratch.
+> **Change requests incorporated:**
+> - **CR-1:** OpenWA + grammY are **Ground Zero** (deploy, pair, secure, integrate from scratch). Component name is **OpenWA**, not OpenQA.
+> - **CR-2:** Introduce **Tines** as orchestration/workflow layer; **small Core Command API + event contract** instead of bots calling dozens of REST endpoints directly.
 
 ---
 
 ## How to use this document
 
-1. Work **phase by phase** — each phase has acceptance criteria and dependencies.
+1. Work **phase by phase** — dependencies are strict (see WBS).
 2. Mark tasks: `[ ]` todo · `[~]` in progress · `[x]` done · `[—]` deferred.
-3. Schema changes: `prisma migrate` + update `release6.0/schema-draft.prisma` when created.
-4. Run `npm run test:all` before release tag.
-5. **Do not start bot channels until Phase 1 (command engine) passes without WhatsApp/Telegram.**
+3. Classify every task: **Core API** · **Event** · **Tines** · **Channel** · **Infra**.
+4. Schema: `prisma migrate` + `release6.0/schema-draft.prisma`.
+5. **Gate:** Phase 1 Command API must pass unit tests **before** Tines channel wiring.
 
 **Related docs**
 
 | Doc | Role |
 |-----|------|
-| `AGENTS.md` | Layered architecture — bot engine calls **services**, not Prisma from adapters |
-| `release5.0/billing-go-live-checklist.md` | Plan gating for bot writes (402 / trial expiry) |
-| `lib/ai/tools/finance.tools.ts` | Reusable read/summary patterns for bot + AI layer |
-| `release6.0/schema-draft.prisma` | Proposed bot tables (create in Phase 1) |
+| `release6.0/wbs.md` | Task breakdown with layer, hours, dependencies |
+| `release6.0/events-contract.md` | Event naming, payload schema, producers/consumers |
+| `release6.0/tines-stories.md` | Tines Story inventory and sub-stories |
+| `release6.0/schema-draft.prisma` | Bot + event outbox tables |
+| `release6.0/uat-checklist.md` | End-to-end UAT matrix |
+| `AGENTS.md` | Layered architecture conventions |
+| `release5.0/billing-go-live-checklist.md` | Plan gating (402 on writes) |
+
+---
+
+## Design philosophy
+
+| Layer | Answers |
+|-------|---------|
+| **PaySaSuchan Core** | “Is this financially valid, and how should financial data change?” |
+| **Event layer** | “What happened?” (immutable facts for downstream automation) |
+| **Tines** | “What should happen next?” (orchestration, notifications, AI routing, schedules) |
+| **OpenWA / grammY** | “How do we talk to the user on this channel?” (transport only) |
+
+**Do not:**
+
+- Make Tines the database or ledger.
+- Let Tines or AI write financial data directly.
+- Make OpenWA/grammY the application backend.
+
+**Do:**
+
+- Route all mutations through **Core Command API** → services → Prisma.
+- Emit domain events after successful commits.
+- Use Tines for message workflows, confirmations, alerts, scheduled summaries, integrations.
+
+---
+
+## North Star architecture
+
+```text
+                 PAY SASUCHAN CORE (nexpo)
+         Web · Mobile · Admin · Command API · Services
+                              │
+                    ┌─────────▼─────────┐
+                    │  Prisma / Postgres │
+                    │  Auth · Rules      │
+                    │  PlanService       │
+                    │  Idempotency       │
+                    └─────────┬─────────┘
+                              │
+                         DOMAIN EVENTS
+                    (expense.created, etc.)
+                              │
+                    ┌─────────▼─────────┐
+                    │      TINES        │
+                    │  Orchestration    │
+                    │  Automation · AI  │
+                    │  Notifications    │
+                    └─────────┬─────────┘
+          ┌───────────────────┼───────────────────┐
+          │                   │                   │
+     ┌────▼────┐        ┌─────▼─────┐       ┌─────▼─────┐
+     │ OpenWA  │        │  grammY   │       │   Email   │
+     │WhatsApp │        │ Telegram  │       │  Resend   │
+     └─────────┘        └───────────┘       └───────────┘
+```
+
+### Synchronous path (user waiting)
+
+```text
+WhatsApp/Telegram → OpenWA/grammY → Tines webhook Story
+  → normalize → resolve user → intent → (confirm?) → Core Command API
+  → DB → event emitted → Tines response Story → channel reply
+```
+
+### Asynchronous path (automation)
+
+```text
+expense.created → Tines ingestion → budget check / large-txn alert / analytics
+  → notification.required → WhatsApp / Telegram / Email
+```
+
+### Trigger.dev vs Tines
+
+| Concern | Owner |
+|---------|-------|
+| Billing lifecycle dispatch | **Trigger.dev** (existing) |
+| Reminder due dispatch | **Trigger.dev** (existing) |
+| Bot message orchestration | **Tines** |
+| Daily/monthly bot summaries | **Tines** (scheduled Stories) |
+| Budget / large-expense alerts | **Tines** (event-driven Stories) |
+| Recurring expense automation (future) | **Tines** (preferred) or Trigger.dev |
+
+Keep Trigger.dev for durable in-app cron already deployed; add Tines for bot-centric and integration workflows.
 
 ---
 
@@ -31,482 +119,424 @@
 
 | Item | Decision |
 |------|----------|
-| WhatsApp gateway | **OpenWA** (self-hosted, REST + webhooks + HMAC) |
-| Telegram gateway | **grammY** (BotFather bot + webhook/polling) |
-| Financial backend | Existing **nexpo** services (`TransactionService`, `ReportService`, `PlanService`, etc.) |
-| Database | **Prisma + Postgres** (not Supabase ORM/RLS — Supabase is OAuth + file storage only) |
-| Income model | `Transaction` with `type: CREDIT` (no separate income table) |
-| Bank accounts | **Not in schema** — `PaymentType` lookup only; bot “balance” = report aggregates |
-| Budgets | **Deferred** post-MVP |
-| Architecture rule | OpenWA/grammY are **transport adapters** — replaceable without rewriting financial logic |
-
-**Timeline:** 8–10 weeks MVP (1 FTE + part-time QA/DevOps). Production-grade with voice/rich AI: 12–16 weeks.
-
----
-
-## Architecture
-
-```text
-                         PAY SASUCHAN (nexpo)
-                    Web · Mobile · Admin · API
-                              │
-              ┌───────────────┴────────────────┐
-              │      Bot Command Engine        │
-              │  (channel-independent core)    │
-              └───────────────┬────────────────┘
-                              │
-              ┌───────────────┴────────────────┐
-              │     Channel Adapter Layer      │
-              └───────────────┬────────────────┘
-                    ┌─────────┴─────────┐
-                    │                   │
-              WhatsApp Adapter    Telegram Adapter
-                    │                   │
-                 OpenWA               grammY
-                    │                   │
-                 WhatsApp           Telegram
-```
-
-**Data flow (mutations):**
-
-```text
-Channel message → Normalize → Resolve linked userId → Intent/Command
-  → Validate → PlanService (entitlements) → Service layer → Prisma
-  → Audit + idempotency → Format response → Channel adapter → User
-```
-
-**AI boundary (Phase 8+):** AI may parse/classify/suggest — it must **not** write to DB directly. All mutations go through the command engine with confirmation.
+| WhatsApp | **OpenWA** — Ground Zero, self-hosted |
+| Telegram | **grammY** — Ground Zero |
+| Orchestration | **Tines** — Ground Zero tenant + Stories |
+| Financial core | nexpo services via **Command API** |
+| Database | **Prisma + Postgres** (Supabase = OAuth + storage only) |
+| Income | `Transaction` `type: CREDIT` |
+| Expenses | `Transaction` `type: DEBIT` |
+| Bank accounts | Not in schema — `PaymentType` + report aggregates |
+| Groups | APIs exist; **bot MVP = personal only**; group bot = fast-follow |
+| Timeline | **10–12 weeks MVP** (+2 weeks for Tines + events vs CR-1-only plan) |
 
 ---
 
-## Corrections from generic draft → nexpo reality
+## Corrections: generic draft → nexpo reality
 
-| Draft assumption | Actual in nexpo |
-|------------------|-----------------|
-| Supabase as primary DB + RLS | Prisma/Postgres; auth via custom JWT + `Session` |
-| `POST /api/v1/transactions` greenfield | Reuse `/api/user/transaction(s)` **or** call services directly from bot engine |
-| Separate income API | `TransactionService.create` with `type: CREDIT` |
-| `GET /api/v1/accounts` | No account balances — use `ReportService` + payment type metadata |
-| `GET /api/v1/reports/*` | `ReportService.getCustomerReport` + transaction list APIs |
+| Draft | Nexpo actual |
+|-------|--------------|
+| Supabase + RLS | Prisma; app-layer auth + `PlanService` |
+| Greenfield `/api/v1/*` | Thin **Command API** wrapping existing services |
+| Separate income table | `Transaction` with `type: CREDIT` |
+| `GET /api/v1/accounts` | Payment types + `ReportService` aggregates |
+| Edge Functions | Next.js routes + Trigger.dev |
 | OpenQA | **OpenWA** |
-| Edge Functions | Next.js API routes + Trigger.dev for async jobs |
+| Bot engine in-process only | Tines orchestrates; Core executes commands |
 
 ---
 
-## Phase 0 — Ground Zero (Week 1)
+## Functionality placement matrix
 
-**Milestone M0:** Existing system documented; OpenWA + grammY smoke-tested locally.
+| Functionality | Layer | Notes |
+|---------------|-------|-------|
+| Create/update/delete transaction | **Core API** | `TransactionService`, atomic |
+| Balance / report calculation | **Core API** | `ReportService` |
+| Authorization / plan gates | **Core API** | `PlanService` |
+| Idempotency / audit | **Core API** | `BotRequest` + service audits |
+| Emit `expense.created` etc. | **Event** | Outbox → Tines webhook |
+| WhatsApp message ingest | **Tines** | OpenWA webhook → Story |
+| Telegram message ingest | **Tines** + thin grammY adapter | Webhook → Tines (or grammY → Tines) |
+| NL classification | **Tines AI** or Core AI endpoint | Structured command output only |
+| Confirmation workflow | **Tines** | State in Tines or Core session table |
+| Daily/monthly summary push | **Tines** | Scheduled Story → Command API read |
+| Budget / large-txn alerts | **Tines** | Subscribe to events |
+| Notification routing | **Tines** | `notification.required` handler |
+| OpenWA deploy / HMAC | **Infra** | `infrastructure/openwa/` |
+| Account linking UI | **Core** | Web + `ChannelAccount` schema |
+| Voice / receipt OCR | **Post-MVP** | Tines media pipeline → Core OCR |
 
-### Module 0.1 — Application discovery
+---
 
-| Area | Finding |
-|------|---------|
-| Frontend | Next.js 16 App Router (`app/customer`, `app/admin`) |
-| Mobile | Expo (`mobile/`) |
-| API | Layered: controllers → services → repositories |
-| Auth | Email/password + Google OAuth; JWT sessions |
-| Transactions | Unified `Transaction` model; personal = `groupId IS NULL` |
-| Categories | `Category` + user defaults via meta resolution |
-| Reports | `GET /api/user/reports` |
-| AI | `lib/ai/` — chat tools, OCR, insights; plan-gated |
-| Billing | Release 5.0 — Freemium trial, Starter/Pro, 402 on writes |
+# PHASE 0 — Ground Zero (Week 1)
 
-**Tasks**
+**M0:** Audit complete; OpenWA, grammY, Tines POCs pass.
 
-- [ ] Document transaction create/update/delete flows (`TransactionService`)
-- [ ] Document report shapes (`ReportService`, `lib/ai/aggregates.ts`)
-- [ ] Document plan write locks (`PlanService.assertCanWrite`)
-- [ ] Document category/payment-type resolution (`MetaResolutionService` or equivalent)
-- [ ] List env secrets needed for bot platform (OpenWA API key, Telegram token, webhook secrets)
+| Module | Tasks | Layer |
+|--------|-------|-------|
+| 0.1 | PaySaSuchan architecture + API inventory | Core |
+| 0.2 | Financial model audit (Transaction, groups, reports) | Core |
+| 0.3 | Auth + plan gating audit | Core |
+| 0.4 | Security baseline (secrets, rate limits, audit) | Core |
+| 0.5 | OpenWA local deploy + QR pair + send/receive | Infra |
+| 0.6 | OpenWA webhook + HMAC POC | Infra |
+| 0.7 | Telegram BotFather + grammY hello-world | Channel |
+| 0.8 | **Tines tenant + webhook POC** (echo Story) | Tines |
+| 0.9 | **Event architecture POC** (sample `expense.created` payload) | Event |
+| 0.10 | Security architecture doc (OpenWA volume, Tines secrets) | Infra |
 
-### Module 0.2 — Feature capability matrix
+### Feature capability matrix (pre-filled)
 
-| PaySaSuchan feature | Existing API / service? | Bot MVP? | Required work |
-|---------------------|-------------------------|----------|---------------|
-| Add expense (DEBIT) | Yes — `TransactionService` | Yes | Bot command + formatter |
-| Add income (CREDIT) | Yes — same service | Yes | Bot command |
-| Edit transaction | Yes | Yes | Command + “last transaction” context |
-| Delete transaction | Yes | Yes | Confirmation flow |
-| List transactions | Yes — repository + API | Yes | Query commands |
-| Categories | Yes | Yes | Fuzzy match + picker in conversation |
-| Payment types | Yes (not bank accounts) | Partial | Map “cash/UPI/card” to lookup |
-| Daily/weekly/monthly summary | Yes — reports + AI aggregates | Yes | Report commands |
-| Category breakdown | Yes | Yes | Report commands |
-| Budget status | No entity | Later | — |
-| Recurring | Limited / reminders | Later | — |
-| Export CSV | Yes (web) | Later | — |
-| Receipt OCR | Yes — AI OCR route | Later | Media pipeline (Phase 9) |
-| Group expenses | Yes | Later | Out of MVP scope |
-| Account linking (bot) | **No** | Yes | Phase 4 schema + flows |
+| Feature | Core API? | Bot MVP? | Layer | Work |
+|---------|-----------|----------|-------|------|
+| Add expense (DEBIT) | Yes | Yes | Core + Tines | Command + workflow |
+| Add income (CREDIT) | Yes | Yes | Core + Tines | Command + workflow |
+| Edit/delete transaction | Yes | Yes | Core + Tines | Confirm in Tines |
+| List transactions | Yes | Yes | Core | Query command |
+| Categories / payment types | Yes | Yes | Core | Meta resolution |
+| Monthly/daily summary | Yes | Yes | Core read; Tines format | Report command |
+| Account linking | No | Yes | Core schema + Tines | Link flow |
+| Group CRUD / group txn | Yes | Later | Core + Tines | Fast-follow |
+| Budget alerts | No entity | Later | Tines on events | Post-MVP |
+| Recurring via bot | Limited | Later | Tines scheduled | Post-MVP |
+| Voice / OCR | Yes (OCR) | Later | Tines + Core | Phase 10+ |
 
-### Module 0.3 — Security assessment
-
-- [ ] Review JWT/session model — bot engine needs **service identity** per linked user, not channel trust
-- [ ] Review rate limiting (Redis) — extend for webhook endpoints
-- [ ] Review audit patterns (`UserRepository.createAudit`, transaction audits)
-- [ ] Identify PII in bot logs (phone numbers, Telegram IDs) — masking policy
-- [ ] Confirm billing 402 behavior applies to bot-initiated writes
-
-### Module 0.4 — Channel feasibility (local only)
-
-- [ ] Deploy OpenWA locally (Docker): API, Postgres, Redis, session volume
-- [ ] Pair test WhatsApp session (QR); send/receive message
-- [ ] Verify webhook + HMAC signature validation against test endpoint
-- [ ] Create Telegram bot via BotFather; grammY hello-world with long polling
-- [ ] **No production credentials in Phase 0**
-
-### M0 acceptance criteria
+### M0 acceptance
 
 ```text
-✓ Architecture + API inventory documented in release6.0/
-✓ Feature matrix signed off
-✓ OpenWA local: message in/out + HMAC verified
-✓ grammY local: /start receives reply
-✓ MVP scope agreed (no voice/budget/groups in v1)
+✓ Architecture documented (release6.0/)
+✓ OpenWA: message in/out + HMAC verified (local)
+✓ grammY: /start reply (local)
+✓ Tines: webhook received and HTTP response returned
+✓ Event contract draft approved
+✓ No production credentials in POC
 ```
 
 ---
 
-## Phase 1 — Bot Command Foundation (Week 2)
+# PHASE 1 — Core Financial Command API (Week 2)
 
-**Milestone M1:** Channel-independent financial command engine — provable without WhatsApp/Telegram.
+**M1:** Channel-independent command execution — **no Tines/channels required**.
 
-### Module 1.1 — Service integration (not greenfield /api/v1)
+### Module 1.1 — Command API
 
-**Decision:** Bot engine imports **services** directly (same process or internal module). Optional thin `POST /api/internal/bot/execute` for OpenWA sidecar later — still calls services.
+`POST /api/internal/bot/command` (or `/api/v1/commands`)
 
-| Command | Service / repository |
-|---------|----------------------|
-| `CREATE_EXPENSE` | `TransactionService.create` (`type: DEBIT`) |
-| `CREATE_INCOME` | `TransactionService.create` (`type: CREDIT`) |
+- Auth: `BOT_COMMAND_SECRET` / mTLS / signed service token
+- Body: canonical command JSON (see `events-contract.md`)
+- Flow: Validate → Authorize (`userId`) → Idempotency → `PlanService` → Service → Audit → Response
+
+| Command | Service |
+|---------|---------|
+| `CREATE_EXPENSE` | `TransactionService.create` (DEBIT, `groupId: null`) |
+| `CREATE_INCOME` | `TransactionService.create` (CREDIT) |
 | `UPDATE_TRANSACTION` | `TransactionService.update` |
 | `DELETE_TRANSACTION` | `TransactionService.delete` |
 | `GET_TRANSACTIONS` | `TransactionRepository.findAll` |
-| `GET_DAILY_SUMMARY` | `ReportService` / `getMonthSummary` patterns |
+| `GET_DAILY_SUMMARY` | `ReportService` / aggregates |
+| `GET_WEEKLY_SUMMARY` | Same |
 | `GET_MONTHLY_SUMMARY` | Same |
 | `GET_CATEGORY_SUMMARY` | Report + filter |
+| `LIST_GROUPS` | `GroupService.listGroups` (fast-follow) |
+| `CREATE_GROUP` | `GroupService.createGroup` (fast-follow) |
+| `ADD_GROUP_EXPENSE` | `GroupTransactionService` (fast-follow) |
 
-**Tasks**
+### Module 1.2 — Bot command engine (`lib/bot/core/`)
 
-- [ ] Create `lib/bot/` (or `bot-platform/core/`) package structure
-- [ ] Define `BotCommand` enum + Zod input schemas (`lib/bot/commands/`)
-- [ ] Implement `BotCommandEngine.execute(command, ctx)` — validate → authorize → execute → audit
-- [ ] Wire `PlanService.assertCanWrite` before mutations
-- [ ] Unit tests: command → DB row without any channel mock
+- [ ] Zod schemas per command
+- [ ] `BotCommandEngine.execute()` — used by Command API route
+- [ ] Channel-neutral `BotResponse` + formatters (for Tines to call or reuse)
 
-### Module 1.2 — Response formatter
+### Module 1.3 — Idempotency & audit
 
-- [ ] `BotResponse` channel-neutral JSON (`success`, `type`, `payload`, `errors`)
-- [ ] `formatForTelegram(response)` / `formatForWhatsApp(response)` — text limits, emoji, INR formatting
+Tables: `ChannelAccount`, `BotRequest`, `ConversationSession` (see schema-draft).
 
-### Module 1.3 — Audit & idempotency
+- Idempotency key: `channel + externalMessageId` (set by Tines in command payload)
 
-**New tables** (see `release6.0/schema-draft.prisma`):
+### M1 acceptance
 
-| Model | Purpose |
+```text
+✓ curl/script → CREATE_EXPENSE → DB row
+✓ Duplicate idempotency → no double insert
+✓ Trial expired → structured error (402 semantics)
+✓ No WhatsApp/Telegram/Tines in test path
+```
+
+---
+
+# PHASE 2 — Event Architecture (Week 3)
+
+**M2:** PaySaSuchan emits standard domain events after successful commits.
+
+### Module 2.1 — Event schema
+
+See `release6.0/events-contract.md`. Minimum MVP events:
+
+```text
+expense.created | expense.updated | expense.deleted
+income.created  | income.updated
+user.linked | user.unlinked
+message.processed | message.failed
+notification.required
+```
+
+### Module 2.2 — Event producer (Core)
+
+- [ ] `DomainEventService.emit()` after transaction mutations
+- [ ] **Outbox pattern** (`DomainEventOutbox` table) for reliability
+- [ ] Dispatcher: POST to Tines webhook(s) with retry + dead-letter logging
+- [ ] `event_id`, `correlation_id`, `event_version` on every payload
+
+### Module 2.3 — Event consumer contract
+
+- Tines Stories subscribe via webhook actions
+- Core never depends on Tines for commit path
+
+### M2 acceptance
+
+```text
+✓ CREATE_EXPENSE → outbox row → Tines receives expense.created
+✓ Failed Tines delivery → retry; outbox remains until ack
+✓ correlation_id traces message → command → event
+```
+
+---
+
+# PHASE 3 — Tines Foundation (Week 3–4)
+
+**M3:** Tines tenant ready for production Stories.
+
+| Module | Tasks |
+|--------|-------|
+| 3.1 | Tenant + env strategy (dev/staging/prod) |
+| 3.2 | Credential vault (OpenWA key, bot token, Command API secret) |
+| 3.3 | Webhook standards (auth, rate limit, IP allowlist) |
+| 3.4 | Reusable sub-stories: HTTP to Command API, error handler, formatter |
+| 3.5 | Logging + monitoring + failure paths |
+| 3.6 | Workflow-as-API for sync queries (Tines API exit action) |
+
+See `release6.0/tines-stories.md` for Story list.
+
+### M3 acceptance
+
+```text
+✓ Sub-story: call Command API with test command
+✓ Sub-story: format BotResponse → WhatsApp text
+✓ Webhook auth rejects unsigned requests
+```
+
+---
+
+# PHASE 4 — WhatsApp / OpenWA (Week 4–5)
+
+**M4:** OpenWA Ground Zero — deploy, pair, secure, integrate with Tines.
+
+| Module | Tasks | Layer |
+|--------|-------|-------|
+| 4.1 | Docker deploy (API, Postgres, Redis, session volume) | Infra |
+| 4.2 | Dedicated number; QR pair; session health | Infra |
+| 4.3 | Security hardening (API keys, HMAC, HTTPS, rate limits, volume protection) | Infra |
+| 4.4 | OpenWA webhook → **Tines** (not directly to Core) | Tines |
+| 4.5 | Tines → OpenWA REST for outbound messages | Tines |
+| 4.6 | HMAC validation in Tines or thin nexpo verify proxy | Infra/Tines |
+
+**Note:** OpenWA session state is **unencrypted on disk** — volume security is mandatory.
+
+### M4 acceptance
+
+```text
+✓ WhatsApp → OpenWA → Tines → (test echo)
+✓ Invalid HMAC rejected
+✓ Outbound reply via Tines → OpenWA → WhatsApp
+✓ Production config hardened
+```
+
+---
+
+# PHASE 5 — Telegram / grammY (Week 5, parallel)
+
+**M5:** grammY Ground Zero — bot, webhook, Tines integration.
+
+| Module | Tasks |
+|--------|-------|
+| 5.1 | BotFather: token, commands, description |
+| 5.2 | grammY app (`lib/bot/channels/telegram/` or sidecar) |
+| 5.3 | Dev: long polling → forward to Tines; Prod: Telegram webhook → grammY → Tines |
+| 5.4 | Security: token in vault, rate limit, callback validation |
+
+**Architecture choice:** grammY remains a **thin adapter** that normalizes Telegram updates and forwards to Tines; heavy logic stays in Tines sub-stories.
+
+### M5 acceptance
+
+```text
+✓ /start → Tines → response
+✓ Webhook mode in staging
+✓ Secrets not in source control
+```
+
+---
+
+# PHASE 6 — Identity & Account Linking (Week 5–6)
+
+**M6:** `ChannelAccount` maps external IDs → PaySaSuchan `User`.
+
+| Flow | Path |
+|------|------|
+| Telegram `/start` | Tines → link URL → web login → confirm → `user.linked` event |
+| WhatsApp first message | Tines → phone from OpenWA → link URL → confirm |
+| Commands | `/link`, `/unlink`, `/account` via Tines routing |
+
+- [ ] `ChannelLinkToken` — one-time, TTL, single use
+- [ ] Customer settings UI for link status + unlink
+- [ ] Tines rejects unlinked users before Command API calls
+
+### M6 acceptance
+
+```text
+✓ Same User on web + WhatsApp + Telegram
+✓ Unlinked → no financial commands
+✓ user.linked / user.unlinked events emitted
+```
+
+---
+
+# PHASE 7 — Common Bot Workflow (Week 6–7)
+
+**M7:** One Tines master Story (or sub-story chain) for both channels.
+
+```text
+message.received
+  → normalize (canonical payload)
+  → resolve ChannelAccount → userId
+  → intent (deterministic regex/slash first)
+  → slot-fill / ConversationSession (Core or Tines state)
+  → confirmation (inline buttons / numbered reply)
+  → Command API
+  → format response
+  → outbound channel action
+```
+
+### Deterministic intents (MVP)
+
+| Input | Command |
 |-------|---------|
-| `ChannelAccount` | Maps `channel` + `externalUserId` → `userId` |
-| `BotRequest` | Idempotency: `channel + externalMessageId` unique |
-| `ConversationSession` | Multi-step flows (amount → category → confirm) |
-| `ConversationMessage` | Optional history for debugging |
-
-- [ ] Idempotency key: reject duplicate webhook deliveries
-- [ ] Audit: command, userId, channel, status, requestId
-
-### M1 acceptance criteria
-
-```text
-✓ Test script: CREATE_EXPENSE → Transaction row in DB
-✓ Duplicate idempotency key → no second row
-✓ Expired trial user → 402-equivalent bot error message
-✓ formatters produce Telegram + WhatsApp strings from same BotResponse
-```
-
----
-
-## Phase 2 — OpenWA Infrastructure (Week 3)
-
-**Milestone M2:** Self-hosted WhatsApp gateway → PaySaSuchan webhook.
-
-### Module 2.1 — Deployment
-
-- [ ] `infrastructure/openwa/` — Docker Compose (OpenWA, Postgres, Redis, volumes)
-- [ ] Health checks, logging, session volume backup notes
-- [ ] Staging + production env templates (no secrets in git)
-
-### Module 2.2 — WhatsApp provisioning
-
-- [ ] Dedicated PaySaSuchan number
-- [ ] Session create → QR → pair → verify status
-- [ ] Outbound test message via REST API
-
-### Module 2.3 — Security hardening
-
-- [ ] Production API keys (least privilege, session-scoped)
-- [ ] HTTPS behind reverse proxy
-- [ ] Webhook HMAC enabled; SSRF protection; body size limits
-- [ ] Rate limiting; disable Swagger in prod
-- [ ] **Filesystem protection for session volume** (OpenWA stores session unencrypted on disk)
-
-### Module 2.4 — Webhook integration
-
-- [ ] `POST /api/webhooks/whatsapp` (or `/api/bot/whatsapp/webhook`)
-- [ ] Verify `X-OpenWA-Signature` (HMAC-SHA256)
-- [ ] Handle `message.received` initially; log `session.status`
-
-### M2 acceptance criteria
-
-```text
-✓ WhatsApp ↔ OpenWA ↔ nexpo webhook round-trip
-✓ Invalid HMAC → 401
-✓ Valid message → normalized payload logged or enqueued
-✓ Outbound reply delivered to WhatsApp
-```
-
----
-
-## Phase 3 — Telegram Infrastructure (Week 3, parallel with 2)
-
-**Milestone M3:** grammY bot operational.
-
-### Module 3.1 — Bot creation
-
-- [ ] BotFather: username, token, commands (`/start`, `/help`, `/add`, `/summary`)
-- [ ] Store `TELEGRAM_BOT_TOKEN` in env / secret manager
-
-### Module 3.2 — grammY application
-
-Recommended location: `bot-platform/channels/telegram/` or `lib/bot/channels/telegram/`
-
-```text
-bot-platform/channels/telegram/
-  ├── bot.ts
-  ├── commands/
-  ├── handlers/
-  ├── keyboards/
-  └── middleware/
-```
-
-- [ ] Dev: long polling
-- [ ] Prod: webhook → `POST /api/bot/telegram/webhook`
-
-### Module 3.3 — Security
-
-- [ ] Webhook secret / path token
-- [ ] Rate limit per Telegram user id
-- [ ] Reject unlinked users (after Phase 4)
-
-### M3 acceptance criteria
-
-```text
-✓ /start and /help work
-✓ Webhook mode works in staging
-✓ Unauthorized (unlinked) user gets link prompt
-```
-
----
-
-## Phase 4 — Identity & Account Linking (Week 4)
-
-**Milestone M4:** WhatsApp/Telegram identities map to PaySaSuchan `User`.
-
-### Module 4.1 — Linking flows
-
-**Telegram**
-
-```text
-/start → not linked → "Connect PaySaSuchan" button
-  → https://app.../customer/settings/bot-link?token=... (or dedicated page)
-  → user logs in → confirm → ChannelAccount created
-```
-
-**WhatsApp**
-
-```text
-First message → phone from OpenWA payload → not linked
-  → secure link URL in reply → login → confirm → linked
-```
-
-- [ ] `ChannelLinkToken` — one-time, short TTL, single use
-- [ ] Web UI: link status + unlink in customer settings
-- [ ] Commands: `/link`, `/unlink`, `/account` (Telegram); WhatsApp keyword equivalents
-
-### Module 4.2 — Security
-
-- [ ] No passwords in chat
-- [ ] PKCE/state on OAuth-style link where applicable
-- [ ] Explicit confirmation screen before bind
-- [ ] Unlink revokes bot access immediately
-
-### M4 acceptance criteria
-
-```text
-✓ Same User works on web + Telegram + WhatsApp
-✓ Unlinked channel cannot read or write financial data
-✓ Token reuse / expiry enforced
-```
-
----
-
-## Phase 5 — Common Bot Engine (Week 5)
-
-**Milestone M5:** One engine, two channels.
-
-### Module 5.1 — Message normalization
-
-```typescript
-// Inbound canonical shape
-{
-  channel: 'whatsapp' | 'telegram',
-  externalUserId: string,
-  messageId: string,
-  text?: string,
-  media?: { type, url },
-  timestamp: Date,
-}
-```
-
-→ resolve `userId` via `ChannelAccount` → pass to engine
-
-### Module 5.2 — Intent routing (deterministic first)
-
-| Pattern | Command |
-|---------|---------|
-| `/add`, `spent X`, `paid X` | CREATE_EXPENSE (or slot-filling) |
+| `/add`, `spent X`, `paid X` | CREATE_EXPENSE |
 | `received X`, `income X` | CREATE_INCOME |
 | `/summary`, `today`, `this month` | GET_*_SUMMARY |
-| `last expenses` | GET_TRANSACTIONS |
-| `delete last` | DELETE with confirmation |
+| `last N expenses` | GET_TRANSACTIONS |
+| `delete last` | DELETE (confirm) |
 
-- [ ] Regex/slash-command router before AI
-- [ ] Unknown → help message
-
-### Module 5.3 — Conversation state
-
-- [ ] Slot-filling: amount → description → category → confirm
-- [ ] Server-side `ConversationSession` (TTL e.g. 15 min)
-- [ ] Telegram inline keyboards; WhatsApp numbered replies or buttons if supported
-
-### Module 5.4 — Confirmation engine
-
-- [ ] All CREATE/UPDATE/DELETE require explicit confirm in MVP
-- [ ] Cancel clears session
-
-### M5 acceptance criteria
+### M7 acceptance
 
 ```text
-✓ Same text on both channels → same BotCommand → same DB outcome
-✓ Multi-step expense flow completes with confirm
+✓ Same utterance on WA + TG → same command → same DB outcome
+✓ Multi-step expense with confirm
+✓ AI not required for MVP path
 ```
 
 ---
 
-## Phase 6 — Core Financial Features (Week 6)
+# PHASE 8 — Financial MVP Features (Week 7–8)
 
-**Milestone M6:** MVP financial assistant.
+**M8:** Personal expense/income CRUD + queries via bot.
 
-### Module 6.1 — Expenses
+- Expenses: amount, category, description, date, payment type, merchant
+- Income: salary, freelance, received-from-person
+- Queries: today, month, category, last N, largest expense
+- Corrections: edit/delete last transaction
+- **Personal only** (`groupId: null`) in MVP
 
-- [ ] Natural phrasing: `Spent ₹500 on lunch`, `₹800 dinner`, `Amazon 2300`
-- [ ] Fields: amount, category, description, date (default today), payment type
-- [ ] Edit/delete last transaction
-
-### Module 6.2 — Income
-
-- [ ] `Received salary ₹120000`, `Got ₹5000 from Ravi`
-
-### Module 6.3 — Queries
-
-- [ ] Today / this month spend
-- [ ] Category spend (e.g. food)
-- [ ] Last N transactions
-- [ ] Largest expense this month
-
-### Module 6.4 — Payment types (not bank balances)
-
-- [ ] “Show payment types” / map user words to `PaymentType`
-- [ ] **Do not** promise bank account balances in MVP
-
-### M6 acceptance criteria
+### M8 acceptance
 
 ```text
-✓ Linked user manages personal transactions entirely via both channels
-✓ Group transactions excluded (groupId null filter)
-✓ Plan limits enforced on writes
+✓ Full personal transaction lifecycle via both channels
+✓ PlanService write gates enforced
 ```
 
 ---
 
-## Phase 7 — Reporting & Analytics (Week 7)
+# PHASE 9 — Reporting & Automation (Week 8–9)
 
-**Milestone M7:** Conversational reporting.
+**M9:** Conversational reports + Tines scheduled/event workflows.
 
-- [ ] Today, yesterday, this week, this month, last month
-- [ ] Category breakdown with % of spend
-- [ ] Simple comparisons (this month vs last month)
-- [ ] Reuse `ReportService` + `lib/ai/aggregates.ts`
+### Module 9.1 — Conversational reports (sync)
 
-**Deferred:** Budget status (no budget entity).
+- Today, yesterday, week, month, last month, category %, month-over-month
+- Tines calls Command API read commands; formats rich replies
 
----
+### Module 9.2 — Tines automation (async)
 
-## Phase 8 — AI Financial Assistant (Week 8)
+| Workflow | Trigger | Layer |
+|----------|---------|-------|
+| Daily summary push | Tines schedule | Tines |
+| Weekly summary | Tines schedule | Tines |
+| Monthly report + AI narrative | Tines schedule | Tines + AI |
+| Large expense alert | `expense.created` | Tines |
+| Budget threshold alert | `expense.created` | Tines (when budget entity exists) |
+| `notification.required` router | Event | Tines → WA/TG/Email |
 
-**Milestone M8:** Natural language after deterministic paths are stable.
+### M9 acceptance
 
-- [ ] Intent + entity extraction via existing `lib/ai/` stack (`modelFor('structured')`)
-- [ ] Multi-transaction utterances → array of commands → batch confirm
-- [ ] Ambiguity → ask, don’t guess
-- [ ] Adversarial prompts → refuse; no cross-user data
-- [ ] Reuse patterns from `createFinanceTools` — read-only tools for AI; mutations via command engine only
-
----
-
-## Phase 9 — Voice & Media (Weeks 9–10, post-MVP)
-
-- [ ] WhatsApp voice → STT → parser → commands
-- [ ] Image receipt → existing OCR route → confirm expense
-- [ ] Shared media pipeline for Telegram
+```text
+✓ “How much on food this month?” → correct report
+✓ Scheduled daily summary delivered to opted-in users
+✓ expense.created > threshold → alert message
+```
 
 ---
 
-## Phase 10 — Security & Hardening (Week 10)
+# PHASE 10 — AI Assistant (Week 9–10)
 
-Formal checklist — test each item:
+**M10:** NL understanding in Tines workflow (post-deterministic).
 
-- [ ] HTTPS everywhere
-- [ ] Secrets not in git; rotation runbook
-- [ ] OpenWA: API key roles, HMAC, rate limits, CORS, SSRF
-- [ ] Webhook replay protection (idempotency + timestamp window)
-- [ ] Input validation on all bot commands
-- [ ] Error messages sanitized (no stack traces to users)
-- [ ] PII masking in logs
-- [ ] Billing + bot audit trail
-- [ ] Backup/recovery for OpenWA session volume
+```text
+Message → Tines AI action (or Core /api/internal/bot/parse)
+  → structured command(s) → validate → confirm → Command API
+```
 
----
+- Multi-transaction utterances → batch confirm
+- Ambiguity → ask; never guess amounts/categories
+- Adversarial prompts → refuse
+- Reuse `lib/ai/` models; **AI never writes DB directly**
 
-## Phase 11 — Testing & UAT (Week 11)
+### M10 acceptance
 
-### Channel test matrix
-
-| Case | WhatsApp | Telegram |
-|------|----------|----------|
-| New user → link | ✓ | ✓ |
-| Add expense | ✓ | ✓ |
-| Duplicate webhook | one txn | one txn |
-| Invalid HMAC / auth | 401 | 401 |
-| Trial expired write | upgrade msg | upgrade msg |
-| Delete with confirm | ✓ | ✓ |
-| Adversarial AI prompt | safe refusal | safe refusal |
-
-- [ ] Integration tests for `BotCommandEngine`
-- [ ] Webhook signature tests
-- [ ] Manual UAT script in `release6.0/uat-checklist.md`
+```text
+✓ “Yesterday dinner 850” → correct dated expense after confirm
+✓ Injection attempts safely refused
+```
 
 ---
 
-## Phase 12 — Production Rollout (Week 12)
+# PHASE 11 — Voice, Media & Integrations (Week 10–11, post-MVP)
+
+- WhatsApp voice → STT → Tines → parser → commands
+- Receipt image → Core OCR route → Tines confirm flow
+- Future: Google Calendar, Sheets, banks via Tines HTTP actions
+
+---
+
+# PHASE 12 — Security & Hardening (Week 11)
+
+Checklist (Core + Tines + OpenWA):
+
+```text
+□ HTTPS everywhere
+□ Secrets in vault (Tines + Vercel env)
+□ OpenWA: prod API keys, HMAC, SSRF, rate limits, session volume
+□ Command API: service auth only; no public exposure
+□ Webhook replay protection (idempotency + timestamp)
+□ Prisma parameterized queries; input validation
+□ Audit logging (Core + Tines action logs)
+□ PII masking in logs
+□ Financial confirm on all mutations
+□ Backup/recovery for OpenWA session volume
+□ Tines failure paths + alerting
+```
+
+---
+
+# PHASE 13 — UAT & Production Rollout (Week 12)
 
 | Stage | Audience |
 |-------|----------|
@@ -514,102 +544,114 @@ Formal checklist — test each item:
 | 2 | 5–10 trusted users |
 | 3 | 25–50 beta |
 | 4 | Public beta |
-| 5 | General availability |
+| 5 | GA |
 
-- [ ] Feature flag: `BOT_CHANNELS_ENABLED`
-- [ ] Monitoring: webhook latency, OpenWA session health, error rate
-- [ ] Analytics: `ps_bot_*` events (mirror `ps_billing` pattern)
-- [ ] Runbook: OpenWA session disconnect / re-pair
+- [ ] `BOT_CHANNELS_ENABLED` feature flag
+- [ ] Monitoring: Tines run logs, OpenWA session, Command API latency, outbox lag
+- [ ] Analytics: `ps_bot_*` events
+- [ ] UAT: `release6.0/uat-checklist.md`
 
 ---
 
-## Recommended repo structure
-
-Add under existing monorepo (do not fork financial logic):
+## Repo structure
 
 ```text
 nexpo/
-├── app/api/bot/              # Webhooks + link callbacks
-├── app/customer/settings/    # Bot link UI
+├── app/api/internal/bot/       # Command API + parse endpoint
+├── app/api/webhooks/           # Optional: OpenWA verify proxy → Tines
+├── app/customer/settings/      # Bot link UI
 ├── lib/bot/
-│   ├── core/
-│   │   ├── commands/
-│   │   ├── engine.ts
-│   │   ├── conversation/
-│   │   ├── formatters/
-│   │   └── intents/
-│   ├── channels/
-│   │   ├── whatsapp/openwa/
-│   │   └── telegram/grammy/
-│   └── auth/linking.ts
-├── infrastructure/openwa/      # Docker, deploy notes
-└── release6.0/               # This plan + schema + UAT
+│   ├── core/                   # Command engine, schemas, formatters
+│   ├── events/                 # DomainEventService, outbox dispatcher
+│   └── channels/telegram/      # Thin grammY adapter
+├── infrastructure/
+│   ├── openwa/                 # Docker Compose, runbooks
+│   └── tines/                  # Story export notes, webhook URLs
+├── release6.0/
+│   ├── plan.md
+│   ├── wbs.md
+│   ├── events-contract.md
+│   ├── tines-stories.md
+│   ├── schema-draft.prisma
+│   └── uat-checklist.md
+└── trigger/                    # Existing — billing, reminders (unchanged)
 ```
-
-Optional: extract `bot-platform/` to separate deployable later; keep `lib/bot` as shared package.
 
 ---
 
 ## MVP boundary
 
-**In MVP**
+**In MVP (Weeks 1–12)**
 
-- Account linking (both channels)
-- Expense + income CRUD with confirmation
-- Today / month / category queries
-- Deterministic commands + basic NL patterns
-- Plan/billing enforcement
-- Security: HMAC, idempotency, audit
+- Core Command API + idempotency + audit
+- Domain events + Tines ingestion
+- OpenWA + grammY Ground Zero
+- Account linking
+- Tines bot workflow (deterministic + confirm)
+- Personal expense/income CRUD + summaries
+- Daily/monthly conversational reports
+- Large-expense alert (Tines on `expense.created`)
+- Security hardening + UAT
 
 **Out of MVP**
 
 - Voice messages
 - Receipt OCR via chat
-- Budgets
-- Group splits via bot
-- Bank account balances
-- Advanced AI multi-turn advisor
-- Export via bot
+- Group bot commands
+- Budget entity + budget alerts
+- Recurring transaction automation
+- Bank integrations
+- Advanced AI advisor
+
+**Fast-follow (Phase 8b)**
+
+- Group list/create/add expense via bot
+- Budget workflows when budget schema lands
 
 ---
 
 ## Delivery timeline
 
-| Milestone | Deliverable | Week |
-|-----------|-------------|------|
-| M0 | Ground-zero assessment | 1 |
-| M1 | Command engine + schema | 2 |
-| M2 | OpenWA deployed + secured | 3 |
-| M3 | Telegram + grammY | 3 |
-| M4 | Account linking | 4 |
-| M5 | Common bot engine | 5 |
-| M6 | Expense/income MVP | 6 |
-| M7 | Reports | 7 |
-| M8 | AI natural language | 8 |
-| M9 | Voice/media | 9–10 |
-| M10 | Security hardening | 10 |
-| M11 | UAT | 11 |
-| M12 | Production rollout | 12 |
+| Week | Milestone | Deliverable |
+|------|-----------|-------------|
+| 1 | M0 | Ground zero + POCs |
+| 2 | M1 | Command API + engine |
+| 3 | M2 | Event layer + outbox |
+| 3–4 | M3 | Tines foundation |
+| 4–5 | M4 | OpenWA production-ready |
+| 5 | M5 | grammY + Tines |
+| 5–6 | M6 | Account linking |
+| 6–7 | M7 | Common bot workflow |
+| 7–8 | M8 | Financial MVP |
+| 8–9 | M9 | Reports + automation |
+| 9–10 | M10 | AI layer |
+| 10–11 | M11 | Voice/media (optional) |
+| 11 | M12 | Security |
+| 12 | M13 | UAT + rollout |
+
+**Estimate:** 10–12 weeks MVP; 14–16 weeks with voice, groups bot, rich AI.
 
 ---
 
-## Implementation priority (strict order)
+## Implementation priority
 
-1. **P0** — Phase 0 discovery sign-off  
-2. **P1** — Bot command engine (no channels)  
-3. **P2** — OpenWA deploy + webhook  
-4. **P3** — grammY bot + webhook  
-5. **P4** — Identity linking  
-6. **P5** — Unified conversation engine  
-7. **P6** — Financial MVP commands  
-8. **P7** — Reports  
-9. **P8** — AI layer  
-10. **P9** — Voice/media  
-11. **P10** — Security, UAT, rollout  
+1. **P0** — Ground zero (Core + OpenWA + grammY + Tines POCs)
+2. **P1** — Core Command API (no channels)
+3. **P2** — Event architecture
+4. **P3** — Tines foundation + sub-stories
+5. **P4** — OpenWA → Tines
+6. **P5** — grammY → Tines
+7. **P6** — Identity linking
+8. **P7** — Common bot workflow
+9. **P8** — Financial MVP
+10. **P9** — Reports + Tines automation
+11. **P10** — AI
+12. **P11** — Security, UAT, rollout
 
 ---
 
 ## Next action
 
-**Start Phase 0 Module 0.1:** finalize API inventory and create `release6.0/schema-draft.prisma` before any OpenWA production deploy.
-
+1. Sign off Phase 0 feature matrix.
+2. Implement Command API (Phase 1) before wiring Tines to OpenWA.
+3. Draft Tines tenant + import sub-stories from `tines-stories.md`.

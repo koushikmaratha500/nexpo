@@ -4,8 +4,8 @@ import { router } from 'expo-router';
 import { useAuth } from '../../../src/context/AuthContext';
 import { CustomerTabBar, FabAddTransaction } from '../../../src/components/layout/CustomerTabBar';
 import { AppIcon } from '../../../src/components/ui/AppIcon';
-import { PlanStatusBanner } from '../../../src/components/billing/PlanStatusBanner';
 import { useMobilePlanContext } from '../../../src/context/PlanContext';
+import { PlanStatusBanner } from '../../../src/components/billing/PlanStatusBanner';
 
 export default function TabsLayout() {
   const { user, isLoading } = useAuth();

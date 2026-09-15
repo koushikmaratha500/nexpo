@@ -5,6 +5,7 @@ import axios from 'axios';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/hooks/useToast';
+import { shouldShowUpgradeCta } from '@/lib/billing/planUi';
 import { usePlan } from './PlanProvider';
 
 interface SubscriptionSummary {
@@ -17,9 +18,15 @@ interface SubscriptionSummary {
   canCancel: boolean;
 }
 
-export function BillingSubscription() {
+export function BillingSubscription({
+  compact = false,
+  embedded = false,
+}: {
+  compact?: boolean;
+  embedded?: boolean;
+}) {
   const { addToast } = useToast();
-  const { refresh, setUpgradeOpen } = usePlan();
+  const { plan, refresh, setUpgradeOpen } = usePlan();
   const [summary, setSummary] = useState<SubscriptionSummary | null>(null);
   const [gstin, setGstin] = useState('');
   const [loading, setLoading] = useState(true);
@@ -81,10 +88,14 @@ export function BillingSubscription() {
     }
   };
 
+  if (plan?.pricingEnabled === false) return null;
+
   if (loading) {
+    const loadingContent = <p className="text-sm text-on-surface-variant">Loading billing details…</p>;
+    if (embedded) return loadingContent;
     return (
-      <Card className="bg-surface-container-lowest" glass={false}>
-        <p className="text-sm text-on-surface-variant">Loading billing details…</p>
+      <Card className={`bg-surface-container-lowest ${compact ? 'p-4' : ''}`} glass={false}>
+        {loadingContent}
       </Card>
     );
   }
@@ -95,14 +106,21 @@ export function BillingSubscription() {
     ? new Date(summary.currentPeriodEndsAt).toLocaleDateString('en-IN')
     : null;
 
-  return (
-    <Card className="bg-surface-container-lowest flex flex-col gap-md" glass={false}>
-      <div>
-        <h3 className="font-title-md font-bold text-primary">Billing</h3>
-        <p className="text-sm text-on-surface-variant mt-1">
-          GSTIN for invoices (optional). Provider: {summary.paymentProvider ?? 'none'}.
+  const content = (
+    <>
+      {!compact && !embedded && (
+        <div>
+          <h3 className="font-title-md font-bold text-primary">Billing</h3>
+          <p className="text-sm text-on-surface-variant mt-1">
+            GSTIN for invoices (optional). Provider: {summary.paymentProvider ?? 'none'}.
+          </p>
+        </div>
+      )}
+      {(compact || embedded) && (
+        <p className="text-xs text-on-surface-variant">
+          GSTIN for invoices (optional)
         </p>
-      </div>
+      )}
 
       {summary.plan === 'STARTER' && (
         <div className="text-sm text-on-surface rounded-lg bg-surface-container-low px-3 py-2">
@@ -133,23 +151,49 @@ export function BillingSubscription() {
           maxLength={15}
           className="h-11 px-3 rounded-lg border border-outline-variant bg-surface-container-low text-on-surface"
         />
-        <Button type="button" disabled={saving} onClick={saveGstin}>
+        <Button
+          type="button"
+          className={compact ? 'w-full' : undefined}
+          disabled={saving}
+          onClick={saveGstin}
+        >
           {saving ? 'Saving…' : 'Save GSTIN'}
         </Button>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {summary.plan !== 'PRO' && (
-          <Button type="button" variant="secondary" onClick={() => setUpgradeOpen(true)}>
+      <div className={`flex flex-wrap gap-2 ${compact ? 'flex-col' : ''}`}>
+        {shouldShowUpgradeCta(plan) && (
+          <Button
+            type="button"
+            variant="secondary"
+            className={compact ? 'w-full' : undefined}
+            onClick={() => setUpgradeOpen(true)}
+          >
             Change plan
           </Button>
         )}
         {summary.canCancel && (
-          <Button type="button" variant="secondary" disabled={canceling} onClick={cancelSubscription}>
+          <Button
+            type="button"
+            variant="secondary"
+            className={compact ? 'w-full' : undefined}
+            disabled={canceling}
+            onClick={cancelSubscription}
+          >
             {canceling ? 'Canceling…' : 'Cancel subscription'}
           </Button>
         )}
       </div>
+    </>
+  );
+
+  if (embedded) {
+    return <div className="flex flex-col gap-3">{content}</div>;
+  }
+
+  return (
+    <Card className={`bg-surface-container-lowest flex flex-col ${compact ? 'gap-3 p-4' : 'gap-md'}`} glass={false}>
+      {content}
     </Card>
   );
 }

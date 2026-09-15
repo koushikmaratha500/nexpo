@@ -10,6 +10,7 @@ import * as jose from 'jose';
 import { AuditAction, AuthProvider, BillingInterval, BillingPlan, PlanStatus } from '@prisma/client';
 import { assertValidUsername, isValidUsername } from '../utils/username';
 import { verifySupabaseAccessToken } from '@/lib/supabase/verifyAccessToken';
+import { SettingsService } from './settings.service';
 
 function getJwtSecretBytes(): Uint8Array {
   const secret = process.env.JWT_SECRET?.trim();
@@ -88,6 +89,19 @@ export class AuthService {
       ? await MetaRepository.findCountryByName(data.country)
       : null;
 
+    const pricingEnabled = await SettingsService.isPricingEnabled();
+    const defaultPlan = pricingEnabled
+      ? {
+          plan: BillingPlan.FREEMIUM,
+          planStatus: PlanStatus.TRIALING,
+          billingInterval: BillingInterval.NONE,
+        }
+      : {
+          plan: BillingPlan.PRO,
+          planStatus: PlanStatus.ACTIVE,
+          billingInterval: BillingInterval.LIFETIME,
+        };
+
     const user = await UserRepository.create({
       username,
       firstName: data.firstName,
@@ -95,9 +109,7 @@ export class AuthService {
       email: data.email,
       passwordHash: hashedPassword,
       provider: AuthProvider.EMAIL,
-      plan: BillingPlan.FREEMIUM,
-      planStatus: PlanStatus.TRIALING,
-      billingInterval: BillingInterval.NONE,
+      ...defaultPlan,
       status: 'P',
       countryId: countryRecord ? countryRecord.id : null,
       currencyId: countryRecord ? countryRecord.currencyId : null,
@@ -292,6 +304,19 @@ export class AuthService {
       const countryRecord = await MetaRepository.findCountryByName('India');
       const username = await this.generateUniqueUsername(googleUser.email);
 
+      const pricingEnabled = await SettingsService.isPricingEnabled();
+      const defaultPlan = pricingEnabled
+        ? {
+            plan: BillingPlan.FREEMIUM,
+            planStatus: PlanStatus.TRIALING,
+            billingInterval: BillingInterval.NONE,
+          }
+        : {
+            plan: BillingPlan.PRO,
+            planStatus: PlanStatus.ACTIVE,
+            billingInterval: BillingInterval.LIFETIME,
+          };
+
       user = await UserRepository.create({
         username,
         firstName: googleUser.firstName,
@@ -299,9 +324,7 @@ export class AuthService {
         email: googleUser.email,
         profileImageUrl: googleUser.avatarUrl,
         provider: AuthProvider.GOOGLE,
-        plan: BillingPlan.FREEMIUM,
-        planStatus: PlanStatus.TRIALING,
-        billingInterval: BillingInterval.NONE,
+        ...defaultPlan,
         status: 'A',
         emailVerified: true,
         countryId: countryRecord?.id ?? null,

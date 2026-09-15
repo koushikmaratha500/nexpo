@@ -11,6 +11,7 @@ import { PasswordInput } from '@/components/forms/PasswordInput';
 import { NotificationPreferencesCard } from '@/components/features/notifications';
 import { BillingInvoices, BillingSubscription, UsageMeters, usePlan } from '@/components/features/billing';
 import { formatInr } from '@/lib/billing/catalog';
+import { shouldShowUpgradeCta } from '@/lib/billing/planUi';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { trackBilling } from '@/lib/analytics/track';
@@ -194,7 +195,7 @@ export default function CustomerSettingsPage() {
         </div>
       </div>
 
-      {plan && (
+      {plan && plan.pricingEnabled !== false && (
         <Card className="bg-surface-container-lowest" glass={false}>
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
@@ -206,7 +207,7 @@ export default function CustomerSettingsPage() {
                 {plan.plan === 'FREEMIUM' && !plan.writesLocked && `Freemium trial · ${plan.trialDaysLeft} days left`}
               </p>
             </div>
-            {plan.plan !== 'PRO' && (
+            {shouldShowUpgradeCta(plan) && (
               <Button type="button" onClick={() => setUpgradeOpen(true)}>
                 {plan.writesLocked ? 'Upgrade to continue' : `Plans from ${formatInr(100)}/mo`}
               </Button>
@@ -215,14 +216,10 @@ export default function CustomerSettingsPage() {
         </Card>
       )}
 
-      {plan && <UsageMeters plan={plan} />}
+      {plan && plan.pricingEnabled !== false && <UsageMeters plan={plan} />}
 
-      <BillingSubscription />
-      <BillingInvoices />
-
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Profile Details Form */}
-        <div className="lg:col-span-8">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)] gap-6 items-start">
+        <div className="flex flex-col gap-6 min-w-0">
           <Card className="bg-surface-container-lowest" glass={false}>
             <form onSubmit={handleUpdate} className="flex flex-col gap-6">
               <div className="flex flex-col sm:flex-row items-center gap-lg border-b border-outline-variant/30 pb-lg">
@@ -377,10 +374,23 @@ export default function CustomerSettingsPage() {
               </div>
             </form>
           </Card>
+
+          <NotificationPreferencesCard />
+
+          <Card className="bg-surface-container-lowest p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4" glass={false}>
+            <div>
+              <h3 className="font-title-md text-title-md font-bold text-primary">Personal reminders</h3>
+              <p className="font-body-md text-on-surface-variant mt-1">
+                Create and manage payment reminders on the dedicated Reminders page.
+              </p>
+            </div>
+            <Link href="/customer/reminders">
+              <Button variant="secondary">Open Reminders</Button>
+            </Link>
+          </Card>
         </div>
 
-        {/* Security Password Update Form */}
-        <div className="lg:col-span-4 flex flex-col gap-6">
+        <div className="flex flex-col gap-6 min-w-0">
           <Card className="bg-surface-container-lowest" glass={false}>
             <form onSubmit={handlePasswordReset} className="flex flex-col gap-4">
               <div>
@@ -424,23 +434,13 @@ export default function CustomerSettingsPage() {
               </Button>
             </form>
           </Card>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-8 flex flex-col gap-6">
-          <NotificationPreferencesCard />
-          <Card className="bg-surface-container-lowest p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4" glass={false}>
-            <div>
-              <h3 className="font-title-md text-title-md font-bold text-primary">Personal reminders</h3>
-              <p className="font-body-md text-on-surface-variant mt-1">
-                Create and manage payment reminders on the dedicated Reminders page.
-              </p>
-            </div>
-            <Link href="/customer/reminders">
-              <Button variant="secondary">Open Reminders</Button>
-            </Link>
-          </Card>
+          {plan?.pricingEnabled !== false && (
+            <>
+              <BillingSubscription compact />
+              <BillingInvoices compact />
+            </>
+          )}
         </div>
       </div>
 

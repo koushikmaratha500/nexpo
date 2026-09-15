@@ -20,6 +20,7 @@ export interface PlanEntitlement {
   trialDaysLeft: number;
   writesLocked: boolean;
   isPaid: boolean;
+  pricingEnabled: boolean;
   features: {
     csvExport: boolean;
     ai: boolean;

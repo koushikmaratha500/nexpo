@@ -8,6 +8,7 @@ import { GroupRepository } from '@/lib/api/repositories/group.repository';
 import { ReminderRepository } from '@/lib/api/repositories/reminder.repository';
 import { AiUsageRepository } from '@/lib/api/repositories/aiUsage.repository';
 import { PLAN_PRICES_INR } from '@/lib/billing/catalog';
+import { SettingsService } from '@/lib/api/services/settings.service';
 
 vi.mock('@/lib/api/repositories/user.repository', () => ({
   UserRepository: { findById: vi.fn(), update: vi.fn() },
@@ -34,7 +35,13 @@ vi.mock('@/lib/api/services/billing.service', () => ({
     }),
   },
 }));
+vi.mock('@/lib/api/services/settings.service', () => ({
+  SettingsService: {
+    isPricingEnabled: vi.fn().mockResolvedValue(true),
+  },
+}));
 
+const mockedIsPricingEnabled = vi.mocked(SettingsService.isPricingEnabled);
 const mockedFindById = vi.mocked(UserRepository.findById);
 const mockedUpdate = vi.mocked(UserRepository.update);
 const mockedTxnCount = vi.mocked(TransactionRepository.countPersonalByUser);
@@ -52,6 +59,7 @@ function usageZeros() {
 describe('PlanService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockedIsPricingEnabled.mockResolvedValue(true);
     usageZeros();
   });
 
@@ -134,6 +142,31 @@ describe('PlanService', () => {
     expect(entitlement.features.ai).toBe(true);
     expect(entitlement.features.csvExport).toBe(true);
     expect(entitlement.limits).toBeNull();
+  });
+
+  it('grants full Pro access when pricing is disabled', async () => {
+    mockedIsPricingEnabled.mockResolvedValue(false);
+    mockedFindById.mockResolvedValue({
+      id: 'u1',
+      plan: BillingPlan.FREEMIUM,
+      planStatus: PlanStatus.EXPIRED,
+      billingInterval: BillingInterval.NONE,
+      trialEndsAt: new Date('2026-08-01T00:00:00.000Z'),
+      currentPeriodEndsAt: null,
+      createdAt: new Date('2026-08-01T00:00:00.000Z'),
+    } as never);
+
+    const entitlement = await PlanService.getEntitlement('u1', new Date('2026-09-10T12:00:00.000Z'));
+    expect(entitlement.pricingEnabled).toBe(false);
+    expect(entitlement.plan).toBe(BillingPlan.PRO);
+    expect(entitlement.writesLocked).toBe(false);
+    expect(entitlement.isPaid).toBe(true);
+    expect(entitlement.limits).toBeNull();
+    expect(entitlement.features.ai).toBe(true);
+    await expect(PlanService.assertWritesAllowed('u1')).resolves.toMatchObject({
+      writesLocked: false,
+      pricingEnabled: false,
+    });
   });
 
   it('grandfathers users missing trialEndsAt with a fresh 7-day trial', async () => {

@@ -22,11 +22,41 @@ React Native client mirroring the **customer web portal**. Uses the same HTTP AP
 ```bash
 npm install
 cp mobile/.env.example mobile/.env
-# EXPO_PUBLIC_API_URL=http://localhost:3000  (iOS sim)
-# EXPO_PUBLIC_API_URL=http://10.0.2.2:3000   (Android emu)
 npm run dev          # Next.js API in another terminal
-npm run mobile
+npm run mobile:android   # or: cd mobile && npm run android
 ```
+
+### Environment variables
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `EXPO_PUBLIC_API_URL` | **Yes** | Base URL for all API calls via `@nexpo/shared` |
+| `EXPO_PUBLIC_SUPABASE_URL` | No | Google OAuth only |
+| `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | No | Google OAuth only |
+
+**API URL by target:**
+
+| Target | `EXPO_PUBLIC_API_URL` |
+|--------|------------------------|
+| Android emulator | `http://10.0.2.2:3000` |
+| iOS simulator | `http://localhost:3000` |
+| Physical device (same Wi‑Fi) | `http://<LAN-IP>:3000` — run API with `next dev -H 0.0.0.0` |
+| Staging / production | `https://your-domain.com` (HTTPS required for release APK/AAB) |
+
+For Google login, add `paysasuchan://auth/callback` to Supabase redirect URLs.
+
+### Android pre-flight (local)
+
+- [ ] `mobile/.env` exists with `EXPO_PUBLIC_API_URL`
+- [ ] Next.js dev server running
+- [ ] Android emulator or device with Expo Go / dev client
+
+### EAS / Play Store (before cloud build)
+
+- [ ] `eas login` + `eas init` in `mobile/` (replaces placeholder `projectId` in `app.json`)
+- [ ] EAS secrets: `EXPO_PUBLIC_API_URL`, Supabase vars (if using Google login)
+- [ ] `google-play-service-account.json` for `eas submit` (gitignored)
+- [ ] Preview APK smoke test: login, transactions, settings, billing sheet
 
 ## Architecture
 
