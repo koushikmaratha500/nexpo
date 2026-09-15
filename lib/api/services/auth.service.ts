@@ -7,10 +7,10 @@ import crypto from 'crypto';
 import { EmailService } from './email.service';
 import { OtpService } from './otp.service';
 import * as jose from 'jose';
-import { AuditAction } from '@prisma/client';
+import { AuditAction, AuthProvider, BillingInterval, BillingPlan, PlanStatus } from '@prisma/client';
 import { assertValidUsername, isValidUsername } from '../utils/username';
 import { verifySupabaseAccessToken } from '@/lib/supabase/verifyAccessToken';
-import { AuthProvider } from '@prisma/client';
+import { SettingsService } from './settings.service';
 
 function getJwtSecretBytes(): Uint8Array {
   const secret = process.env.JWT_SECRET?.trim();
@@ -89,12 +89,27 @@ export class AuthService {
       ? await MetaRepository.findCountryByName(data.country)
       : null;
 
+    const pricingEnabled = await SettingsService.isPricingEnabled();
+    const defaultPlan = pricingEnabled
+      ? {
+          plan: BillingPlan.FREEMIUM,
+          planStatus: PlanStatus.TRIALING,
+          billingInterval: BillingInterval.NONE,
+        }
+      : {
+          plan: BillingPlan.PRO,
+          planStatus: PlanStatus.ACTIVE,
+          billingInterval: BillingInterval.LIFETIME,
+        };
+
     const user = await UserRepository.create({
       username,
       firstName: data.firstName,
       lastName: data.lastName || null,
       email: data.email,
       passwordHash: hashedPassword,
+      provider: AuthProvider.EMAIL,
+      ...defaultPlan,
       status: 'P',
       countryId: countryRecord ? countryRecord.id : null,
       currencyId: countryRecord ? countryRecord.currencyId : null,
@@ -103,7 +118,7 @@ export class AuthService {
     await UserRepository.createAudit({
       userId: user.id,
       action: AuditAction.CREATE,
-      newValue: { email: user.email, firstName: user.firstName, status: user.status },
+      newValue: { email: user.email, firstName: user.firstName, status: user.status, provider: 'EMAIL' },
       ipAddress: meta.ip || null,
       userAgent: meta.ua || null,
       status: 'A',
@@ -289,6 +304,19 @@ export class AuthService {
       const countryRecord = await MetaRepository.findCountryByName('India');
       const username = await this.generateUniqueUsername(googleUser.email);
 
+      const pricingEnabled = await SettingsService.isPricingEnabled();
+      const defaultPlan = pricingEnabled
+        ? {
+            plan: BillingPlan.FREEMIUM,
+            planStatus: PlanStatus.TRIALING,
+            billingInterval: BillingInterval.NONE,
+          }
+        : {
+            plan: BillingPlan.PRO,
+            planStatus: PlanStatus.ACTIVE,
+            billingInterval: BillingInterval.LIFETIME,
+          };
+
       user = await UserRepository.create({
         username,
         firstName: googleUser.firstName,
@@ -296,6 +324,7 @@ export class AuthService {
         email: googleUser.email,
         profileImageUrl: googleUser.avatarUrl,
         provider: AuthProvider.GOOGLE,
+        ...defaultPlan,
         status: 'A',
         emailVerified: true,
         countryId: countryRecord?.id ?? null,
@@ -317,7 +346,6 @@ export class AuthService {
 
       const updates: Parameters<typeof UserRepository.update>[1] = {
         emailVerified: true,
-        provider: AuthProvider.GOOGLE,
       };
 
       if (user.status === 'P') {

@@ -12,6 +12,7 @@ const ADMIN_NAV_LINKS = [
   { name: 'Reminders', path: '/admin/reminders', icon: 'notifications_active' },
   { name: 'Administrators', path: '/admin/admins', icon: 'shield_person' },
   { name: 'Categories', path: '/admin/categories', icon: 'category' },
+  { name: 'Billing', path: '/admin/billing', icon: 'payments' },
   { name: 'Reports', path: '/admin/reports', icon: 'assessment' },
   { name: 'Support', path: '/admin/support', icon: 'support_agent' },
   { name: 'Settings', path: '/admin/settings', icon: 'settings' },

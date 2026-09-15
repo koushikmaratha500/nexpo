@@ -1,10 +1,18 @@
 import { NextResponse } from 'next/server';
 
 export class HttpError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string,
+    public extra?: Record<string, unknown>,
+  ) {
     super(message);
     this.name = 'HttpError';
   }
+}
+
+export function httpErrorBody(error: HttpError): Record<string, unknown> {
+  return { error: error.message, ...(error.extra ?? {}) };
 }
 
 export function handleApiError(error: any) {
@@ -16,7 +24,7 @@ export function handleApiError(error: any) {
   }
 
   if (error instanceof HttpError) {
-    return NextResponse.json({ error: error.message }, { status: error.status });
+    return NextResponse.json(httpErrorBody(error), { status: error.status });
   }
 
   return NextResponse.json(

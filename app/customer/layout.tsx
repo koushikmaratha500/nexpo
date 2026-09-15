@@ -1,10 +1,11 @@
 'use client';
 
-import React from 'react';
+import React, { Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/components/auth/AuthContext';
 import { OneSignalProvider } from '@/components/features/notifications';
+import { PlanBanner, PlanProvider, UpgradeWall, usePlan } from '@/components/features/billing';
 
 const CUSTOMER_NAV_LINKS = [
   { name: 'Dashboard', path: '/customer', icon: 'dashboard' },
@@ -17,15 +18,27 @@ const CUSTOMER_NAV_LINKS = [
 ];
 
 export default function CustomerLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <OneSignalProvider>
+      <Suspense fallback={null}>
+        <PlanProvider>
+          <CustomerShell>{children}</CustomerShell>
+        </PlanProvider>
+      </Suspense>
+    </OneSignalProvider>
+  );
+}
+
+function CustomerShell({ children }: { children: React.ReactNode }) {
   const { logout } = useAuth();
   const router = useRouter();
+  const { plan } = usePlan();
 
   const handleFabClick = () => {
     router.push('/customer/transactions?openAdd=true');
   };
 
   return (
-    <OneSignalProvider>
       <AppLayout
         navLinks={CUSTOMER_NAV_LINKS}
         appTitle="PaysaSuchan"
@@ -33,15 +46,16 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
         roleLabel="Customer Hub"
         searchPlaceholder="Search personal ledger..."
         showNotifications
-        showFab
+        showFab={!plan?.writesLocked}
         fabLabel="Add Transaction"
         fabIcon="add"
         fabHref="/customer/transactions"
         onFabClick={handleFabClick}
         onLogout={logout}
       >
+        <PlanBanner />
         {children}
+        <UpgradeWall />
       </AppLayout>
-    </OneSignalProvider>
   );
 }

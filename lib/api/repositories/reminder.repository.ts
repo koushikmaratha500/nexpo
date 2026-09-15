@@ -204,6 +204,21 @@ export class ReminderRepository {
     });
   }
 
+  static async countActivePersonal(userId: string): Promise<number> {
+    const now = new Date();
+    return prisma.paymentReminder.count({
+      where: {
+        userId,
+        groupId: null,
+        status: { in: [ReminderStatus.ACTIVE, ReminderStatus.SNOOZED] },
+        NOT: {
+          status: ReminderStatus.SNOOZED,
+          snoozedUntil: { gt: now },
+        },
+      },
+    });
+  }
+
   static async findUpcomingPersonal(userId: string, days = 7) {
     const now = new Date();
     now.setHours(0, 0, 0, 0);

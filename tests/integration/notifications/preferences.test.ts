@@ -52,6 +52,11 @@ describe('NotificationService preferences', () => {
         defaultChannels: ['IN_APP'],
       },
       resendEnabled: false,
+      billing: {
+        checkoutProvider: 'razorpay',
+        razorpayConfigured: false,
+        stripeConfigured: false,
+      },
     });
   });
 
@@ -101,6 +106,11 @@ describe('NotificationService preferences', () => {
         defaultChannels: ['IN_APP'],
       },
       resendEnabled: true,
+      billing: {
+        checkoutProvider: 'razorpay',
+        razorpayConfigured: false,
+        stripeConfigured: false,
+      },
     });
 
     await expect(

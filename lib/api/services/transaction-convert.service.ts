@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { HttpError } from '../middleware/errorHandler';
 import { GroupRepository } from '../repositories/group.repository';
 import { GroupService } from './group.service';
+import { PlanService } from './plan.service';
 import { SplitService } from './split.service';
 import type { ConvertTransactionDto } from '../dtos/transaction-convert.dto';
 
@@ -70,6 +71,7 @@ async function hardDeleteTransaction(tx: PrismaTx, transactionId: string) {
 
 export class TransactionConvertService {
   static async convert(userId: string, transactionId: string, dto: ConvertTransactionDto, meta: RequestMeta = {}) {
+    await PlanService.assertWritesAllowed(userId);
     const source = await loadSourceTransaction(transactionId);
     if (!source) {
       throw new HttpError(404, 'Transaction not found');

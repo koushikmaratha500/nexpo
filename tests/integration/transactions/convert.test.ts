@@ -38,6 +38,12 @@ vi.mock('@/lib/prisma', () => ({
   },
 }));
 
+vi.mock('@/lib/api/services/plan.service', () => ({
+  PlanService: {
+    assertWritesAllowed: vi.fn(),
+  },
+}));
+
 vi.mock('@/lib/api/services/group.service', () => ({
   GroupService: {
     assertMember: vi.fn(),

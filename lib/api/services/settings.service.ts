@@ -2,6 +2,7 @@ import { SettingsRepository } from '../repositories/settings.repository';
 import { isResendEnabled } from '../utils/emailConfig';
 import type { SystemSettingsResponse, UpdateSystemSettingsDto } from '../dtos/settings.dto';
 import { Prisma } from '@prisma/client';
+import { isRazorpayConfigured, isStripeConfigured } from '@/lib/billing/config';
 
 const POLICY_KEYS = {
   baseCurrency: 'baseCurrency',
@@ -17,6 +18,11 @@ const NOTIFICATION_KEYS = {
   defaultChannels: 'notifications.defaultChannels',
 } as const;
 
+const BILLING_KEYS = {
+  checkoutProvider: 'billing.checkoutProvider',
+  pricingEnabled: 'billing.pricingEnabled',
+} as const;
+
 export const DEFAULT_SYSTEM_SETTINGS: Omit<SystemSettingsResponse, 'resendEnabled'> = {
   baseCurrency: 'INR',
   matchingRate: 90,
@@ -27,6 +33,12 @@ export const DEFAULT_SYSTEM_SETTINGS: Omit<SystemSettingsResponse, 'resendEnable
     emailRemindersEnabled: true,
     inAppEnabled: true,
     defaultChannels: ['IN_APP'],
+  },
+  billing: {
+    checkoutProvider: 'razorpay',
+    pricingEnabled: true,
+    razorpayConfigured: false,
+    stripeConfigured: false,
   },
 };
 
@@ -77,6 +89,13 @@ function mapStoredSettings(rows: Array<{ key: string; value: unknown }>): Omit<S
         defaults.notifications.defaultChannels,
       ),
     },
+    billing: {
+      checkoutProvider:
+        byKey.get(BILLING_KEYS.checkoutProvider) === 'stripe' ? 'stripe' : 'razorpay',
+      pricingEnabled: asBoolean(byKey.get(BILLING_KEYS.pricingEnabled), defaults.billing.pricingEnabled),
+      razorpayConfigured: isRazorpayConfigured(),
+      stripeConfigured: isStripeConfigured(),
+    },
   };
 }
 
@@ -124,11 +143,29 @@ export class SettingsService {
       });
     }
 
+    if (data.billing?.checkoutProvider !== undefined) {
+      entries.push({
+        key: BILLING_KEYS.checkoutProvider,
+        value: data.billing.checkoutProvider,
+      });
+    }
+    if (data.billing?.pricingEnabled !== undefined) {
+      entries.push({
+        key: BILLING_KEYS.pricingEnabled,
+        value: data.billing.pricingEnabled,
+      });
+    }
+
     if (entries.length > 0) {
       await SettingsRepository.upsertMany(entries, adminId);
     }
 
     return this.getSettings();
+  }
+
+  static async isPricingEnabled(): Promise<boolean> {
+    const settings = await this.getSettings();
+    return settings.billing.pricingEnabled;
   }
 
   static async isNotificationChannelGloballyEnabled(

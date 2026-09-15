@@ -11,6 +11,7 @@ import {
   createAdminSchema,
   updateAdminSchema,
   resetUserPasswordSchema,
+  grantUserPlanSchema,
 } from '../dtos/admin.dto';
 
 export class AdminController extends BaseController {
@@ -124,6 +125,29 @@ export class AdminController extends BaseController {
         },
       };
     }, { fallbackMessage: 'Failed to reset password' });
+  }
+
+  static async grantUserPlan(req: NextRequest, id: string) {
+    return this.safeExecuteJson(async () => {
+      const body = await req.json();
+      const validated = grantUserPlanSchema.parse(body);
+      const updated = await AdminService.grantUserPlan(id, validated, {
+        ip: req.headers.get('x-forwarded-for') || null,
+        ua: req.headers.get('user-agent') || null,
+      });
+      return {
+        success: true,
+        message: 'Plan updated',
+        user: {
+          id: updated.id,
+          plan: updated.plan,
+          planStatus: updated.planStatus,
+          billingInterval: updated.billingInterval,
+          trialEndsAt: updated.trialEndsAt,
+          currentPeriodEndsAt: updated.currentPeriodEndsAt,
+        },
+      };
+    }, { fallbackMessage: 'Failed to update plan' });
   }
 
   static async getUserExpenses(req: NextRequest, userId: string) {

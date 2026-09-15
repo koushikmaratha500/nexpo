@@ -23,6 +23,52 @@ enum AuthProvider {
   MOBILE
 }
 
+enum BillingPlan {
+  FREEMIUM
+  STARTER
+  PRO
+}
+
+enum PlanStatus {
+  TRIALING
+  ACTIVE
+  EXPIRED
+  PAST_DUE
+  CANCELED
+}
+
+enum BillingInterval {
+  NONE
+  MONTH
+  YEAR
+  LIFETIME
+}
+
+enum PaymentProvider {
+  RAZORPAY
+  STRIPE
+}
+
+enum CheckoutSku {
+  STARTER_MONTHLY
+  STARTER_YEARLY
+  PRO_LIFETIME
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum CheckoutSessionStatus {
+  CREATED
+  COMPLETED
+  EXPIRED
+  FAILED
+}
+
 enum AuditAction {
   CREATE
   UPDATE
@@ -127,8 +173,23 @@ model User {
   status          Status       @default(A)
   forcedResetPassword Boolean   @default(false)
   lastPasswordChangedDate DateTime?
+  plan            BillingPlan  @default(FREEMIUM)
+  planStatus      PlanStatus   @default(TRIALING)
+  billingInterval BillingInterval @default(NONE)
+  trialEndsAt     DateTime?
+  currentPeriodEndsAt DateTime?
+  paymentProvider PaymentProvider?
+  razorpayCustomerId String?
+  stripeCustomerId   String?
+  razorpaySubscriptionId String?
+  stripeSubscriptionId   String?
+  billingGstin           String?
+  trialReminderSentAt    DateTime?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
+  billingCheckoutSessions BillingCheckoutSession[]
+  billingPayments BillingPayment[]
+  billingInvoices BillingInvoice[]
   transactions    Transaction[]
   sessions        Session[]
   userAudits      UserAudit[]
@@ -392,6 +453,84 @@ model SystemSetting {
   updatedByAdminId String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+}
+
+model BillingCheckoutSession {
+  id                     String                @id @default(uuid())
+  userId                 String
+  user                   User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sku                    CheckoutSku
+  provider               PaymentProvider
+  status                 CheckoutSessionStatus @default(CREATED)
+  subtotalPaise          Int
+  gstPaise               Int
+  totalPaise             Int
+  currency               String                @default("INR")
+  providerSessionId      String?
+  providerSubscriptionId String?
+  metadata               Json?
+  expiresAt              DateTime?
+  completedAt            DateTime?
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+  payment                BillingPayment?
+
+  @@index([userId])
+  @@index([providerSessionId])
+}
+
+model BillingPayment {
+  id                String          @id @default(uuid())
+  userId            String
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  checkoutSessionId String          @unique
+  checkoutSession   BillingCheckoutSession @relation(fields: [checkoutSessionId], references: [id], onDelete: Cascade)
+  provider          PaymentProvider
+  providerPaymentId String
+  amountPaise       Int
+  currency          String          @default("INR")
+  status            PaymentStatus
+  sku               CheckoutSku
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  invoice           BillingInvoice?
+
+  @@unique([provider, providerPaymentId])
+  @@index([userId])
+}
+
+model BillingInvoice {
+  id             String   @id @default(uuid())
+  invoiceNumber  String   @unique
+  paymentId      String   @unique
+  payment        BillingPayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  legalName      String
+  gstin          String
+  sac            String
+  billingAddress String
+  customerName   String
+  customerEmail  String
+  sku            CheckoutSku
+  planLabel      String
+  subtotalPaise  Int
+  cgstPaise      Int
+  sgstPaise      Int
+  igstPaise      Int
+  totalPaise     Int
+  pdfBytes       Bytes?
+  issuedAt       DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId])
+  @@index([invoiceNumber])
+}
+
+model BillingInvoiceSequence {
+  year       Int @id
+  lastNumber Int @default(0)
 }
 
 model Group {

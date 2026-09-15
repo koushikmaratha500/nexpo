@@ -8,9 +8,19 @@ export interface TokenStorage {
 }
 
 let tokenStorage: TokenStorage | null = null;
+export interface PlanLimitDetails {
+  message?: string;
+  code?: string;
+}
+
+let planLimitHandler: ((details: PlanLimitDetails) => void) | null = null;
 
 export function configureApiClient(storage: TokenStorage): void {
   tokenStorage = storage;
+}
+
+export function setPlanLimitHandler(handler: ((details: PlanLimitDetails) => void) | null): void {
+  planLimitHandler = handler;
 }
 
 function createClient(): AxiosInstance {
@@ -25,6 +35,20 @@ function createClient(): AxiosInstance {
     }
     return config;
   });
+
+  client.interceptors.response.use(
+    (response) => response,
+    (error) => {
+      if (error.response?.status === 402) {
+        const data = error.response.data as { error?: string; code?: string } | undefined;
+        planLimitHandler?.({
+          message: typeof data?.error === 'string' ? data.error : undefined,
+          code: typeof data?.code === 'string' ? data.code : undefined,
+        });
+      }
+      return Promise.reject(error);
+    },
+  );
 
   return client;
 }

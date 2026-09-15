@@ -7,6 +7,7 @@ import { AiUsageRepository } from '@/lib/api/repositories/aiUsage.repository';
 import { getAiConfig } from '@/lib/ai/config';
 import { generateInsights } from '@/lib/ai/agents/insights.agent';
 import { toProviderHttpError, unwrapProviderError } from '@/lib/ai/errors';
+import { PlanService } from '@/lib/api/services/plan.service';
 
 const INSIGHTS_DAILY_LIMIT = 5;
 const INSIGHTS_WINDOW_SECONDS = 24 * 60 * 60;
@@ -73,6 +74,7 @@ async function getInsights(userId: string, cacheKey: string): Promise<InsightsPa
 export async function GET(req: NextRequest) {
   try {
     const user = await authGuard(req, 'CUSTOMER');
+    await PlanService.assertCanUseAi(user.id);
 
     const todayKey = new Date().toISOString().slice(0, 10);
     const cacheKey = `ai_insights:${user.id}:${todayKey}`;

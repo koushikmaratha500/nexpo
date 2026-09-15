@@ -6,6 +6,7 @@ import { MetaResolutionService } from './meta-resolution.service';
 import { GroupService } from './group.service';
 import { SplitService } from './split.service';
 import { SettlementService } from './settlement.service';
+import { PlanService } from './plan.service';
 import type { CreateGroupTransactionDto, UpdateGroupTransactionDto } from '../dtos/group-transaction.dto';
 
 interface RequestMeta {
@@ -40,6 +41,7 @@ export class GroupTransactionService {
     data: CreateGroupTransactionDto,
     meta: RequestMeta = {},
   ) {
+    await PlanService.assertWritesAllowed(userId);
     await GroupService.assertMember(groupId, userId);
 
     const group = await GroupRepository.findByIdWithMembers(groupId);
@@ -113,6 +115,7 @@ export class GroupTransactionService {
     data: UpdateGroupTransactionDto,
     meta: RequestMeta = {},
   ) {
+    await PlanService.assertWritesAllowed(userId);
     const membership = await GroupService.assertMember(groupId, userId);
     const existing = await GroupTransactionRepository.findByIdInGroup(groupId, transactionId);
     if (!existing) {
@@ -185,6 +188,7 @@ export class GroupTransactionService {
   }
 
   static async deleteTransaction(groupId: string, transactionId: string, userId: string, meta: RequestMeta = {}) {
+    await PlanService.assertWritesAllowed(userId);
     const membership = await GroupService.assertMember(groupId, userId);
     const existing = await GroupTransactionRepository.findByIdInGroup(groupId, transactionId);
     if (!existing) {
@@ -207,6 +211,7 @@ export class GroupTransactionService {
   }
 
   static async exportSettlementCsv(groupId: string, userId: string) {
+    await PlanService.assertCanExportCsv(userId);
     await GroupService.assertMember(groupId, userId);
     const balances = await GroupTransactionRepository.computeBalances(groupId);
     const transfers = SettlementService.computeTransfers(balances.members);

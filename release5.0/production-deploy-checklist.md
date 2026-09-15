@@ -2,6 +2,8 @@
 
 Use for **Vercel web go-live** and **production EAS** builds.
 
+**Billing & payments:** see [`billing-go-live-checklist.md`](./billing-go-live-checklist.md) (env vars, webhooks, staging checkout walkthrough).
+
 ## Pre-deploy
 
 - [ ] `npx prisma db push` applied on production database
@@ -33,7 +35,12 @@ Brand assets ship in `public/brand/` and `mobile/assets/` (run `npm run brand:ch
 | `ONESIGNAL_REST_API_KEY` | If push | |
 | `UPSTASH_REDIS_REST_URL` | If rate limits | Or Vercel KV vars |
 | `UPSTASH_REDIS_REST_TOKEN` | If rate limits | |
-| `TRIGGER_SECRET_KEY` | If Trigger | Background jobs |
+| `TRIGGER_PROJECT_REF` | If Trigger | Project ref (`proj_...`) |
+| `TRIGGER_SECRET_KEY` | If Trigger | Background jobs (set PROD key in Trigger.dev env) |
+| `BILLING_DISPATCH_SECRET` | Optional | Manual billing dispatch curl only |
+| `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` | If billing | + webhook secret + Starter plan IDs |
+| `STRIPE_SECRET_KEY` | If billing | + webhook secret + price IDs (see billing checklist) |
+| `BILLING_LEGAL_NAME` / `BILLING_GSTIN` / `BILLING_ADDRESS` | If billing | Invoice header |
 | `NEXT_PUBLIC_BRAND_LOGO_URL` | Optional | Swap logo without redeploy |
 | `NEXT_PUBLIC_GTM_ID` | Optional | Google Tag Manager container ID (e.g. `GTM-MVSSX5X5`) — see `docs/analytics/TRACKING_PLAN.md` |
 
@@ -84,7 +91,14 @@ Update `eas.json` submit block with real Apple / Play credentials before submit.
 npm run trigger:deploy
 ```
 
-Verify scheduled task `purge-expired-receipt-shares` appears in Trigger dashboard.
+Verify scheduled tasks appear in Trigger dashboard:
+
+- `reminder-due-dispatch` (07:00 IST)
+- `billing-lifecycle-dispatch` (08:00 IST)
+- `purge-expired-receipt-shares` (02:30 IST)
+- `daily-health-check` (06:00 IST)
+
+Set production env vars in Trigger.dev (Project → Environment variables): `DATABASE_URL`, `DIRECT_URL`, `ENABLE_RESEND`, `RESEND_API_KEY`, Redis/KV vars as needed.
 
 ## Monitoring (soft launch week)
 

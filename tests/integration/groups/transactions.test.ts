@@ -7,6 +7,13 @@ import { GroupRepository } from '@/lib/api/repositories/group.repository';
 import { GroupTransactionRepository } from '@/lib/api/repositories/group-transaction.repository';
 import { MetaResolutionService } from '@/lib/api/services/meta-resolution.service';
 
+vi.mock('@/lib/api/services/plan.service', () => ({
+  PlanService: {
+    assertWritesAllowed: vi.fn(),
+    assertCanExportCsv: vi.fn(),
+  },
+}));
+
 vi.mock('@/lib/api/services/group.service', () => ({
   GroupService: {
     assertMember: vi.fn(),

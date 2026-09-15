@@ -9,7 +9,12 @@ import Image from 'next/image';
 import axios from 'axios';
 import { PasswordInput } from '@/components/forms/PasswordInput';
 import { NotificationPreferencesCard } from '@/components/features/notifications';
+import { BillingInvoices, BillingSubscription, UsageMeters, usePlan } from '@/components/features/billing';
+import { formatInr } from '@/lib/billing/catalog';
+import { shouldShowUpgradeCta } from '@/lib/billing/planUi';
 import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { trackBilling } from '@/lib/analytics/track';
 
 interface CountryOption {
   id: string;
@@ -28,6 +33,9 @@ interface CurrencyOption {
 export default function CustomerSettingsPage() {
   const { user, updateUser } = useAuth();
   const { addToast } = useToast();
+  const { plan, setUpgradeOpen, refresh } = usePlan();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
 
   const [firstName, setFirstName] = useState(() => user?.firstName || '');
   const [lastName, setLastName] = useState(() => user?.lastName || '');
@@ -47,6 +55,27 @@ export default function CustomerSettingsPage() {
   const [isUploading, setIsUploading] = useState(false);
 
   const metadataFetchedRef = useRef(false);
+  const checkoutHandledRef = useRef(false);
+
+  useEffect(() => {
+    if (checkoutHandledRef.current) return;
+    const checkout = searchParams.get('checkout');
+    if (!checkout) return;
+    checkoutHandledRef.current = true;
+    const pageSearch = searchParams.toString() ? `?${searchParams.toString()}` : '';
+    if (checkout === 'success') {
+      trackBilling(pathname, pageSearch, {
+        action: 'checkout_success',
+        provider: 'stripe',
+        plan: plan?.plan,
+      });
+      addToast('Payment received. Your plan will update shortly.', 'success');
+      void refresh();
+    } else if (checkout === 'cancel') {
+      trackBilling(pathname, pageSearch, { action: 'checkout_cancel', provider: 'stripe' });
+      addToast('Checkout was cancelled.', 'info');
+    }
+  }, [searchParams, addToast, refresh, pathname, plan?.plan]);
 
   // Load countries & currencies on mount
   useEffect(() => {
@@ -166,9 +195,31 @@ export default function CustomerSettingsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Profile Details Form */}
-        <div className="lg:col-span-8">
+      {plan && plan.pricingEnabled !== false && (
+        <Card className="bg-surface-container-lowest" glass={false}>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h3 className="font-title-md font-bold text-primary">Current plan</h3>
+              <p className="text-sm text-on-surface-variant mt-1">
+                {plan.plan === 'PRO' && 'Pro · lifetime'}
+                {plan.plan === 'STARTER' && `Starter · ${plan.billingInterval === 'YEAR' ? 'yearly' : 'monthly'}`}
+                {plan.plan === 'FREEMIUM' && plan.writesLocked && 'Freemium trial ended — writes locked'}
+                {plan.plan === 'FREEMIUM' && !plan.writesLocked && `Freemium trial · ${plan.trialDaysLeft} days left`}
+              </p>
+            </div>
+            {shouldShowUpgradeCta(plan) && (
+              <Button type="button" onClick={() => setUpgradeOpen(true)}>
+                {plan.writesLocked ? 'Upgrade to continue' : `Plans from ${formatInr(100)}/mo`}
+              </Button>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {plan && plan.pricingEnabled !== false && <UsageMeters plan={plan} />}
+
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)] gap-6 items-start">
+        <div className="flex flex-col gap-6 min-w-0">
           <Card className="bg-surface-container-lowest" glass={false}>
             <form onSubmit={handleUpdate} className="flex flex-col gap-6">
               <div className="flex flex-col sm:flex-row items-center gap-lg border-b border-outline-variant/30 pb-lg">
@@ -323,10 +374,23 @@ export default function CustomerSettingsPage() {
               </div>
             </form>
           </Card>
+
+          <NotificationPreferencesCard />
+
+          <Card className="bg-surface-container-lowest p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4" glass={false}>
+            <div>
+              <h3 className="font-title-md text-title-md font-bold text-primary">Personal reminders</h3>
+              <p className="font-body-md text-on-surface-variant mt-1">
+                Create and manage payment reminders on the dedicated Reminders page.
+              </p>
+            </div>
+            <Link href="/customer/reminders">
+              <Button variant="secondary">Open Reminders</Button>
+            </Link>
+          </Card>
         </div>
 
-        {/* Security Password Update Form */}
-        <div className="lg:col-span-4 flex flex-col gap-6">
+        <div className="flex flex-col gap-6 min-w-0">
           <Card className="bg-surface-container-lowest" glass={false}>
             <form onSubmit={handlePasswordReset} className="flex flex-col gap-4">
               <div>
@@ -370,23 +434,13 @@ export default function CustomerSettingsPage() {
               </Button>
             </form>
           </Card>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-8 flex flex-col gap-6">
-          <NotificationPreferencesCard />
-          <Card className="bg-surface-container-lowest p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4" glass={false}>
-            <div>
-              <h3 className="font-title-md text-title-md font-bold text-primary">Personal reminders</h3>
-              <p className="font-body-md text-on-surface-variant mt-1">
-                Create and manage payment reminders on the dedicated Reminders page.
-              </p>
-            </div>
-            <Link href="/customer/reminders">
-              <Button variant="secondary">Open Reminders</Button>
-            </Link>
-          </Card>
+          {plan?.pricingEnabled !== false && (
+            <>
+              <BillingSubscription compact />
+              <BillingInvoices compact />
+            </>
+          )}
         </div>
       </div>
 

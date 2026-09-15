@@ -2,6 +2,7 @@ import { GroupMemberRole, ReminderStatus } from '@prisma/client';
 import { HttpError } from '../middleware/errorHandler';
 import { ReminderRepository } from '../repositories/reminder.repository';
 import { GroupService } from './group.service';
+import { PlanService } from './plan.service';
 import { NotificationService } from './notification.service';
 import { SettingsService } from './settings.service';
 import type { CreateReminderDto, UpdateReminderDto } from '../dtos/reminder.dto';
@@ -39,6 +40,7 @@ export class ReminderService {
   }
 
   static async createPersonal(userId: string, data: CreateReminderDto) {
+    await PlanService.assertCanCreateReminder(userId);
     await this.validateChannels(data.channels);
 
     const reminder = await ReminderRepository.create({
@@ -67,6 +69,7 @@ export class ReminderService {
   }
 
   static async createGroup(groupId: string, userId: string, data: CreateReminderDto) {
+    await PlanService.assertWritesAllowed(userId);
     await GroupService.assertAdmin(groupId, userId);
     await this.validateChannels(data.channels);
 
@@ -97,6 +100,7 @@ export class ReminderService {
   }
 
   static async updatePersonal(id: string, userId: string, data: UpdateReminderDto) {
+    await PlanService.assertWritesAllowed(userId);
     const existing = await ReminderRepository.findById(id);
     if (!existing || existing.userId !== userId || existing.groupId) {
       throw new HttpError(404, 'Reminder not found');
@@ -122,6 +126,7 @@ export class ReminderService {
   }
 
   static async updateGroup(groupId: string, id: string, userId: string, data: UpdateReminderDto) {
+    await PlanService.assertWritesAllowed(userId);
     await GroupService.assertAdmin(groupId, userId);
 
     const existing = await ReminderRepository.findById(id);
@@ -148,6 +153,7 @@ export class ReminderService {
   }
 
   static async deletePersonal(id: string, userId: string) {
+    await PlanService.assertWritesAllowed(userId);
     const existing = await ReminderRepository.findById(id);
     if (!existing || existing.userId !== userId || existing.groupId) {
       throw new HttpError(404, 'Reminder not found');
@@ -158,6 +164,7 @@ export class ReminderService {
   }
 
   static async deleteGroup(groupId: string, id: string, userId: string) {
+    await PlanService.assertWritesAllowed(userId);
     await GroupService.assertAdmin(groupId, userId);
 
     const existing = await ReminderRepository.findById(id);
