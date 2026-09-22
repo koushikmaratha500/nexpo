@@ -140,6 +140,11 @@ export function buildOAuthCallbackUrl(origin?: string): string {
   return `${base}/auth/callback`;
 }
 
+/** HTTPS callback used by the Expo app in-app browser (PKCE exchange stays on device). */
+export function buildMobileOAuthCallbackUrl(origin: string): string {
+  return `${normalizeOrigin(origin)}/auth/mobile-callback`;
+}
+
 export function resolveOAuthRedirectOrigin(request: Request): string {
   return resolveRequestOrigin(request);
 }

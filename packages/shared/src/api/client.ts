@@ -113,7 +113,7 @@ export async function apiUpload<T>(
       method,
       url: apiUrl(path),
       data: formData,
-      headers: { 'Content-Type': 'multipart/form-data' },
+      // Let the runtime set multipart boundaries (required for React Native uploads).
       ...(config ?? {}),
     });
     return response.data;

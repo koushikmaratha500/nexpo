@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo } fro
 import {
   API_ROUTES,
   apiPost,
+  configureApiBaseUrl,
   configureApiClient,
   getApiErrorMessage,
   isTokenExpired,
@@ -10,7 +11,7 @@ import {
 } from '@nexpo/shared';
 import { useAuthStore } from '../store/authStore';
 import { mobileTokenStorage } from '../lib/tokenStorage';
-import { isSupabaseConfigured } from '../lib/supabase';
+import { getApiUrl, isApiConfigured, isSupabaseConfigured } from '../lib/env';
 import { signInWithGoogleOAuth } from '../lib/googleAuth';
 
 interface AuthContextValue {
@@ -43,6 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isLoading = !hydrated;
 
   useEffect(() => {
+    configureApiBaseUrl(getApiUrl());
     configureApiClient(mobileTokenStorage);
   }, []);
 
@@ -69,6 +71,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
+    if (!isApiConfigured()) {
+      return {
+        success: false,
+        error: 'API URL is not configured. Add EXPO_PUBLIC_API_URL to mobile/.env (see mobile/.env.example).',
+      };
+    }
+
     if (!password || password.length <= 6) {
       return { success: false, error: 'Password must be more than 6 characters long.' };
     }
@@ -100,8 +109,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [setAuth]);
 
   const loginWithGoogle = useCallback(async () => {
+    if (!isApiConfigured()) {
+      return {
+        success: false,
+        error: 'API URL is not configured. Add EXPO_PUBLIC_API_URL to mobile/.env.',
+      };
+    }
+
     if (!isSupabaseConfigured()) {
-      return { success: false, error: 'Google sign-in is not configured on this build.' };
+      return {
+        success: false,
+        error:
+          'Google sign-in is not configured. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY to mobile/.env.',
+      };
     }
 
     try {

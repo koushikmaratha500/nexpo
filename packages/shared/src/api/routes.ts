@@ -76,7 +76,19 @@ export const API_ROUTES = {
   },
 } as const;
 
+let apiBaseUrlOverride: string | null = null;
+
+/** Mobile (or tests) can set the API origin at runtime before requests. */
+export function configureApiBaseUrl(url: string | null | undefined): void {
+  const trimmed = url?.trim();
+  apiBaseUrlOverride = trimmed ? trimmed.replace(/\/$/, '') : null;
+}
+
 export function getApiBaseUrl(): string {
+  if (apiBaseUrlOverride) {
+    return apiBaseUrlOverride;
+  }
+
   const fromEnv =
     (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_API_URL) ||
     (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_APP_URL) ||

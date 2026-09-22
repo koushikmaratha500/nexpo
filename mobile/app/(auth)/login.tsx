@@ -4,7 +4,8 @@ import { router } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
 import { BrandMark } from '../../src/components/layout/BrandMark';
 import { AuthSocialDivider, GoogleSignInButton } from '../../src/components/auth/GoogleSignInButton';
-import { isSupabaseConfigured } from '../../src/lib/supabase';
+import { getApiConfigHint, getApiUrl, isApiConfigured, isSupabaseConfigured } from '../../src/lib/env';
+import { getGoogleOAuthReturnPrefix } from '../../src/lib/googleAuth';
 import { APP_TITLE } from '../../src/constants/navigation';
 import { Card } from '../../src/components/ui/Card';
 import { Input } from '../../src/components/ui/Input';
@@ -18,6 +19,7 @@ export default function LoginScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
   const googleEnabled = isSupabaseConfigured();
+  const apiConfigured = isApiConfigured();
 
   const onSubmit = async () => {
     setError(null);
@@ -60,6 +62,21 @@ export default function LoginScreen() {
             </Text>
           </View>
 
+          {!apiConfigured ? (
+            <View className="rounded-lg border border-error-container bg-error-container/30 p-sm">
+              <Text className="font-label-md text-label-md font-semibold text-error">
+                API URL not configured
+              </Text>
+              <Text className="mt-1 font-body-md text-on-surface-variant">
+                Copy mobile/.env.example to mobile/.env or run npm run mobile:sync-env from the repo root.
+              </Text>
+            </View>
+          ) : __DEV__ ? (
+            <Text className="font-label-sm text-label-sm text-on-surface-variant">
+              API: {getApiUrl()}
+            </Text>
+          ) : null}
+
           <Input
             label="Email"
             autoCapitalize="none"
@@ -79,19 +96,38 @@ export default function LoginScreen() {
 
           {error ? <Text className="text-sm font-semibold text-error">{error}</Text> : null}
 
-          <Button title="Sign in" loading={submitting} onPress={onSubmit} className="mt-sm" />
+          <Button
+            title="Sign in"
+            loading={submitting}
+            onPress={onSubmit}
+            className="mt-sm"
+            disabled={!apiConfigured}
+          />
 
-          {googleEnabled ? (
-            <>
-              <AuthSocialDivider />
-              <GoogleSignInButton
-                loading={googleSubmitting}
-                disabled={submitting}
-                onPress={onGoogleSignIn}
-              />
-            </>
+          <AuthSocialDivider />
+          <GoogleSignInButton
+            loading={googleSubmitting}
+            disabled={submitting || !apiConfigured || !googleEnabled}
+            onPress={onGoogleSignIn}
+          />
+          {!googleEnabled ? (
+            <Text className="text-center font-label-sm text-label-sm text-on-surface-variant">
+              Google sign-in needs EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY in
+              mobile/.env (same values as web NEXT_PUBLIC_SUPABASE_*).
+            </Text>
+          ) : __DEV__ ? (
+            <Text className="text-center font-label-sm text-label-sm text-on-surface-variant">
+              Add to Supabase redirect URLs:{'\n'}
+              {getGoogleOAuthReturnPrefix()}
+            </Text>
           ) : null}
         </Card>
+
+        {__DEV__ && !apiConfigured ? (
+          <Text className="mt-md text-center font-label-sm text-label-sm text-on-surface-variant">
+            {getApiConfigHint()}
+          </Text>
+        ) : null}
       </View>
     </KeyboardAvoidingView>
   );

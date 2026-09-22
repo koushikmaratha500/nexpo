@@ -6,19 +6,19 @@ export type BrandLogoTheme = 'light' | 'dark' | 'mono';
 
 const logoSources: Record<BrandLogoVariant, Record<BrandLogoTheme, ImageSourcePropType>> = {
   full: {
-    dark: require('../../assets/brand/logo-full-dark.png'),
-    light: require('../../assets/brand/logo-full-light.png'),
-    mono: require('../../assets/brand/logo-full-mono.png'),
+    dark: require('../../../assets/brand/logo-full-dark.png'),
+    light: require('../../../assets/brand/logo-full-light.png'),
+    mono: require('../../../assets/brand/logo-full-mono.png'),
   },
   icon: {
-    dark: require('../../assets/brand/logo-icon-dark.png'),
-    light: require('../../assets/brand/logo-icon-light.png'),
-    mono: require('../../assets/brand/logo-icon-mono.png'),
+    dark: require('../../../assets/brand/logo-icon-dark.png'),
+    light: require('../../../assets/brand/logo-icon-light.png'),
+    mono: require('../../../assets/brand/logo-icon-mono.png'),
   },
   wordmark: {
-    dark: require('../../assets/brand/logo-wordmark-dark.png'),
-    light: require('../../assets/brand/logo-wordmark-light.png'),
-    mono: require('../../assets/brand/logo-wordmark-mono.png'),
+    dark: require('../../../assets/brand/logo-wordmark-dark.png'),
+    light: require('../../../assets/brand/logo-wordmark-light.png'),
+    mono: require('../../../assets/brand/logo-wordmark-mono.png'),
   },
 };
 
