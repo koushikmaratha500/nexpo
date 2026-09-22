@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { HttpError } from '../middleware/errorHandler';
 import { TransactionService } from './transaction.service';
 import { ReportService } from './report.service';
@@ -36,6 +37,10 @@ function formatInr(amount: number): string {
   return `₹${amount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 }
 
+function toStoredResult(result: BotCommandResult): Prisma.InputJsonValue {
+  return result as unknown as Prisma.InputJsonValue;
+}
+
 function mapPlanError(error: unknown): BotCommandResult | null {
   if (error instanceof HttpError && error.status === 402) {
     const code = (error.extra?.code as string) || PLAN_ERROR_CODES.WRITE_LOCKED;
@@ -54,8 +59,9 @@ export class BotCommandService {
     const existing = await BotRequestRepository.findByIdempotencyKey(request.idempotency_key);
 
     if (existing?.status === 'COMPLETED' && existing.result) {
+      const cached = existing.result as unknown as BotCommandResult;
       return {
-        ...(existing.result as BotCommandResult),
+        ...cached,
         success: true,
         error_code: 'DUPLICATE',
         message: 'Already processed',
@@ -75,12 +81,17 @@ export class BotCommandService {
 
     try {
       const result = await this.dispatch(request);
-      await BotRequestRepository.updateStatus(botRequest.id, 'COMPLETED', result);
+      await BotRequestRepository.updateStatus(botRequest.id, 'COMPLETED', toStoredResult(result));
       return result;
     } catch (error) {
       const planResult = mapPlanError(error);
       if (planResult) {
-        await BotRequestRepository.updateStatus(botRequest.id, 'FAILED', planResult, planResult.message);
+        await BotRequestRepository.updateStatus(
+          botRequest.id,
+          'FAILED',
+          toStoredResult(planResult),
+          planResult.message,
+        );
         return planResult;
       }
       const message = error instanceof Error ? error.message : 'Command failed';
@@ -210,10 +221,11 @@ export class BotCommandService {
       transactionDate: parseTransactionDate(
         payload.transaction_date || payload.transactionDate || new Date(),
       ),
+      isRecurring: false,
     });
 
     const amount = Number(TransactionRepository.serializeAmount(transaction as unknown as Record<string, unknown>));
-    const categoryName = transaction.category?.name ?? payload.category ?? 'Other';
+    const categoryName = payload.category || payload.categoryName || 'Other';
 
     return {
       success: true,
@@ -223,7 +235,7 @@ export class BotCommandService {
         amount: formatInr(amount),
         category: categoryName,
         description: transaction.description || transaction.title,
-        merchant: transaction.merchant,
+        merchant: transaction.merchant ?? undefined,
         date_label: formatDateLabel(transaction.transactionDate),
       },
     };
@@ -374,7 +386,7 @@ export class BotCommandService {
       transaction_id: updated.id,
       display: {
         amount: formatInr(amount),
-        category: updated.category?.name,
+        category: payload?.category || payload?.categoryName,
         description: updated.description || updated.title,
       },
       message: 'Last expense updated.',
