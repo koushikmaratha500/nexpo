@@ -67,7 +67,7 @@ export async function signInWithGoogleOAuth(): Promise<GoogleSignInResult> {
   }
 
   const appRedirect = getGoogleDeepLinkUri();
-  const startUrl = `${apiUrl}/api/auth/google/mobile?app_redirect=${encodeURIComponent(appRedirect)}`;
+  const startUrl = `${apiUrl}/api/auth/google?mobile=1&app_redirect=${encodeURIComponent(appRedirect)}`;
   const returnPrefix = getGoogleOAuthReturnPrefix();
 
   if (__DEV__) {
