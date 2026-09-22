@@ -155,10 +155,14 @@ export function buildAppRedirectUrl(request: Request, path: string): string {
   return `${origin}${normalizedPath}`;
 }
 
-/** If Supabase sends ?code= to Site URL root, forward to our callback handler. */
+const OAUTH_CALLBACK_PATHS = new Set(['/auth/callback', '/auth/mobile-callback']);
+
+/** If Supabase sends ?code= to Site URL root, forward to our web callback handler. */
 export function buildOAuthCallbackRedirectFromRequest(request: NextRequest): URL | null {
   const code = request.nextUrl.searchParams.get('code');
-  if (!code || request.nextUrl.pathname === '/auth/callback') {
+  const pathname = request.nextUrl.pathname;
+
+  if (!code || OAUTH_CALLBACK_PATHS.has(pathname)) {
     return null;
   }
 

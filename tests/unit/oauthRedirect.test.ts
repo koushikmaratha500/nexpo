@@ -73,6 +73,11 @@ describe('oauthRedirect', () => {
     expect(redirect?.searchParams.get('code')).toBe('abc123');
   });
 
+  it('does not rewrite mobile OAuth callback hits', () => {
+    const request = new NextRequest('https://paysasuchan.com/auth/mobile-callback?code=abc123');
+    expect(buildOAuthCallbackRedirectFromRequest(request)).toBeNull();
+  });
+
   it('prefers configured app url on callback redirect', () => {
     vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://paysasuchan.com');
     const request = new Request('http://localhost:3000/auth/callback?code=abc');

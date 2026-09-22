@@ -1,126 +1,52 @@
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
-import { createSupabaseClient } from './supabase';
 import { getApiUrl } from './env';
 
 WebBrowser.maybeCompleteAuthSession();
 
 const DEEP_LINK_PATH = 'auth/callback';
-const OAUTH_WAIT_MS = 1500;
+const OAUTH_WAIT_MS = 3000;
+
+export type GoogleSignInResult = { token: string } | { error: string };
 
 /** Deep link that returns control to the Expo / standalone app. */
 export function getGoogleDeepLinkUri(): string {
   return Linking.createURL(DEEP_LINK_PATH);
 }
 
-function getMobileBridgeBaseUrl(): string {
-  const apiUrl = getApiUrl();
-  if (!apiUrl) {
-    return getGoogleDeepLinkUri();
-  }
-  return `${apiUrl}/auth/mobile-callback`;
-}
-
-/**
- * Supabase redirect URL. Uses HTTPS bridge + app deep link so the in-app browser
- * can return to the app even when exp:// is not allow-listed.
- */
-export function getGoogleRedirectUri(): string {
-  const bridgeBase = getMobileBridgeBaseUrl();
-  if (!bridgeBase.includes('/auth/mobile-callback')) {
-    return bridgeBase;
-  }
-
-  const deepLink = getGoogleDeepLinkUri();
-  const params = new URLSearchParams({ app_redirect: deepLink });
-  return `${bridgeBase}?${params.toString()}`;
-}
-
-/** Prefix used by openAuthSessionAsync — must match without query params. */
 export function getGoogleOAuthReturnPrefix(): string {
-  return getMobileBridgeBaseUrl();
+  const apiUrl = getApiUrl();
+  return apiUrl ? `${apiUrl}/auth/mobile-callback` : getGoogleDeepLinkUri();
 }
 
-export function parseAuthResultUrl(resultUrl: string): {
-  code?: string;
-  accessToken?: string;
-  error?: string;
-} {
-  const url = new URL(resultUrl);
-  const error =
-    url.searchParams.get('error_description') || url.searchParams.get('error') || undefined;
-  const code = url.searchParams.get('code') || undefined;
-
-  const hash = url.hash.startsWith('#') ? url.hash.slice(1) : url.hash;
-  const hashParams = new URLSearchParams(hash);
-  const accessToken = hashParams.get('access_token') || undefined;
-
-  return { code, accessToken, error };
+function isAppCallbackUrl(url: string): boolean {
+  return url.includes('auth/callback');
 }
 
-function isOAuthCallbackUrl(url: string): boolean {
-  return url.includes('auth/callback') || url.includes('auth/mobile-callback');
-}
+function parseAppCallbackUrl(url: string): GoogleSignInResult | null {
+  if (!isAppCallbackUrl(url)) {
+    return null;
+  }
 
-function describeUnexpectedOAuthUrl(resultUrl: string): string | null {
   try {
-    const parsed = new URL(resultUrl);
-    if (parsed.pathname.endsWith('/auth/mobile-callback') || parsed.pathname.endsWith('/auth/callback')) {
-      return null;
+    const parsed = new URL(url);
+    const token = parsed.searchParams.get('token');
+    if (token) {
+      return { token };
     }
-    if (parsed.pathname === '/auth/login' || parsed.pathname.startsWith('/auth/login')) {
-      return (
-        'Google sign-in opened the web login page instead of returning to the app. ' +
-        `Add this URL in Supabase → Auth → Redirect URLs: ${getMobileBridgeBaseUrl()}`
-      );
+
+    const error =
+      parsed.searchParams.get('error_description') ||
+      parsed.searchParams.get('error') ||
+      undefined;
+    if (error) {
+      return { error };
     }
-    return (
-      'Unexpected sign-in redirect. ' +
-      `Add this URL in Supabase → Auth → Redirect URLs: ${getMobileBridgeBaseUrl()}`
-    );
   } catch {
-    return 'Invalid sign-in redirect URL';
-  }
-}
-
-export async function completeGoogleOAuthFromUrl(
-  resultUrl: string,
-): Promise<{ accessToken: string } | { error: string }> {
-  const unexpected = describeUnexpectedOAuthUrl(resultUrl);
-  if (unexpected) {
-    return { error: unexpected };
+    return null;
   }
 
-  const parsed = parseAuthResultUrl(resultUrl);
-  if (parsed.error) {
-    return { error: parsed.error };
-  }
-
-  const supabase = createSupabaseClient();
-
-  if (parsed.code) {
-    const { data: sessionData, error: exchangeError } =
-      await supabase.auth.exchangeCodeForSession(parsed.code);
-    await supabase.auth.signOut();
-    if (exchangeError || !sessionData.session?.access_token) {
-      const message = exchangeError?.message || 'Failed to complete Google sign-in';
-      if (message.toLowerCase().includes('code verifier')) {
-        return {
-          error:
-            'OAuth session expired. Retry Google sign-in. If it persists, confirm the mobile callback URL is in Supabase Auth redirect URLs.',
-        };
-      }
-      return { error: message };
-    }
-    return { accessToken: sessionData.session.access_token };
-  }
-
-  if (parsed.accessToken) {
-    await supabase.auth.signOut();
-    return { accessToken: parsed.accessToken };
-  }
-
-  return { error: 'Google sign-in session not found' };
+  return null;
 }
 
 function wait(ms: number): Promise<void> {
@@ -129,82 +55,65 @@ function wait(ms: number): Promise<void> {
   });
 }
 
-export async function signInWithGoogleOAuth(): Promise<{ accessToken: string } | { error: string }> {
-  const supabase = createSupabaseClient();
-  const redirectTo = getGoogleRedirectUri();
+/**
+ * Server-driven Google OAuth for mobile.
+ * Opens the API starter in an in-app browser; the server exchanges the code and
+ * deep-links back with a Nexpo JWT.
+ */
+export async function signInWithGoogleOAuth(): Promise<GoogleSignInResult> {
+  const apiUrl = getApiUrl();
+  if (!apiUrl) {
+    return { error: 'API URL is not configured. Add EXPO_PUBLIC_API_URL to mobile/.env.' };
+  }
+
+  const appRedirect = getGoogleDeepLinkUri();
+  const startUrl = `${apiUrl}/api/auth/google/mobile?app_redirect=${encodeURIComponent(appRedirect)}`;
   const returnPrefix = getGoogleOAuthReturnPrefix();
 
   if (__DEV__) {
-    console.info('[Google OAuth] Supabase redirect URL:', redirectTo);
-    console.info('[Google OAuth] Add this in Supabase → Auth → Redirect URLs:', returnPrefix);
-    console.info('[Google OAuth] Deep link fallback:', getGoogleDeepLinkUri());
+    console.info('[Google OAuth] Start URL:', startUrl);
+    console.info('[Google OAuth] Deep link:', appRedirect);
   }
 
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo,
-      skipBrowserRedirect: true,
-      queryParams: {
-        access_type: 'offline',
-        prompt: 'select_account',
-      },
-    },
-  });
+  return await new Promise<GoogleSignInResult>((resolve) => {
+    let settled = false;
 
-  if (error || !data?.url) {
-    return { error: error?.message || 'Could not start Google sign-in' };
-  }
+    const finish = async (result: GoogleSignInResult) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      subscription.remove();
+      await WebBrowser.dismissBrowser();
+      resolve(result);
+    };
 
-  let settled = false;
-  let deepLinkResult: { accessToken: string } | { error: string } | null = null;
+    const handleUrl = (url: string) => {
+      const parsed = parseAppCallbackUrl(url);
+      if (parsed) {
+        void finish(parsed);
+      }
+    };
 
-  const finish = async (
-    result: { accessToken: string } | { error: string },
-  ): Promise<{ accessToken: string } | { error: string }> => {
-    if (settled) {
-      return result;
-    }
-    settled = true;
-    subscription.remove();
-    await WebBrowser.dismissBrowser();
-    return result;
-  };
+    const subscription = Linking.addEventListener('url', (event) => {
+      handleUrl(event.url);
+    });
 
-  const subscription = Linking.addEventListener('url', (event) => {
-    if (!isOAuthCallbackUrl(event.url)) {
-      return;
-    }
-    void completeGoogleOAuthFromUrl(event.url).then((result) => {
-      deepLinkResult = result;
+    void WebBrowser.openAuthSessionAsync(startUrl, returnPrefix).then(async (result) => {
+      if (result.type === 'success') {
+        handleUrl(result.url);
+      }
+
+      if (!settled) {
+        await wait(OAUTH_WAIT_MS);
+      }
+
+      if (!settled) {
+        void finish({
+          error:
+            'Google sign-in did not return to the app. Deploy the latest API update, then try again.',
+        });
+      }
     });
   });
-
-  const browserResult = await WebBrowser.openAuthSessionAsync(data.url, returnPrefix, {
-    preferEphemeralSession: false,
-  });
-
-  if (browserResult.type === 'success' && isOAuthCallbackUrl(browserResult.url)) {
-    return finish(await completeGoogleOAuthFromUrl(browserResult.url));
-  }
-
-  if (deepLinkResult) {
-    return finish(deepLinkResult);
-  }
-
-  if (browserResult.type === 'cancel' || browserResult.type === 'dismiss') {
-    await wait(OAUTH_WAIT_MS);
-    if (deepLinkResult) {
-      return finish(deepLinkResult);
-    }
-    subscription.remove();
-    return { error: 'Google sign-in was cancelled' };
-  }
-
-  subscription.remove();
-  return {
-    error:
-      'Google sign-in did not return to the app. ' +
-      `Add ${returnPrefix} to Supabase Auth redirect URLs and ensure the API is running at ${getApiUrl()}.`,
-  };
 }

@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo } from 'react';
 import {
   API_ROUTES,
+  apiGet,
   apiPost,
   configureApiBaseUrl,
   configureApiClient,
@@ -11,7 +12,7 @@ import {
 } from '@nexpo/shared';
 import { useAuthStore } from '../store/authStore';
 import { mobileTokenStorage } from '../lib/tokenStorage';
-import { getApiUrl, isApiConfigured, isSupabaseConfigured } from '../lib/env';
+import { getApiUrl, isApiConfigured } from '../lib/env';
 import { signInWithGoogleOAuth } from '../lib/googleAuth';
 
 interface AuthContextValue {
@@ -116,31 +117,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
-    if (!isSupabaseConfigured()) {
-      return {
-        success: false,
-        error:
-          'Google sign-in is not configured. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY to mobile/.env.',
-      };
-    }
-
     try {
       const oauth = await signInWithGoogleOAuth();
       if ('error' in oauth) {
         return { success: false, error: oauth.error };
       }
 
-      const response = await apiPost<LoginResponse>(API_ROUTES.auth.google, {
-        accessToken: oauth.accessToken,
-      });
-
-      if (!response.success || !response.token || !response.user) {
+      await mobileTokenStorage.setToken(oauth.token);
+      const profile = await apiGet<LoginResponse['user']>(API_ROUTES.auth.profile);
+      if (!profile?.email) {
         return { success: false, error: 'Google sign-in failed' };
       }
 
-      const loggedInUser = mapCustomerUser(response.user);
-      await mobileTokenStorage.setToken(response.token);
-      setAuth(loggedInUser, response.token);
+      const loggedInUser = mapCustomerUser(profile);
+      setAuth(loggedInUser, oauth.token);
       return { success: true };
     } catch (err) {
       return { success: false, error: getApiErrorMessage(err, 'Google sign-in failed') };
