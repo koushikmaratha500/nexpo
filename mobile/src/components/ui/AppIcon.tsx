@@ -11,6 +11,7 @@ const ICON_MAP: Record<string, keyof typeof MaterialIcons.glyphMap> = {
   bar_chart: 'bar-chart',
   smart_toy: 'smart-toy',
   settings: 'settings',
+  menu: 'menu',
   help: 'help',
   logout: 'logout',
   add: 'add',

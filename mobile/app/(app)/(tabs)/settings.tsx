@@ -1,13 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
+import { Image, ScrollView, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import {
   API_ROUTES,
   apiGet,
   apiPatch,
-  apiPost,
-  apiUpload,
   type CountryOption,
   type CurrencyOption,
   type UserMetadata,
@@ -20,6 +17,18 @@ import { Input } from '../../../src/components/ui/Input';
 import { ScreenHeader } from '../../../src/components/ui/ScreenHeader';
 import { PageShell } from '../../../src/components/layout/PageShell';
 import { MobileBillingSection } from '../../../src/components/billing/MobileBillingSection';
+import { pickAndUploadImage } from '../../../src/lib/imageUpload';
+
+type ProfileResponse = {
+  username?: string | null;
+  firstName?: string;
+  lastName?: string | null;
+  email?: string;
+  phone?: string | null;
+  profileImageUrl?: string | null;
+  countryId?: string | null;
+  currencyId?: string | null;
+};
 
 export default function SettingsScreen() {
   const { user, logout, updateUser } = useAuth();
@@ -41,35 +50,43 @@ export default function SettingsScreen() {
   useEffect(() => {
     if (fetched.current) return;
     fetched.current = true;
-    void apiGet<UserMetadata>(API_ROUTES.metadata).then((res) => {
-      setCountries(res.countries || []);
-      setCurrencies(res.currencies || []);
-    });
+
+    void (async () => {
+      try {
+        const [metadata, profile] = await Promise.all([
+          apiGet<UserMetadata>(API_ROUTES.metadata),
+          apiGet<ProfileResponse>(API_ROUTES.auth.profile),
+        ]);
+
+        setCountries(metadata.countries || []);
+        setCurrencies(metadata.currencies || []);
+
+        if (profile.firstName) setFirstName(profile.firstName);
+        if (profile.lastName) setLastName(profile.lastName);
+        if (profile.username) setUsername(profile.username);
+        if (profile.countryId) setCountryId(profile.countryId);
+        if (profile.currencyId) setCurrencyId(profile.currencyId);
+        if (profile.profileImageUrl) setAvatar(profile.profileImageUrl);
+      } catch {
+        const metadata = await apiGet<UserMetadata>(API_ROUTES.metadata);
+        setCountries(metadata.countries || []);
+        setCurrencies(metadata.currencies || []);
+      }
+    })();
   }, []);
 
   const pickAvatar = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.8,
-    });
-    if (result.canceled || !result.assets[0]) return;
-
-    const asset = result.assets[0];
     setSubmitting(true);
     addToast('Uploading profile image...', 'info');
     try {
-      const formData = new FormData();
-      formData.append('file', {
-        uri: asset.uri,
-        name: asset.fileName || 'avatar.jpg',
-        type: asset.mimeType || 'image/jpeg',
-      } as unknown as Blob);
-      formData.append('bucket', 'nexpo');
-      const res = await apiUpload<{ url: string }>('POST', API_ROUTES.upload, formData);
-      setAvatar(res.url);
-      addToast('Profile image uploaded.', 'success');
-    } catch {
-      addToast('Failed to upload image.', 'error');
+      const url = await pickAndUploadImage();
+      if (!url) {
+        return;
+      }
+      setAvatar(url);
+      addToast('Profile image uploaded. Tap Save profile to apply.', 'success');
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'Failed to upload image.', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -126,7 +143,28 @@ export default function SettingsScreen() {
 
       <Card className="mb-lg gap-md">
         <Text className="font-title-md font-bold text-primary">Profile</Text>
-        <Button title={avatar ? 'Change photo' : 'Upload photo'} variant="secondary" onPress={pickAvatar} />
+
+        <View className="items-center gap-sm">
+          {avatar ? (
+            <Image
+              source={{ uri: avatar }}
+              className="h-20 w-20 rounded-full border border-outline-variant bg-surface-container-low"
+            />
+          ) : (
+            <View className="h-20 w-20 items-center justify-center rounded-full border border-outline-variant bg-surface-container-low">
+              <Text className="font-headline-sm font-bold text-on-surface-variant">
+                {(firstName?.[0] || user?.email?.[0] || '?').toUpperCase()}
+              </Text>
+            </View>
+          )}
+          <Button
+            title={avatar ? 'Change photo' : 'Upload photo'}
+            variant="secondary"
+            loading={submitting}
+            onPress={pickAvatar}
+          />
+        </View>
+
         <Input label="First name" value={firstName} onChangeText={setFirstName} />
         <Input label="Last name" value={lastName} onChangeText={setLastName} />
         <Input label="Username" value={username} onChangeText={setUsername} autoCapitalize="none" />

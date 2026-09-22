@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import {
   buildAppRedirectUrl,
+  buildMobileOAuthCallbackUrl,
   buildOAuthCallbackRedirectFromRequest,
   buildOAuthCallbackUrl,
   getClientAppOrigin,
@@ -23,6 +24,15 @@ describe('oauthRedirect', () => {
   it('builds a query-free callback URL for Supabase allow-list matching', () => {
     expect(buildOAuthCallbackUrl('https://app.example.com')).toBe(
       'https://app.example.com/auth/callback',
+    );
+  });
+
+  it('builds mobile OAuth callback URL for Expo in-app browser', () => {
+    expect(buildMobileOAuthCallbackUrl('https://app.example.com')).toBe(
+      'https://app.example.com/auth/mobile-callback',
+    );
+    expect(buildMobileOAuthCallbackUrl('http://10.0.2.2:3000/')).toBe(
+      'http://10.0.2.2:3000/auth/mobile-callback',
     );
   });
 
