@@ -30,7 +30,7 @@ export const aiParseSchema = z.object({
   description: z.string().nullable().optional(),
   transaction_date: z.string().nullable().optional(),
   clarification_question: z.string().nullable().optional(),
-  commands: z.array(z.record(z.unknown())).nullable().optional(),
+  commands: z.array(z.record(z.string(), z.unknown())).nullable().optional(),
   query: z
     .object({
       category: z.string().nullable().optional(),
