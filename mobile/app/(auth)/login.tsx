@@ -4,8 +4,8 @@ import { router } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
 import { BrandMark } from '../../src/components/layout/BrandMark';
 import { AuthSocialDivider, GoogleSignInButton } from '../../src/components/auth/GoogleSignInButton';
-import { getApiConfigHint, getApiUrl, isApiConfigured, isSupabaseConfigured } from '../../src/lib/env';
-import { getGoogleOAuthReturnPrefix } from '../../src/lib/googleAuth';
+import { getApiConfigHint, getApiUrl, isApiConfigured } from '../../src/lib/env';
+import { getGoogleDeepLinkUri, getGoogleOAuthReturnPrefix } from '../../src/lib/googleAuth';
 import { APP_TITLE } from '../../src/constants/navigation';
 import { Card } from '../../src/components/ui/Card';
 import { Input } from '../../src/components/ui/Input';
@@ -18,8 +18,8 @@ export default function LoginScreen() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
-  const googleEnabled = isSupabaseConfigured();
   const apiConfigured = isApiConfigured();
+  const googleEnabled = apiConfigured;
 
   const onSubmit = async () => {
     setError(null);
@@ -110,15 +110,11 @@ export default function LoginScreen() {
             disabled={submitting || !apiConfigured || !googleEnabled}
             onPress={onGoogleSignIn}
           />
-          {!googleEnabled ? (
+          {googleEnabled && __DEV__ ? (
             <Text className="text-center font-label-sm text-label-sm text-on-surface-variant">
-              Google sign-in needs EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY in
-              mobile/.env (same values as web NEXT_PUBLIC_SUPABASE_*).
-            </Text>
-          ) : __DEV__ ? (
-            <Text className="text-center font-label-sm text-label-sm text-on-surface-variant">
-              Add to Supabase redirect URLs:{'\n'}
-              {getGoogleOAuthReturnPrefix()}
+              OAuth callback: {getGoogleOAuthReturnPrefix()}
+              {'\n'}
+              App return: {getGoogleDeepLinkUri()}
             </Text>
           ) : null}
         </Card>
