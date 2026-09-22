@@ -205,6 +205,62 @@ model User {
   notificationPreference UserNotificationPreference?
   pushSubscriptions UserPushSubscription[]
   transactionShares TransactionShare[]
+  channelAccounts   ChannelAccount[]
+}
+
+enum BotChannel {
+  WHATSAPP
+  TELEGRAM
+}
+
+enum ChannelAccountStatus {
+  PENDING
+  LINKED
+  REVOKED
+}
+
+enum BotRequestStatus {
+  RECEIVED
+  PROCESSING
+  COMPLETED
+  FAILED
+  DUPLICATE
+}
+
+model ChannelAccount {
+  id             String               @id @default(uuid())
+  userId         String
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel        BotChannel
+  externalUserId String
+  externalPhone  String?
+  displayName    String?
+  status         ChannelAccountStatus @default(PENDING)
+  linkedAt       DateTime?
+  lastSeenAt     DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@unique([channel, externalUserId])
+  @@index([userId])
+}
+
+model BotRequest {
+  id                String           @id @default(uuid())
+  idempotencyKey    String           @unique
+  channel           BotChannel
+  externalMessageId String
+  userId            String?
+  command           String?
+  status            BotRequestStatus @default(RECEIVED)
+  error             String?
+  payload           Json?
+  result            Json?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([channel, createdAt])
 }
 
 model Admin {

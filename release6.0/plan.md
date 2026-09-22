@@ -27,6 +27,8 @@
 | `release6.0/tines-stories.md` | Tines Story inventory and sub-stories |
 | `release6.0/schema-draft.prisma` | Bot + event outbox tables |
 | `release6.0/uat-checklist.md` | End-to-end UAT matrix |
+| `release6.0/phase0-openwa-playbook.md` | OpenWA send/receive, webhook HMAC, Tines echo POC |
+| `release6.0/bot-api-inventory.md` | Nexpo services & APIs for bot integration |
 | `AGENTS.md` | Layered architecture conventions |
 | `release5.0/billing-go-live-checklist.md` | Plan gating (402 on writes) |
 

@@ -1,3 +1,5 @@
+import '../src/lib/crypto-polyfill';
+import 'react-native-css-interop/dist/runtime/components';
 import '../global.css';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -35,6 +37,7 @@ export default function RootLayout() {
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#f7f9fb' } }}>
           <Stack.Screen name="index" />
           <Stack.Screen name="(auth)/login" />
+          <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
           <Stack.Screen name="(app)" />
         </Stack>
       </AuthProvider>
