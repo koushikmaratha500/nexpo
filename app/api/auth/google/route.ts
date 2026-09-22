@@ -2,16 +2,23 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import {
+  buildMobileOAuthCallbackUrl,
   buildOAuthCallbackUrl,
   normalizeOAuthNextPath,
   OAUTH_NEXT_COOKIE,
   resolveRequestOrigin,
 } from '@/lib/auth/oauthRedirect';
+import {
+  isAllowedMobileAppRedirect,
+  MOBILE_OAUTH_REDIRECT_COOKIE,
+} from '@/lib/auth/mobileOAuth';
 
 export async function GET(request: NextRequest) {
   const origin = resolveRequestOrigin(request);
-  const next = normalizeOAuthNextPath(request.nextUrl.searchParams.get('next'));
-  const redirectTo = buildOAuthCallbackUrl(origin);
+  const appRedirect = request.nextUrl.searchParams.get('app_redirect')?.trim();
+  const isMobile =
+    request.nextUrl.searchParams.get('mobile') === '1' ||
+    request.nextUrl.pathname.endsWith('/mobile');
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim();
@@ -21,13 +28,31 @@ export async function GET(request: NextRequest) {
   }
 
   const cookieStore = await cookies();
-  cookieStore.set(OAUTH_NEXT_COOKIE, next, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    path: '/',
-    maxAge: 60 * 10,
-  });
+  let redirectTo = buildOAuthCallbackUrl(origin);
+
+  if (isMobile) {
+    if (!appRedirect || !isAllowedMobileAppRedirect(appRedirect)) {
+      return NextResponse.json({ error: 'Invalid or missing app_redirect' }, { status: 400 });
+    }
+
+    redirectTo = buildMobileOAuthCallbackUrl(origin);
+    cookieStore.set(MOBILE_OAUTH_REDIRECT_COOKIE, appRedirect, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: 60 * 10,
+    });
+  } else {
+    const next = normalizeOAuthNextPath(request.nextUrl.searchParams.get('next'));
+    cookieStore.set(OAUTH_NEXT_COOKIE, next, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: 60 * 10,
+    });
+  }
 
   const supabase = createServerClient(supabaseUrl, supabaseKey, {
     cookies: {
