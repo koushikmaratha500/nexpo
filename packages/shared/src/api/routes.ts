@@ -69,6 +69,19 @@ export const API_ROUTES = {
   },
   reports: '/api/user/reports',
   support: '/api/support',
+  sms: {
+    settings: '/api/user/sms/settings',
+    sync: '/api/user/sms/sync',
+    syncStatus: '/api/user/sms/sync/status',
+    manual: '/api/user/sms/manual',
+  },
+  account: {
+    lifecycle: '/api/user/account/lifecycle',
+    otpSend: '/api/user/account/otp/send',
+    reset: '/api/user/account/reset',
+    delete: '/api/user/account/delete',
+    restore: '/api/user/account/restore',
+  },
   ai: {
     chat: '/api/ai/chat',
     insights: '/api/ai/insights',

@@ -9,6 +9,9 @@ import Image from 'next/image';
 import axios from 'axios';
 import { PasswordInput } from '@/components/forms/PasswordInput';
 import { NotificationPreferencesCard } from '@/components/features/notifications';
+import { SmsImportStatusCard } from '@/components/features/sms-import';
+import { isSmsImportUiEnabled } from '@/lib/featureFlags';
+import { AccountLifecycleCard } from '@/components/features/account-lifecycle';
 import { BillingInvoices, BillingSubscription, UsageMeters, usePlan } from '@/components/features/billing';
 import { formatInr } from '@/lib/billing/catalog';
 import { shouldShowUpgradeCta } from '@/lib/billing/planUi';
@@ -377,6 +380,8 @@ export default function CustomerSettingsPage() {
 
           <NotificationPreferencesCard />
 
+          {isSmsImportUiEnabled() ? <SmsImportStatusCard /> : null}
+
           <Card className="bg-surface-container-lowest p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4" glass={false}>
             <div>
               <h3 className="font-title-md text-title-md font-bold text-primary">Personal reminders</h3>
@@ -434,6 +439,8 @@ export default function CustomerSettingsPage() {
               </Button>
             </form>
           </Card>
+
+          <AccountLifecycleCard />
 
           {plan?.pricingEnabled !== false && (
             <>

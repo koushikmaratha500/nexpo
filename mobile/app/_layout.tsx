@@ -13,6 +13,11 @@ import {
 } from '@expo-google-fonts/figtree';
 import { AuthProvider } from '../src/context/AuthContext';
 import { ToastProvider } from '../src/hooks/useToast';
+import { isSmsImportUiEnabled } from '../src/lib/featureFlags';
+
+if (isSmsImportUiEnabled()) {
+  require('../src/tasks/smsSyncTask');
+}
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({

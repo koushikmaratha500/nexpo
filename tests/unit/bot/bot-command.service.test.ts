@@ -5,6 +5,7 @@ import { TransactionService } from '@/lib/api/services/transaction.service';
 import { ReportService } from '@/lib/api/services/report.service';
 import { BotRequestRepository } from '@/lib/api/repositories/bot-request.repository';
 import { TransactionRepository } from '@/lib/api/repositories/transaction.repository';
+import { TransactionImportFingerprintRepository } from '@/lib/api/repositories/transaction-import-fingerprint.repository';
 import { PLAN_ERROR_CODES } from '@/lib/billing/types';
 
 vi.mock('@/lib/api/repositories/bot-request.repository', () => ({
@@ -37,15 +38,26 @@ vi.mock('@/lib/api/repositories/transaction.repository', () => ({
   },
 }));
 
+vi.mock('@/lib/api/repositories/transaction-import-fingerprint.repository', () => ({
+  TransactionImportFingerprintRepository: {
+    findByFingerprint: vi.fn(),
+    create: vi.fn(),
+  },
+}));
+
 const mockedFindByKey = vi.mocked(BotRequestRepository.findByIdempotencyKey);
 const mockedCreate = vi.mocked(BotRequestRepository.create);
 const mockedUpdateStatus = vi.mocked(BotRequestRepository.updateStatus);
 const mockedCreateTxn = vi.mocked(TransactionService.createTransaction);
 const mockedGetReport = vi.mocked(ReportService.getCustomerReport);
+const mockedFindFingerprint = vi.mocked(TransactionImportFingerprintRepository.findByFingerprint);
+const mockedCreateFingerprint = vi.mocked(TransactionImportFingerprintRepository.create);
 
 describe('BotCommandService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockedFindFingerprint.mockResolvedValue(null);
+    mockedCreateFingerprint.mockResolvedValue({} as never);
     mockedFindByKey.mockResolvedValue(null);
     mockedCreate.mockResolvedValue({
       id: 'req-1',
@@ -162,6 +174,34 @@ describe('BotCommandService', () => {
 
     expect(result.success).toBe(true);
     expect(result.type).toBe('expense_created');
+  });
+
+  it('returns DUPLICATE for sms channel when fingerprint already exists', async () => {
+    mockedFindFingerprint.mockResolvedValue({
+      id: 'fp-1',
+      userId: '11111111-1111-1111-1111-111111111111',
+      fingerprint: 'hash',
+      transactionId: 'txn-existing',
+      source: 'sms',
+      createdAt: new Date(),
+    } as never);
+
+    const result = await BotCommandService.execute({
+      command: 'CREATE_EXPENSE',
+      user_id: '11111111-1111-1111-1111-111111111111',
+      idempotency_key: 'sms:user-1:hash123',
+      source_channel: 'sms',
+      payload: {
+        amount: 500,
+        description: 'Swiggy',
+        transaction_date: '2026-09-18',
+      },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.error_code).toBe('DUPLICATE');
+    expect(result.transaction_id).toBe('txn-existing');
+    expect(mockedCreateTxn).not.toHaveBeenCalled();
   });
 
   it('returns daily summary from GET_DAILY_SUMMARY', async () => {

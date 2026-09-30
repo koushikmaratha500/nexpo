@@ -63,6 +63,24 @@ export function buildVerificationEmailHtml(otp: string): string {
   );
 }
 
+export function buildAccountActionOtpEmailHtml(otp: string, actionLabel: string): string {
+  return emailShell(
+    `Confirm ${actionLabel}`,
+    `
+      <h1 style="margin:0 0 12px;font-size:22px;line-height:1.3;color:#111827;">Confirm ${actionLabel}</h1>
+      <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#374151;">
+        Use this one-time code to confirm the request on your ${BRAND_NAME} account:
+      </p>
+      <div style="margin:0 0 20px;padding:16px 20px;border-radius:12px;background:#f3f0ff;text-align:center;">
+        <span style="font-size:32px;font-weight:800;letter-spacing:0.35em;color:#7C3AED;">${otp}</span>
+      </div>
+      <p style="margin:0;font-size:14px;line-height:1.6;color:#6b7280;">
+        This code expires in <strong>15 minutes</strong>. If you did not request this, secure your account immediately.
+      </p>
+    `,
+  );
+}
+
 export function buildPasswordResetEmailHtml(resetLink: string, isAdmin = false): string {
   const accountLabel = isAdmin ? 'admin' : 'customer';
   return emailShell(

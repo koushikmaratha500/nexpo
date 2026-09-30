@@ -5,6 +5,7 @@ import { ChannelAccountService } from '../services/channel-account.service';
 import { BotCommandService } from '../services/bot-command.service';
 import { formatBotReply } from '@/lib/bot/formatReply';
 import { normalizeTinesBridgeInput } from '@/lib/bot/normalizeTinesBridge';
+import { SmsImportService } from '../services/sms-import.service';
 
 export class TinesBridgeController extends BaseController {
   static async ingest(req: NextRequest) {
@@ -33,37 +34,53 @@ export class TinesBridgeController extends BaseController {
         };
       }
 
-      if (!externalUserId) {
-        return {
-          ok: true,
-          success: false,
-          error_code: 'MISSING_EXTERNAL_USER',
-          reply_text: 'Could not identify your WhatsApp account.',
-          channel,
-          idempotency_key: idempotencyKey,
-        };
-      }
+      let userId: string | null = null;
 
-      const userId = await ChannelAccountService.resolveUserId(
-        channel,
-        externalUserId,
-        normalized.user_id,
-      );
+      if (channel === 'sms') {
+        userId = normalized.user_id ?? null;
+        if (!userId) {
+          return {
+            ok: true,
+            success: false,
+            error_code: 'MISSING_USER',
+            reply_text: 'SMS import requires a linked user.',
+            channel,
+            idempotency_key: idempotencyKey,
+          };
+        }
+      } else {
+        if (!externalUserId) {
+          return {
+            ok: true,
+            success: false,
+            error_code: 'MISSING_EXTERNAL_USER',
+            reply_text: 'Could not identify your WhatsApp account.',
+            channel,
+            idempotency_key: idempotencyKey,
+          };
+        }
 
-      if (!userId) {
-        const result = {
-          success: false,
-          error_code: 'USER_NOT_LINKED',
-          message:
-            'Your WhatsApp is not linked to PaySaSuchan. Open the app → Settings → Link WhatsApp.',
-        };
-        return {
-          ok: true,
-          ...result,
-          reply_text: formatBotReply(result),
+        userId = await ChannelAccountService.resolveUserId(
           channel,
-          idempotency_key: idempotencyKey,
-        };
+          externalUserId,
+          normalized.user_id,
+        );
+
+        if (!userId) {
+          const result = {
+            success: false,
+            error_code: 'USER_NOT_LINKED',
+            message:
+              'Your WhatsApp is not linked to PaySaSuchan. Open the app → Settings → Link WhatsApp.',
+          };
+          return {
+            ok: true,
+            ...result,
+            reply_text: formatBotReply(result),
+            channel,
+            idempotency_key: idempotencyKey,
+          };
+        }
       }
 
       const commandResult = await BotCommandService.executeFromAiParse({
@@ -72,6 +89,16 @@ export class TinesBridgeController extends BaseController {
         idempotencyKey,
         aiParse: aiParse.data,
       });
+
+      if (channel === 'sms') {
+        await SmsImportService.markMessageFromBotResult({
+          idempotencyKey,
+          success: commandResult.success,
+          errorCode: commandResult.error_code,
+          transactionId: commandResult.transaction_id,
+          intent: aiParse.data.intent,
+        });
+      }
 
       return {
         ok: true,

@@ -14,6 +14,7 @@ import { useAuthStore } from '../store/authStore';
 import { mobileTokenStorage } from '../lib/tokenStorage';
 import { getApiUrl, isApiConfigured } from '../lib/env';
 import { signInWithGoogleOAuth } from '../lib/googleAuth';
+import { isSmsImportUiEnabled } from '../lib/featureFlags';
 
 interface AuthContextValue {
   user: User | null;
@@ -48,6 +49,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     configureApiBaseUrl(getApiUrl());
     configureApiClient(mobileTokenStorage);
   }, []);
+
+  useEffect(() => {
+    if (!token || !isSmsImportUiEnabled()) {
+      return;
+    }
+
+    let detach: (() => void) | undefined;
+
+    void import('../tasks/smsSyncTask').then(async (mod) => {
+      await mod.registerSmsSyncTask();
+      detach = mod.attachSmsForegroundFallback();
+    });
+
+    return () => {
+      detach?.();
+    };
+  }, [token]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -144,6 +162,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch {
         // ignore network errors on logout
       }
+    }
+    if (isSmsImportUiEnabled()) {
+      const { unregisterSmsSyncTask } = await import('../tasks/smsSyncTask');
+      await unregisterSmsSyncTask();
     }
     await mobileTokenStorage.setToken(null);
     clearAuth();

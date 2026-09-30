@@ -44,46 +44,37 @@ export class OtpService {
     return isResendEnabled() ? this.generateOtp() : getDevOtpCode();
   }
 
-  static async createOtp(email: string, sendEmail = true): Promise<string> {
-    assertOtpStoreAvailable();
-    assertOtpAllowedInProduction();
+  static scopedKey(scope: string): string {
+    return `${OTP_KEY_PREFIX}${scope}`;
+  }
 
-    const code = this.resolveOtpCode();
+  static accountActionKey(params: {
+    userId: string;
+    action: 'RESET' | 'DELETE';
+    channel: 'email' | 'sms';
+    destination: string;
+  }): string {
+    const destination = params.destination.trim().toLowerCase();
+    return this.scopedKey(`account:${params.userId}:${params.action}:${params.channel}:${destination}`);
+  }
+
+  private static async persistCode(storageKey: string, code: string): Promise<void> {
     const record: OtpRecord = {
       code,
       attempts: 0,
       expiresAt: Date.now() + OTP_TTL_SECONDS * 1000,
     };
-
-    await kvSetJson(otpKey(email), record, OTP_TTL_SECONDS);
-
-    if (sendEmail) {
-      if (isResendEnabled()) {
-        const result = await EmailService.sendOtpEmail(email, code);
-        if (!result.success) {
-          await kvDelete(otpKey(email));
-          throw new Error('Failed to send verification email. Please try again later.');
-        }
-      } else {
-        logOtpDevMode(email);
-      }
-    }
-
-    return code;
+    await kvSetJson(storageKey, record, OTP_TTL_SECONDS);
   }
 
-  static async verifyOtp(email: string, code: string): Promise<boolean> {
-    assertOtpStoreAvailable();
-    assertOtpAllowedInProduction();
-
-    const key = otpKey(email);
-    const record = await kvGetJson<OtpRecord>(key);
+  private static async verifyStoredCode(storageKey: string, code: string): Promise<boolean> {
+    const record = await kvGetJson<OtpRecord>(storageKey);
     if (!record) {
       return false;
     }
 
     if (record.expiresAt < Date.now()) {
-      await kvDelete(key);
+      await kvDelete(storageKey);
       return false;
     }
 
@@ -97,23 +88,65 @@ export class OtpService {
       const remainingSeconds = Math.ceil(remainingMs / 1000);
 
       if (nextAttempts >= MAX_ATTEMPTS) {
-        await kvDelete(key);
+        await kvDelete(storageKey);
         throw new HttpError(429, 'Too many OTP attempts. Request a new verification code.');
       }
 
       await kvSetJson(
-        key,
+        storageKey,
         { ...record, attempts: nextAttempts },
         Math.min(remainingSeconds, OTP_TTL_SECONDS),
       );
       return false;
     }
 
-    await kvDelete(key);
+    await kvDelete(storageKey);
     return true;
+  }
+
+  static async createScopedOtp(storageKey: string, resolveCode?: () => string): Promise<string> {
+    assertOtpStoreAvailable();
+    const code = resolveCode ? resolveCode() : this.resolveOtpCode();
+    await this.persistCode(storageKey, code);
+    return code;
+  }
+
+  static async verifyScopedOtp(storageKey: string, code: string): Promise<boolean> {
+    assertOtpStoreAvailable();
+    return this.verifyStoredCode(storageKey, code);
+  }
+
+  static async createOtp(email: string, sendEmail = true): Promise<string> {
+    assertOtpAllowedInProduction();
+
+    const key = otpKey(email);
+    const code = await this.createScopedOtp(key);
+
+    if (sendEmail) {
+      if (isResendEnabled()) {
+        const result = await EmailService.sendOtpEmail(email, code);
+        if (!result.success) {
+          await kvDelete(key);
+          throw new Error('Failed to send verification email. Please try again later.');
+        }
+      } else {
+        logOtpDevMode(email);
+      }
+    }
+
+    return code;
+  }
+
+  static async verifyOtp(email: string, code: string): Promise<boolean> {
+    assertOtpAllowedInProduction();
+    return this.verifyScopedOtp(otpKey(email), code);
   }
 
   static async clearOtp(email: string): Promise<void> {
     await kvDelete(otpKey(email));
+  }
+
+  static async clearScopedOtp(storageKey: string): Promise<void> {
+    await kvDelete(storageKey);
   }
 }

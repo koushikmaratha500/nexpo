@@ -11,10 +11,12 @@ export function parseJsonIfString(value: unknown): unknown {
   }
 }
 
-export function normalizeChannel(channel: unknown): 'whatsapp' | 'telegram' {
+export function normalizeChannel(channel: unknown): 'whatsapp' | 'telegram' | 'sms' {
   if (typeof channel !== 'string') return 'whatsapp';
   const normalized = channel.trim().toLowerCase();
-  return normalized === 'telegram' ? 'telegram' : 'whatsapp';
+  if (normalized === 'telegram') return 'telegram';
+  if (normalized === 'sms') return 'sms';
+  return 'whatsapp';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -63,7 +65,7 @@ function extractWebhookData(raw: Record<string, unknown>) {
 }
 
 export interface NormalizedTinesBridgeInput {
-  channel: 'whatsapp' | 'telegram';
+  channel: 'whatsapp' | 'telegram' | 'sms';
   event?: string;
   idempotency_key?: string;
   session_id?: string;

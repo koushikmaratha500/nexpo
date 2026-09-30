@@ -11,6 +11,7 @@ import { AuditAction, AuthProvider, BillingInterval, BillingPlan, PlanStatus } f
 import { assertValidUsername, isValidUsername } from '../utils/username';
 import { verifySupabaseAccessToken } from '@/lib/supabase/verifyAccessToken';
 import { SettingsService } from './settings.service';
+import { AccountLifecycleService } from './account-lifecycle.service';
 
 function getJwtSecretBytes(): Uint8Array {
   const secret = process.env.JWT_SECRET?.trim();
@@ -243,7 +244,22 @@ export class AuthService {
       status: 'A',
     });
 
-    return { user, token: jwt };
+    const accountRecovered = await this.tryRecoverAccountOnLogin(user.id, meta);
+
+    return { user, token: jwt, accountRecovered };
+  }
+
+  private static async tryRecoverAccountOnLogin(
+    userId: string,
+    meta: { ip?: string; ua?: string },
+  ): Promise<boolean> {
+    try {
+      const recovery = await AccountLifecycleService.recoverOnLogin(userId, meta);
+      return recovery.restored;
+    } catch (error) {
+      console.error('[Auth] Account lifecycle recovery skipped:', error);
+      return false;
+    }
   }
 
   private static async generateUniqueUsername(email: string): Promise<string> {
@@ -293,7 +309,9 @@ export class AuthService {
       status: 'A',
     });
 
-    return { user, token: jwt };
+    const accountRecovered = await this.tryRecoverAccountOnLogin(user.id, meta);
+
+    return { user, token: jwt, accountRecovered };
   }
 
   static async loginWithGoogle(accessToken: string, meta = { ip: '', ua: '' }) {

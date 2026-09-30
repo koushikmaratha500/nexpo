@@ -7,6 +7,7 @@ import {
   isResendEnabled,
 } from '../utils/emailConfig';
 import {
+  buildAccountActionOtpEmailHtml,
   buildPasswordResetEmailHtml,
   buildVerificationEmailHtml,
 } from '../utils/emailTemplates';
@@ -55,6 +56,34 @@ export class EmailService {
       return { success: true, id: result.data?.id };
     } catch (error) {
       console.error('Failed to send verification email:', error);
+      return { success: false, error };
+    }
+  }
+
+  static async sendAccountActionOtpEmail(to: string, otp: string, actionLabel: string) {
+    if (!isResendEnabled()) {
+      return { success: true, simulated: true as const };
+    }
+
+    const resend = getResendClient();
+    if (!resend) {
+      return { success: false, error: new Error('Resend client unavailable') };
+    }
+
+    try {
+      const result = await resend.emails.send({
+        from: getResendFromEmail(),
+        to,
+        subject: `Confirm ${actionLabel} — ${BRAND_NAME}`,
+        html: buildAccountActionOtpEmailHtml(otp, actionLabel),
+      });
+
+      if (result.error) {
+        return { success: false, error: new Error(formatSendError(result.error)) };
+      }
+
+      return { success: true, id: result.data?.id };
+    } catch (error) {
       return { success: false, error };
     }
   }
