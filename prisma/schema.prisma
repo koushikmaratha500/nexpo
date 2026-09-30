@@ -129,6 +129,12 @@ enum PushPlatform {
   ANDROID
 }
 
+enum AccountLifecycleMode {
+  ACTIVE
+  RESET_PENDING
+  DELETE_PENDING
+}
+
 model Country {
   id         String    @id @default(uuid())
   name       String    @unique
@@ -185,6 +191,10 @@ model User {
   stripeSubscriptionId   String?
   billingGstin           String?
   trialReminderSentAt    DateTime?
+  accountLifecycleMode      AccountLifecycleMode @default(ACTIVE)
+  accountLifecycleAt        DateTime?
+  accountLifecyclePurgeAt   DateTime?
+  accountLifecycleBatchId   String?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
   billingCheckoutSessions BillingCheckoutSession[]
@@ -206,11 +216,26 @@ model User {
   pushSubscriptions UserPushSubscription[]
   transactionShares TransactionShare[]
   channelAccounts   ChannelAccount[]
+  smsImportSettings UserSmsImportSettings?
+  smsIngestMessages SmsIngestMessage[]
+  transactionImportFingerprints TransactionImportFingerprint[]
+
+  @@index([accountLifecyclePurgeAt, accountLifecycleMode])
 }
 
 enum BotChannel {
   WHATSAPP
   TELEGRAM
+  SMS
+}
+
+enum SmsIngestStatus {
+  PENDING
+  PARSING
+  PARSED
+  SKIPPED
+  FAILED
+  DUPLICATE
 }
 
 enum ChannelAccountStatus {
@@ -261,6 +286,62 @@ model BotRequest {
 
   @@index([userId, createdAt])
   @@index([channel, createdAt])
+}
+
+model UserSmsImportSettings {
+  userId                 String    @id
+  enabled                Boolean   @default(true)
+  notifyOnSync           Boolean   @default(true)
+  lastSyncAt             DateTime?
+  lastSyncDeviceId       String?
+  lastBatchId            String?
+  lastBatchSummary       Json?
+  androidSmsGranted      Boolean   @default(false)
+  notificationsGranted   Boolean   @default(false)
+  callGranted            Boolean   @default(false)
+  locationGranted        Boolean   @default(false)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model SmsIngestMessage {
+  id            String          @id @default(uuid())
+  userId        String
+  deviceId      String
+  externalSmsId String?
+  messageHash   String
+  sender        String
+  body          String          @db.Text
+  receivedAt    DateTime
+  status        SmsIngestStatus @default(PENDING)
+  skipReason    String?
+  botRequestId  String?
+  transactionId String?
+  syncBatchId   String
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, messageHash])
+  @@index([userId, status])
+  @@index([syncBatchId])
+}
+
+model TransactionImportFingerprint {
+  id            String   @id @default(uuid())
+  userId        String
+  fingerprint   String
+  transactionId String
+  source        String   @default("sms")
+  createdAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, fingerprint])
+  @@index([userId, createdAt])
 }
 
 model Admin {
@@ -351,6 +432,7 @@ model Transaction {
   documentSize        Int?
   merchant            String?
   status              String           @default("A")
+  lifecycleBatchId    String?
   isRecurring         Boolean          @default(false)
   recurringDay        Int?
   createdAt           DateTime         @default(now())
@@ -361,6 +443,7 @@ model Transaction {
   shares              TransactionShare[]
 
   @@index([userId])
+  @@index([userId, lifecycleBatchId])
   @@index([groupId])
   @@index([createdByUserId])
   @@index([type])

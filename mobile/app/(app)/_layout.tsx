@@ -20,6 +20,8 @@ export default function AppLayout() {
         <Stack.Screen name="groups/[id]" options={{ title: 'Group' }} />
         <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
         <Stack.Screen name="support" options={{ title: 'Help Center' }} />
+        <Stack.Screen name="sms-import" options={{ title: 'Import SMS' }} />
+        <Stack.Screen name="sms-sync-status" options={{ title: 'SMS Sync Status' }} />
       </Stack>
     </View>
     </PlanProvider>

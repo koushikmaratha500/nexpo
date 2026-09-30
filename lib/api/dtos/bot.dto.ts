@@ -3,7 +3,7 @@ import { normalizeChannel, parseJsonIfString } from '@/lib/bot/normalizeTinesBri
 
 export const botChannelSchema = z.preprocess(
   (value) => normalizeChannel(value),
-  z.enum(['whatsapp', 'telegram']),
+  z.enum(['whatsapp', 'telegram', 'sms']),
 );
 
 export const botCommandNameSchema = z.enum([

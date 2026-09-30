@@ -9,6 +9,8 @@ import { formatDateLabel, parseTransactionDate, resolveDateRange } from '@/lib/b
 import { mapTransaction, toYmd } from '@/lib/ai/aggregates';
 import type { AiParseResult, BotCommandRequest } from '../dtos/bot.dto';
 import { PLAN_ERROR_CODES } from '@/lib/billing/types';
+import { computeTransactionImportFingerprint } from '@/lib/auth/smsMessageHash';
+import { TransactionImportFingerprintRepository } from '../repositories/transaction-import-fingerprint.repository';
 
 export interface BotDisplayFields {
   amount?: string;
@@ -108,6 +110,15 @@ export class BotCommandService {
   }): Promise<BotCommandResult> {
     const { aiParse } = params;
 
+    if (aiParse.intent === 'SKIP') {
+      return {
+        success: true,
+        type: 'skipped',
+        error_code: 'SKIP',
+        message: 'Non-transactional message skipped',
+      };
+    }
+
     if (aiParse.intent === 'UNKNOWN') {
       return {
         success: false,
@@ -133,7 +144,7 @@ export class BotCommandService {
       command,
       user_id: params.userId,
       idempotency_key: params.idempotencyKey,
-      source_channel: params.channel as 'whatsapp' | 'telegram',
+      source_channel: params.channel as 'whatsapp' | 'telegram' | 'sms',
       correlation_id: params.idempotencyKey,
       payload: this.aiParseToPayload(aiParse),
     });
@@ -174,9 +185,9 @@ export class BotCommandService {
 
     switch (command) {
       case 'CREATE_EXPENSE':
-        return this.createTransaction(userId, 'DEBIT', payload);
+        return this.createTransaction(userId, 'DEBIT', payload, request.source_channel);
       case 'CREATE_INCOME':
-        return this.createTransaction(userId, 'CREDIT', payload);
+        return this.createTransaction(userId, 'CREDIT', payload, request.source_channel);
       case 'GET_DAILY_SUMMARY':
         return this.getSummary(userId, resolveDateRange('today'));
       case 'GET_WEEKLY_SUMMARY':
@@ -202,6 +213,7 @@ export class BotCommandService {
     userId: string,
     type: 'DEBIT' | 'CREDIT',
     payload: BotCommandRequest['payload'],
+    sourceChannel: BotCommandRequest['source_channel'] = 'whatsapp',
   ): Promise<BotCommandResult> {
     if (!payload?.amount || payload.amount <= 0) {
       return {
@@ -211,18 +223,60 @@ export class BotCommandService {
       };
     }
 
+    const transactionDate = parseTransactionDate(
+      payload.transaction_date || payload.transactionDate || new Date(),
+    );
+    const title = payload.description || payload.merchant || (type === 'DEBIT' ? 'Expense' : 'Income');
+
+    if (sourceChannel === 'sms') {
+      const fingerprint = computeTransactionImportFingerprint({
+        userId,
+        type,
+        amount: payload.amount,
+        transactionDate,
+        title,
+      });
+      const existing = await TransactionImportFingerprintRepository.findByFingerprint(
+        userId,
+        fingerprint,
+      );
+      if (existing) {
+        return {
+          success: true,
+          type: type === 'DEBIT' ? 'expense_created' : 'income_created',
+          transaction_id: existing.transactionId,
+          error_code: 'DUPLICATE',
+          message: 'Transaction already imported',
+        };
+      }
+    }
+
     const transaction = await TransactionService.createTransaction(userId, {
       type,
       amount: payload.amount,
-      title: payload.description || payload.merchant || (type === 'DEBIT' ? 'Expense' : 'Income'),
+      title,
       description: payload.description,
       merchant: payload.merchant,
       categoryName: payload.category || payload.categoryName,
-      transactionDate: parseTransactionDate(
-        payload.transaction_date || payload.transactionDate || new Date(),
-      ),
+      transactionDate,
       isRecurring: false,
     });
+
+    if (sourceChannel === 'sms') {
+      const fingerprint = computeTransactionImportFingerprint({
+        userId,
+        type,
+        amount: payload.amount,
+        transactionDate,
+        title,
+      });
+      await TransactionImportFingerprintRepository.create({
+        userId,
+        fingerprint,
+        transactionId: transaction.id,
+        source: 'sms',
+      });
+    }
 
     const amount = Number(TransactionRepository.serializeAmount(transaction as unknown as Record<string, unknown>));
     const categoryName = payload.category || payload.categoryName || 'Other';

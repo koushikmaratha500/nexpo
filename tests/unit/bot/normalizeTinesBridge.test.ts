@@ -84,4 +84,16 @@ describe('normalizeTinesBridgeInput', () => {
 
     expect(result.user_id).toBe(uuid);
   });
+
+  it('normalizes sms channel and idempotency key', () => {
+    const result = normalizeTinesBridgeInput({
+      channel: 'SMS',
+      user_id: '11111111-1111-1111-1111-111111111111',
+      idempotency_key: 'sms:user-1:hash123',
+      ai_parse: sampleAiOutput,
+    });
+
+    expect(result.channel).toBe('sms');
+    expect(result.idempotency_key).toBe('sms:user-1:hash123');
+  });
 });
