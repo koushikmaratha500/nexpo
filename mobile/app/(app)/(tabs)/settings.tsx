@@ -17,6 +17,9 @@ import { Input } from '../../../src/components/ui/Input';
 import { ScreenHeader } from '../../../src/components/ui/ScreenHeader';
 import { PageShell } from '../../../src/components/layout/PageShell';
 import { MobileBillingSection } from '../../../src/components/billing/MobileBillingSection';
+import { SmsImportCard } from '../../../src/components/settings/SmsImportCard';
+import { isSmsImportUiEnabled } from '../../../src/lib/featureFlags';
+import { AccountLifecycleCard } from '../../../src/components/settings/AccountLifecycleCard';
 import { pickAndUploadImage } from '../../../src/lib/imageUpload';
 
 type ProfileResponse = {
@@ -141,6 +144,8 @@ export default function SettingsScreen() {
 
       <MobileBillingSection />
 
+      {isSmsImportUiEnabled() ? <SmsImportCard /> : null}
+
       <Card className="mb-lg gap-md">
         <Text className="font-title-md font-bold text-primary">Profile</Text>
 
@@ -206,6 +211,8 @@ export default function SettingsScreen() {
         <Input label="New password" value={newPassword} onChangeText={setNewPassword} secureTextEntry />
         <Button title="Update password" variant="secondary" loading={submitting} onPress={savePassword} />
       </Card>
+
+      <AccountLifecycleCard />
 
       <Card className="mb-lg gap-sm">
         <Button
