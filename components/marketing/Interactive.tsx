@@ -18,12 +18,12 @@ export function SplitDemo() {
 
   return (
     <div className="ps:relative ps:rounded-3xl ps:bg-white ps:p-6 ps:shadow-[0_30px_80px_-30px_rgba(76,29,149,.45)] ps:ring-1 ps:ring-ink/5">
-      <div className="ps:flex ps:items-baseline ps:justify-between">
+      <div className="ps:flex ps:items-baseline ps:justify-between ps:gap-3">
         <div>
           <p className="ps:text-sm ps:text-ink/55">Dinner at Toit · Flatmates</p>
-          <p className="ps:text-4xl ps:font-extrabold ps:tabular-nums">{inr(total)}</p>
+          <p className="ps:text-3xl ps:font-extrabold ps:tabular-nums ps:sm:text-4xl">{inr(total)}</p>
         </div>
-        <span className="ps:rounded-full ps:bg-brand-soft ps:px-3 ps:py-1 ps:text-xs ps:font-semibold ps:text-brand">Equal split</span>
+        <span className="ps:hidden ps:shrink-0 ps:rounded-full ps:bg-brand-soft ps:px-3 ps:py-1 ps:text-xs ps:min-[380px]:block ps:font-semibold ps:text-brand">Equal split</span>
       </div>
       <label className="ps:mt-5 ps:block ps:text-sm ps:font-medium">
         Drag the bill
@@ -95,30 +95,36 @@ function StepVisual({ i }: { i: number }) {
   if (i === 2) return (<div className="ps:space-y-3">{[['Rent', '1 Oct · monthly'], ['Wi-Fi', '5 Oct · monthly'], ['Flat dues', '7 Oct · group']].map(([a, b]) => <div key={a} className={row}><span><span className="ps:inline-block ps:origin-top ps:motion-safe:animate-wiggle">🔔</span> {a}</span><span className="ps:text-white/60">{b}</span></div>)}</div>);
   return (<div className="ps:space-y-3"><p className="ps:ml-auto ps:w-fit ps:rounded-2xl ps:bg-brand ps:px-4 ps:py-2">Why was July so high?</p><p className="ps:rounded-2xl ps:bg-white/10 ps:px-4 ps:py-3 ps:leading-7">Groceries rose to ₹2,950 and three subscriptions billed in the same week.</p></div>);
 }
+function StepCard({ i }: { i: number }) {
+  return <div className="ps:rounded-[2rem] ps:bg-ink ps:p-5 ps:text-white ps:shadow-2xl ps:shadow-brand/30 ps:sm:p-6"><StepVisual i={i} /></div>;
+}
 export function Story() {
   const [a, setA] = useState(0);
-  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const refs = useRef<(HTMLDivElement | null)[]>([]);
   useEffect(() => {
     const io = new IntersectionObserver((es) => es.forEach((e) => e.isIntersecting && setA(Number(e.target.getAttribute('data-i')))), { rootMargin: '-40% 0px -40% 0px' });
     refs.current.forEach((r) => r && io.observe(r));
     return () => io.disconnect();
   }, []);
   return (
-    <div className="ps:grid ps:gap-6 ps:lg:grid-cols-2 ps:lg:gap-12">
+    <div className="ps:grid ps:gap-4 ps:lg:grid-cols-2 ps:lg:gap-12">
       <div>
         {STEPS.map(([t, d], i) => (
-          <button key={t} type="button" ref={(el) => { refs.current[i] = el; }} data-i={i} onClick={() => setA(i)}
-            className={`ps:block ps:w-full ps:min-h-[38vh] ps:py-8 ps:text-left ps:transition-opacity ps:md:min-h-[45vh] ps:lg:min-h-[60vh] ps:lg:py-24 ${a === i ? 'ps:opacity-100' : 'ps:opacity-35'}`}>
-            <span className="ps:text-sm ps:font-bold ps:text-brand">0{i + 1}</span>
-            <span className="ps:mt-2 ps:block ps:text-4xl ps:sm:text-5xl ps:font-extrabold ps:tracking-tight">{t}</span>
-            <span className="ps:mt-4 ps:block ps:max-w-[40ch] ps:text-lg ps:leading-8 ps:text-ink/65">{d}</span>
-          </button>
+          <div key={t} ref={(el) => { refs.current[i] = el; }} data-i={i}
+            className={`ps:py-8 ps:transition-opacity ps:lg:min-h-[60vh] ps:lg:py-24 ${a === i ? '' : 'ps:lg:opacity-35'}`}>
+            <button type="button" onClick={() => setA(i)} className="ps:block ps:w-full ps:text-left">
+              <span className="ps:text-sm ps:font-bold ps:text-brand">0{i + 1}</span>
+              <span className="ps:mt-2 ps:block ps:text-4xl ps:font-extrabold ps:tracking-tight ps:sm:text-5xl">{t}</span>
+              <span className="ps:mt-4 ps:block ps:max-w-[40ch] ps:text-lg ps:leading-8 ps:text-ink/65">{d}</span>
+            </button>
+            <div className="ps:mt-6 ps:max-w-xl ps:lg:hidden"><StepCard i={i} /></div>
+          </div>
         ))}
       </div>
-      <div className="ps:sticky ps:top-[72px] ps:z-10 ps:order-first ps:mx-auto ps:w-full ps:max-w-xl ps:lg:top-28 ps:lg:order-last ps:lg:h-[420px] ps:lg:max-w-none">
-        <div className="ps:relative ps:h-64 ps:sm:h-72 ps:rounded-[2rem] ps:bg-ink ps:p-5 ps:sm:p-6 ps:text-white ps:shadow-2xl ps:shadow-brand/30 ps:lg:h-full">
+      <div className="ps:hidden ps:lg:sticky ps:lg:top-28 ps:lg:block ps:lg:self-start">
+        <div className="ps:grid ps:min-h-[420px] ps:rounded-[2rem] ps:bg-ink ps:p-6 ps:text-white ps:shadow-2xl ps:shadow-brand/30">
           {STEPS.map(([t], i) => (
-            <div key={t} aria-hidden={a !== i} className={`ps:absolute ps:inset-5 ps:sm:inset-6 ps:transition-all ps:duration-500 ${a === i ? 'ps:translate-y-0 ps:opacity-100' : 'ps:pointer-events-none ps:translate-y-4 ps:opacity-0'}`}><StepVisual i={i} /></div>
+            <div key={t} aria-hidden={a !== i} className={`ps:col-start-1 ps:row-start-1 ps:transition-all ps:duration-500 ${a === i ? 'ps:translate-y-0 ps:opacity-100' : 'ps:pointer-events-none ps:translate-y-4 ps:opacity-0'}`}><StepVisual i={i} /></div>
           ))}
         </div>
       </div>
@@ -225,7 +231,7 @@ export function MobileMenu({ links }: { links: string[][] }) {
   const [o, setO] = useState(false);
   const bar = 'ps:block ps:h-0.5 ps:w-5 ps:bg-ink ps:transition';
   return (
-    <div className="ps:md:hidden">
+    <div className="ps:lg:hidden">
       <button type="button" aria-label="Menu" aria-expanded={o} onClick={() => setO(!o)} className="ps:grid ps:size-10 ps:place-content-center ps:gap-1.5 ps:rounded-full ps:ring-1 ps:ring-ink/15">
         <span className={`${bar} ${o ? 'ps:translate-y-2 ps:rotate-45' : ''}`} /><span className={`${bar} ${o ? 'ps:opacity-0' : ''}`} /><span className={`${bar} ${o ? 'ps:-translate-y-2 ps:-rotate-45' : ''}`} />
       </button>
