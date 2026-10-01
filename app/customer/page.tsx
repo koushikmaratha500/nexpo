@@ -4,7 +4,8 @@ import React, { useEffect, useRef } from 'react';
 import { Card } from '@/components/ui/Card';
 import { useTransactionStore } from '@/store/transactionStore';
 import { useAuth } from '@/components/auth/AuthContext';
-import { parseDate } from '@/lib/date';
+import { isSameCalendarMonth, parseDate, parseTransactionCalendarDate } from '@/lib/date';
+import { isLedgerExpenseTransaction, isLedgerIncomeTransaction } from '@/lib/transactions/ledger';
 import { DashboardMetrics, RecentTransactions } from '@/components/features/dashboard';
 import { InsightCard } from '@/components/features/assistant';
 import { UpcomingReminders } from '@/components/features/notifications';
@@ -22,19 +23,15 @@ export default function CustomerDashboard() {
 
   // Scope all dashboard metrics to the current month.
   const monthTransactions = React.useMemo(() => {
-    const now = new Date();
-    return transactions.filter((t) => {
-      const d = parseDate(t.date);
-      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-    });
+    return transactions.filter((t) => isSameCalendarMonth(t.date));
   }, [transactions]);
   const expenses = React.useMemo(
-    () => monthTransactions.filter((t) => t.type === 'DEBIT'),
-    [monthTransactions]
+    () => monthTransactions.filter((t) => isLedgerExpenseTransaction(t)),
+    [monthTransactions],
   );
   const credits = React.useMemo(
-    () => monthTransactions.filter((t) => t.type === 'CREDIT'),
-    [monthTransactions]
+    () => monthTransactions.filter((t) => isLedgerIncomeTransaction(t)),
+    [monthTransactions],
   );
 
   const totalSpend = React.useMemo(() => {
@@ -59,12 +56,12 @@ export default function CustomerDashboard() {
     for (let day = 1; day <= daysInMonth; day++) {
       labels.push(String(day));
       const dayExp = expenses
-        .filter((e) => parseDate(e.date).getDate() === day)
-        .reduce((sum, e) => sum + e.amount, 0);
+        .filter((e) => parseTransactionCalendarDate(e.date)?.getDate() === day)
+        .reduce((sum, e) => sum + (Number.isFinite(e.amount) ? e.amount : 0), 0);
       expenseAmounts.push(dayExp);
       const dayCred = credits
-        .filter((c) => parseDate(c.date).getDate() === day)
-        .reduce((sum, c) => sum + c.amount, 0);
+        .filter((c) => parseTransactionCalendarDate(c.date)?.getDate() === day)
+        .reduce((sum, c) => sum + (Number.isFinite(c.amount) ? c.amount : 0), 0);
       incomeAmounts.push(dayCred);
     }
 
@@ -145,9 +142,13 @@ export default function CustomerDashboard() {
 
   // Last 3 transactions of this month, sorted by date descending
   const recentTransactions = [...monthTransactions]
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .sort((a, b) => {
+      const aTime = parseTransactionCalendarDate(a.date)?.getTime() ?? 0;
+      const bTime = parseTransactionCalendarDate(b.date)?.getTime() ?? 0;
+      return bTime - aTime;
+    })
     .slice(0, 3);
-  const totalDeposits = credits.reduce((sum, c) => sum + c.amount, 0);
+  const totalDeposits = credits.reduce((sum, c) => sum + (Number.isFinite(c.amount) ? c.amount : 0), 0);
   const userFirstName = user?.firstName || 'User';
 
   return (

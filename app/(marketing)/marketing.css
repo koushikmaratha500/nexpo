@@ -1,0 +1,22 @@
+/* Prefixed Tailwind v4: every utility is written `ps:...`, theme vars become --ps-*.
+   Preflight is intentionally NOT imported, so it cannot reset your app's styles. */
+@import "tailwindcss/theme.css" layer(theme) prefix(ps);
+@import "tailwindcss/utilities.css" layer(utilities) prefix(ps);
+@source "../../components/marketing";
+@source "./";
+
+@theme {
+  --font-sans: "Figtree", ui-sans-serif, system-ui, sans-serif;
+  --color-brand: #6d28d9;
+  --color-brand-deep: #4c1d95;
+  --color-brand-soft: #f3efff;
+  --color-ink: #14112b;
+  --color-paper: #faf8ff;
+  --color-gold: #f6ad55;
+  --color-mint: #0e9f6e;
+  --animate-drift: drift 9s ease-in-out infinite;
+  @keyframes drift { 0%,100% { transform: translate(0,0) } 50% { transform: translate(18px,-14px) } }
+}
+
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }

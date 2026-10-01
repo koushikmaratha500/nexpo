@@ -453,12 +453,16 @@ export default function TransactionsPage() {
   const selectedEditType = useWatch({ control: controlEdit, name: 'type' });
 
   // Filter categories based on selected transaction type
-  const filteredAddCategories = selectedAddType
-    ? categories.filter((c) => !c.type || c.type === selectedAddType)
-    : categories;
-  const filteredEditCategories = selectedEditType
-    ? categories.filter((c) => !c.type || c.type === selectedEditType)
-    : categories;
+  const filterCategoriesForType = (type?: TransactionType) => {
+    if (!type) return categories;
+    return categories.filter((c) => {
+      if (!c.type) return true;
+      return c.type === type;
+    });
+  };
+
+  const filteredAddCategories = filterCategoriesForType(selectedAddType);
+  const filteredEditCategories = filterCategoriesForType(selectedEditType);
 
   const hasFetchedRef = useRef(false);
   const metadataFetchedRef = useRef(false);
@@ -579,13 +583,6 @@ export default function TransactionsPage() {
   const totalCredit = filteredTransactions.filter((t) => t.type === 'CREDIT').reduce((sum, t) => sum + t.amount, 0);
 
   const resolveCategoryForForm = (value: string, type: TransactionType): string => {
-    if (type === 'CREDIT') {
-      const depositMatch = depositTypes.find(
-        (d) => d.name === value || d.name.toLowerCase() === value.toLowerCase(),
-      );
-      return depositMatch?.name ?? value;
-    }
-
     const categoryMatch = categories.find(
       (c) =>
         c.name === value ||
@@ -593,6 +590,13 @@ export default function TransactionsPage() {
         c.name.toUpperCase().replace(/\s+/g, '_') === value.toUpperCase(),
     );
     return categoryMatch?.name ?? value;
+  };
+
+  const resolveDepositTypeForForm = (value: string): string => {
+    const depositMatch = depositTypes.find(
+      (d) => d.name === value || d.name.toLowerCase() === value.toLowerCase(),
+    );
+    return depositMatch?.name ?? value;
   };
 
   const handleOpenEdit = (t: Transaction) => {
@@ -609,7 +613,7 @@ export default function TransactionsPage() {
       currency: t.currency,
       paymentType: t.paymentType || '',
       notes: t.notes || '',
-      depositType: t.depositType || 'Account',
+      depositType: resolveDepositTypeForForm(t.depositType || t.paymentType || 'Account'),
       isRecurring: t.isRecurring ?? false,
       recurringDay: t.isRecurring ? String(t.recurringDay ?? new Date(t.date).getDate()) : String(new Date(t.date).getDate()),
     });

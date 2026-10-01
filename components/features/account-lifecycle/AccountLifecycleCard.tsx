@@ -4,8 +4,10 @@ import React, { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/hooks/useToast';
 import { useAuth } from '@/components/auth/AuthContext';
+import { AccountLifecycleTermsAcceptance } from '@/components/features/account-lifecycle/AccountLifecycleTermsAcceptance';
 
 type LifecycleStatus = {
   mode: 'ACTIVE' | 'RESET_PENDING' | 'DELETE_PENDING';
@@ -16,16 +18,26 @@ type LifecycleStatus = {
 };
 
 type OtpChannel = 'email' | 'sms';
-type PendingAction = 'RESET' | 'DELETE' | null;
+type ModalAction = 'RESET' | 'DELETE';
+
+function getApiErrorMessage(err: unknown, fallback: string): string {
+  if (axios.isAxiosError(err)) {
+    const data = err.response?.data as { error?: string; message?: string } | undefined;
+    return data?.error || data?.message || fallback;
+  }
+  return err instanceof Error ? err.message : fallback;
+}
 
 export function AccountLifecycleCard() {
   const { addToast } = useToast();
   const { logout } = useAuth();
   const [lifecycle, setLifecycle] = useState<LifecycleStatus | null>(null);
   const [channel, setChannel] = useState<OtpChannel>('email');
-  const [otp, setOtp] = useState('');
-  const [otpSentFor, setOtpSentFor] = useState<PendingAction>(null);
   const [loading, setLoading] = useState(false);
+  const [modalAction, setModalAction] = useState<ModalAction | null>(null);
+  const [otp, setOtp] = useState('');
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -42,86 +54,68 @@ export function AccountLifecycleCard() {
     void load();
   }, [load]);
 
-  const sendOtp = async (action: 'RESET' | 'DELETE') => {
+  const openOtpFlow = async (action: ModalAction) => {
     setLoading(true);
+    setModalError(null);
     try {
       await axios.post('/api/user/account/otp/send', { action, channel });
-      setOtpSentFor(action);
-      addToast(`Verification code sent via ${channel === 'email' ? 'email' : 'SMS'}`, 'success');
-    } catch (err) {
-      const message =
-        axios.isAxiosError(err) && err.response?.data?.error
-          ? String(err.response.data.error)
-          : err instanceof Error
-            ? err.message
-            : 'Failed to send code';
-      addToast(message, 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const resetAccount = async () => {
-    if (otpSentFor !== 'RESET' || otp.length !== 6) {
-      addToast('Send and enter the email or SMS verification code first', 'error');
-      return;
-    }
-    if (!window.confirm('Reset all personal transactions? You can recover them within 7 days by signing in again.')) {
-      return;
-    }
-    setLoading(true);
-    try {
-      await axios.post('/api/user/account/reset', {
-        confirmation: 'RESET',
-        channel,
-        otp,
-      });
-      addToast('Account reset started. Personal transactions are hidden for now.', 'success');
+      if (action === 'RESET') {
+        addToast(
+          `Reset OTP sent to your ${channel === 'email' ? 'email' : 'phone'}. Enter it below to continue.`,
+          'success',
+        );
+      } else {
+        addToast(
+          `Account deletion OTP sent to your ${channel === 'email' ? 'email' : 'phone'}. Enter it below to continue.`,
+          'success',
+        );
+      }
       setOtp('');
-      setOtpSentFor(null);
-      await load();
+      setTermsAccepted(false);
+      setModalAction(action);
     } catch (err) {
-      const message =
-        axios.isAxiosError(err) && err.response?.data?.error
-          ? String(err.response.data.error)
-          : err instanceof Error
-            ? err.message
-            : 'Reset failed';
-      addToast(message, 'error');
+      addToast(getApiErrorMessage(err, 'Failed to send verification code'), 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  const deleteAccount = async () => {
-    if (otpSentFor !== 'DELETE' || otp.length !== 6) {
-      addToast('Send and enter the email or SMS verification code first', 'error');
+  const submitOtp = async () => {
+    if (!termsAccepted) {
+      setModalError('Please accept the Terms & Conditions to continue.');
       return;
     }
-    if (
-      !window.confirm(
-        'Delete your account? Sign in within 7 days to cancel deletion. After that, all data is permanently removed.',
-      )
-    ) {
+    if (!modalAction || otp.length !== 6) {
+      setModalError('Enter the 6-digit verification code.');
       return;
     }
+
     setLoading(true);
+    setModalError(null);
     try {
-      await axios.post('/api/user/account/delete', {
-        confirmation: 'DELETE',
-        channel,
-        otp,
-      });
-      addToast('Account scheduled for deletion. You have been signed out.', 'info');
-      await logout();
+      if (modalAction === 'RESET') {
+        await axios.post('/api/user/account/reset', {
+          confirmation: 'RESET',
+          channel,
+          otp,
+        });
+        setModalAction(null);
+        setOtp('');
+        addToast('Account reset complete. Personal transactions are hidden for now.', 'success');
+        await load();
+      } else {
+        await axios.post('/api/user/account/delete', {
+          confirmation: 'DELETE',
+          channel,
+          otp,
+        });
+        setModalAction(null);
+        setOtp('');
+        addToast('Account scheduled for deletion. Signing you out…', 'info');
+        await logout();
+      }
     } catch (err) {
-      const message =
-        axios.isAxiosError(err) && err.response?.data?.error
-          ? String(err.response.data.error)
-          : err instanceof Error
-            ? err.message
-            : 'Delete failed';
-      addToast(message, 'error');
+      setModalError(getApiErrorMessage(err, 'Verification failed'));
     } finally {
       setLoading(false);
     }
@@ -134,7 +128,7 @@ export function AccountLifecycleCard() {
       addToast('Account restored successfully.', 'success');
       await load();
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Restore failed', 'error');
+      addToast(getApiErrorMessage(err, 'Restore failed'), 'error');
     } finally {
       setLoading(false);
     }
@@ -144,79 +138,128 @@ export function AccountLifecycleCard() {
     return null;
   }
 
+  const modalTitle =
+    modalAction === 'DELETE' ? 'Confirm account deletion' : 'Confirm account reset';
+  const modalSubtitle =
+    modalAction === 'DELETE'
+      ? 'Enter the deletion code we sent to complete this step.'
+      : 'Enter the reset code we sent to complete this step.';
+
   return (
-    <Card className="bg-surface-container-lowest p-5 flex flex-col gap-4" glass={false}>
-      <div>
-        <h3 className="font-title-md text-title-md font-bold text-primary">Account data</h3>
-        <p className="font-body-md text-on-surface-variant mt-1">
-          Reset or delete requires a one-time code by email or SMS. Data is retained for 7 days, then permanently removed.
-        </p>
-      </div>
-
-      {lifecycle.mode !== 'ACTIVE' ? (
-        <div className="rounded-lg border border-outline-variant/40 bg-surface-container-low p-3 text-sm text-on-surface-variant">
-          {lifecycle.mode === 'RESET_PENDING'
-            ? 'Reset in progress — personal transactions are hidden.'
-            : 'Account scheduled for deletion.'}
-          {lifecycle.purge_at ? (
-            <p className="mt-1">
-              Recovery available until {new Date(lifecycle.purge_at).toLocaleString()}
-              {lifecycle.days_remaining !== null ? ` (${lifecycle.days_remaining} day(s) left)` : ''}.
-            </p>
-          ) : null}
+    <>
+      <Card className="bg-surface-container-lowest p-5 flex flex-col gap-4" glass={false}>
+        <div>
+          <h3 className="font-title-md text-title-md font-bold text-primary">Account data</h3>
+          <p className="font-body-md text-on-surface-variant mt-1">
+            Reset or delete requires a one-time code by email or SMS. Data is retained for 7 days, then
+            permanently removed.
+          </p>
         </div>
-      ) : null}
 
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant={channel === 'email' ? 'primary' : 'secondary'}
-          onClick={() => setChannel('email')}
-          type="button"
-        >
-          Email OTP
-        </Button>
-        <Button
-          variant={channel === 'sms' ? 'primary' : 'secondary'}
-          onClick={() => setChannel('sms')}
-          type="button"
-        >
-          SMS OTP
-        </Button>
-      </div>
+        {lifecycle.mode !== 'ACTIVE' ? (
+          <div className="rounded-lg border border-outline-variant/40 bg-surface-container-low p-3 text-sm text-on-surface-variant">
+            {lifecycle.mode === 'RESET_PENDING'
+              ? 'Reset in progress — personal transactions are hidden.'
+              : 'Account scheduled for deletion.'}
+            {lifecycle.purge_at ? (
+              <p className="mt-1">
+                Recovery available until {new Date(lifecycle.purge_at).toLocaleString()}
+                {lifecycle.days_remaining !== null ? ` (${lifecycle.days_remaining} day(s) left)` : ''}.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
-      <input
-        className="w-full rounded-xl border border-outline-variant/50 bg-surface px-4 py-3 font-body-md text-on-surface"
-        placeholder="6-digit verification code"
-        inputMode="numeric"
-        maxLength={6}
-        value={otp}
-        onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-      />
-
-      {lifecycle.can_restore ? (
-        <Button variant="secondary" disabled={loading} onClick={restoreAccount}>
-          Restore account &amp; transactions
-        </Button>
-      ) : null}
-
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col sm:flex-row gap-2">
-          <Button variant="secondary" disabled={loading} onClick={() => sendOtp('RESET')} className="flex-1">
-            Send code (reset)
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant={channel === 'email' ? 'primary' : 'secondary'}
+            onClick={() => setChannel('email')}
+            type="button"
+            disabled={Boolean(modalAction)}
+          >
+            Email OTP
           </Button>
-          <Button variant="secondary" disabled={loading} onClick={resetAccount} className="flex-1">
+          <Button
+            variant={channel === 'sms' ? 'primary' : 'secondary'}
+            onClick={() => setChannel('sms')}
+            type="button"
+            disabled={Boolean(modalAction)}
+          >
+            SMS OTP
+          </Button>
+        </div>
+
+        {lifecycle.can_restore ? (
+          <Button variant="secondary" disabled={loading || Boolean(modalAction)} onClick={restoreAccount}>
+            Restore account &amp; transactions
+          </Button>
+        ) : null}
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Button
+            variant="secondary"
+            disabled={loading || Boolean(modalAction)}
+            onClick={() => openOtpFlow('RESET')}
+            className="flex-1"
+          >
             Reset account
           </Button>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <Button variant="secondary" disabled={loading} onClick={() => sendOtp('DELETE')} className="flex-1">
-            Send code (delete)
-          </Button>
-          <Button variant="secondary" disabled={loading} onClick={deleteAccount} className="flex-1">
+          <Button
+            variant="secondary"
+            disabled={loading || Boolean(modalAction)}
+            onClick={() => openOtpFlow('DELETE')}
+            className="flex-1"
+          >
             Delete account
           </Button>
         </div>
-      </div>
-    </Card>
+      </Card>
+
+      <Modal
+        isOpen={modalAction !== null}
+        onClose={() => undefined}
+        title={modalTitle}
+        subtitle={modalSubtitle}
+        dismissible={false}
+        closeOnEscape={false}
+        showCloseButton={false}
+        maxWidth="max-w-md"
+      >
+        <div className="flex flex-col gap-4 pt-2">
+          <input
+            className="w-full rounded-xl border border-outline-variant/50 bg-surface px-4 py-3 font-body-md text-on-surface text-center tracking-[0.35em]"
+            placeholder="******"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={6}
+            value={otp}
+            onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            disabled={loading}
+            autoFocus
+          />
+          <AccountLifecycleTermsAcceptance
+            checked={termsAccepted}
+            onChange={setTermsAccepted}
+            disabled={loading}
+          />
+          {modalError ? (
+            <p className="font-label-sm text-label-sm text-error text-center">{modalError}</p>
+          ) : null}
+          <Button
+            type="button"
+            variant="primary"
+            onClick={() => void submitOtp()}
+            disabled={loading}
+            className="w-full"
+          >
+            {loading
+              ? 'Verifying…'
+              : modalAction === 'DELETE'
+                ? 'Verify and delete account'
+                : 'Verify and reset account'}
+          </Button>
+        </div>
+      </Modal>
+    </>
   );
 }

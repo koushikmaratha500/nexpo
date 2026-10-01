@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { parseLocalDateInput } from '@/lib/date';
 
 const transactionBaseObject = z.object({
   type: z.enum(['DEBIT', 'CREDIT']),
@@ -16,7 +17,9 @@ const transactionBaseObject = z.object({
   budgetTypeId: z.string().optional().nullable(),
   budgetType: z.string().optional().nullable(),
   amount: z.number().positive('Amount must be a positive number'),
-  transactionDate: z.union([z.string(), z.date()]).transform((val) => new Date(val)),
+  transactionDate: z
+    .union([z.string(), z.date()])
+    .transform((val) => (typeof val === 'string' ? parseLocalDateInput(val) : val)),
   notes: z.string().max(1000, 'Notes must be at most 1000 characters').optional().nullable(),
   documentUrl: z.string().optional().nullable(),
   documentFileName: z.string().optional().nullable(),

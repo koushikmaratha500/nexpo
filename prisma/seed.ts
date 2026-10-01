@@ -70,7 +70,7 @@ async function main() {
 
     console.log('🌱 Seeding categories...');
 
-    const categories = [
+    const expenseCategories = [
         'Food',
         'Travel',
         'Fuel',
@@ -81,21 +81,34 @@ async function main() {
         'Loans',
         'CreditCard',
         'Education',
-        'Investments',
         'Rent',
         'Insurance',
         'Taxes',
-        'Salary',
         'Miscellaneous',
     ];
+    const incomeCategories = ['Salary', 'Investments', 'Freelance', 'Gift', 'Refund'];
 
-    for (const name of categories) {
+    for (const name of expenseCategories) {
         await prisma.category.upsert({
             where: { name },
-            update: {},
+            update: { type: 'DEBIT' },
             create: {
                 name,
                 code: name.toUpperCase().trim(),
+                type: 'DEBIT',
+                status: 'A',
+            },
+        });
+    }
+
+    for (const name of incomeCategories) {
+        await prisma.category.upsert({
+            where: { name },
+            update: { type: 'CREDIT' },
+            create: {
+                name,
+                code: name.toUpperCase().trim(),
+                type: 'CREDIT',
                 status: 'A',
             },
         });

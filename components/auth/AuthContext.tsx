@@ -16,6 +16,7 @@ export interface User {
   role: 'ADMIN' | 'CUSTOMER';
   status?: string;
   avatar?: string;
+  profileImageUrl?: string | null;
   mobile?: string;
   countryId?: string | null;
   currencyId?: string | null;
@@ -68,6 +69,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { addToast } = useToast();
   const toastShownRef = useRef(false);
+
+  // Hydrate customer profile (avatar, etc.) when session restores from storage
+  useEffect(() => {
+    if (!token || !user || user.role !== 'CUSTOMER') return;
+
+    let cancelled = false;
+    axios
+      .get('/api/user/auth/profile')
+      .then((response) => {
+        if (cancelled) return;
+        const data = response.data as {
+          profileImageUrl?: string | null;
+          avatar?: string;
+          firstName?: string;
+          lastName?: string;
+          username?: string;
+          countryId?: string | null;
+          currencyId?: string | null;
+        };
+        const avatar = data.avatar || data.profileImageUrl || undefined;
+        updateUser({
+          ...(data.firstName ? { firstName: data.firstName } : {}),
+          ...(data.lastName !== undefined ? { lastName: data.lastName } : {}),
+          ...(data.username ? { username: data.username } : {}),
+          ...(data.countryId !== undefined ? { countryId: data.countryId } : {}),
+          ...(data.currencyId !== undefined ? { currencyId: data.currencyId } : {}),
+          ...(avatar ? { avatar, profileImageUrl: avatar } : {}),
+        });
+      })
+      .catch(() => {
+        // Non-fatal: header falls back to initials until profile loads elsewhere
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, user?.email, user?.role, updateUser]);
 
   // Set dynamic request interceptor and handle hydration load
   useEffect(() => {
@@ -219,6 +257,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             email: rawUser.email,
             countryId: rawUser.countryId || null,
             currencyId: rawUser.currencyId || null,
+            avatar: rawUser.avatar || rawUser.profileImageUrl || undefined,
+            profileImageUrl: rawUser.profileImageUrl || rawUser.avatar || null,
             role: 'CUSTOMER',
           };
         }
@@ -270,6 +310,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email: rawUser.email,
         countryId: rawUser.countryId || null,
         currencyId: rawUser.currencyId || null,
+        avatar: rawUser.avatar || rawUser.profileImageUrl || undefined,
+        profileImageUrl: rawUser.profileImageUrl || rawUser.avatar || null,
         role: 'CUSTOMER',
       };
 
