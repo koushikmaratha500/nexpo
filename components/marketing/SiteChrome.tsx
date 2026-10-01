@@ -20,9 +20,9 @@ export function Logo({ light = false }: { light?: boolean }) {
 export function Nav() {
   return (
     <header className="ps:sticky ps:top-0 ps:z-40 ps:border-b ps:border-ink/5 ps:bg-paper/95 ps:backdrop-blur-lg">
-      <div className="ps:relative ps:mx-auto ps:flex ps:h-16 ps:max-w-6xl ps:items-center ps:justify-between ps:px-6">
+      <div className="ps:mx-auto ps:flex ps:h-16 ps:max-w-6xl ps:items-center ps:justify-between ps:px-6">
         <Logo />
-        <nav className="ps:hidden ps:gap-6 ps:lg:gap-8 ps:text-sm ps:font-medium ps:text-ink/70 ps:md:flex">
+        <nav className="ps:hidden ps:gap-6 ps:lg:gap-8 ps:text-sm ps:font-medium ps:text-ink/70 ps:lg:flex">
           {LINKS.map(([t, h]) => <Link key={t} href={h} className="ps:hover:text-brand">{t}</Link>)}
         </nav>
         <div className="ps:flex ps:items-center ps:gap-3 ps:text-sm ps:font-semibold">
@@ -56,7 +56,7 @@ export function Footer() {
 /** Marketing layout shell: font, prefixed theme CSS, nav, footer. */
 export function MarketingShell({ children }: { children: ReactNode }) {
   return (
-    <div className={`${figtree.className} ps:min-h-screen ps:bg-paper ps:text-ink ps:antialiased`}>
+    <div className={`${figtree.className} ps:min-h-screen ps:overflow-x-clip ps:bg-paper ps:text-ink ps:antialiased`}>
       <ScrollBar />
       <Nav />
       <main>{children}</main>
