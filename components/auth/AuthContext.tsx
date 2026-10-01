@@ -6,6 +6,7 @@ import axios from 'axios';
 import { useAuthStore, UserState } from '@/store/authStore';
 import { useToast } from '@/hooks/useToast';
 import { createClient } from '@/lib/supabase/client';
+import { isPublicAppPath } from '@/lib/auth/publicPaths';
 
 export interface User {
   username?: string;
@@ -131,9 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isLoading) return;
 
-    const isPublicPage =
-      pathname === '/' || pathname.startsWith('/r/') || pathname.startsWith('/auth/callback');
-    const isAuthPage = pathname.startsWith('/auth') || isPublicPage;
+    const isAuthPage = isPublicAppPath(pathname);
     const isAdminAuthPage = pathname.startsWith('/admin/login') ||
       pathname.startsWith('/admin/forgot-password') ||
       pathname.startsWith('/admin/reset-password');
