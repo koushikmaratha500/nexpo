@@ -5,7 +5,7 @@ const ARTICLE = 'ps:max-w-[68ch] ps:text-[17px] ps:leading-8 ps:text-ink/80';
 
 export function LegalPage({ title, intro, sections }: { title: string; intro: string; sections: Section[] }) {
   return (
-    <div className="ps:mx-auto ps:grid ps:max-w-6xl ps:gap-12 ps:px-6 ps:py-20 ps:lg:grid-cols-[220px_1fr]">
+    <div className="ps:mx-auto ps:grid ps:max-w-6xl ps:gap-12 ps:px-6 ps:py-12 ps:sm:py-20 ps:lg:grid-cols-[220px_1fr]">
       <aside className="ps:hidden ps:lg:block">
         <nav aria-label="On this page" className="ps:sticky ps:top-24 ps:flex ps:flex-col ps:gap-1 ps:border-l ps:border-ink/10 ps:text-sm">
           {sections.map((s, i) => (
