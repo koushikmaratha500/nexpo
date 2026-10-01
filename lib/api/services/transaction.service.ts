@@ -1,7 +1,9 @@
 import { TransactionRepository } from '../repositories/transaction.repository';
 import { MetaResolutionService } from './meta-resolution.service';
+import { MetaRepository } from '../repositories/meta.repository';
+import { isIncomeCategoryName } from '@/lib/transactions/ledger';
 import { PlanService } from './plan.service';
-import { AuditAction } from '@prisma/client';
+import { AuditAction, Prisma } from '@prisma/client';
 import { createTransactionSchema } from '../dtos/transaction.dto';
 import type { z } from 'zod';
 
@@ -15,6 +17,7 @@ type TransactionData = CreateTransactionData & {
   receiptMimeType?: string | null;
   receiptSize?: number | null;
   categoryName?: string | null;
+  depositType?: string | null;
 };
 
 interface TransactionMeta {
@@ -22,21 +25,50 @@ interface TransactionMeta {
   ua?: string;
 }
 
+function normalizeText(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function resolveLedgerType(
+  requested: 'DEBIT' | 'CREDIT',
+  category: { type?: 'DEBIT' | 'CREDIT'; name: string } | null,
+): 'DEBIT' | 'CREDIT' {
+  if (isIncomeCategoryName(category?.name)) return 'CREDIT';
+  if (category?.type === 'CREDIT' || category?.type === 'DEBIT') return category.type;
+  return requested;
+}
+
+/** First calendar month (inclusive) that may surface a recurring due date. */
+export function firstRecurringScheduleMonthYm(transactionDate: Date): number {
+  const year = transactionDate.getFullYear();
+  const month = transactionDate.getMonth();
+  return year * 12 + month + 1;
+}
+
 export class TransactionService {
   static async createTransaction(userId: string, data: TransactionData, meta: TransactionMeta = {}) {
     await PlanService.assertCanCreatePersonalTransactions(userId, 1);
     const resolved = await MetaResolutionService.resolveForTransaction(data);
+    const categoryRecord = resolved.categoryId
+      ? await MetaRepository.findCategoryById(resolved.categoryId)
+      : null;
+    const resolvedType = resolveLedgerType(data.type, categoryRecord);
+
+    const title = normalizeText(data.title) || normalizeText(data.merchant) || 'Transaction';
+    const merchant = normalizeText(data.merchant);
 
     const transaction = await TransactionRepository.create({
       userId,
-      type: data.type,
+      type: resolvedType,
       categoryId: resolved.categoryId,
       currencyId: resolved.currencyId,
       paymentTypeId: resolved.paymentTypeId,
       budgetDepositTypeId: resolved.budgetDepositTypeId,
       budgetTypeId: resolved.budgetTypeId,
-      title: data.title || data.merchant || 'Transaction Title',
-      description: data.description || data.merchant,
+      title,
+      description: data.description ?? merchant,
       amount: data.amount,
       transactionDate: data.transactionDate || data.expenseDate || data.date,
       notes: data.notes || null,
@@ -44,7 +76,7 @@ export class TransactionService {
       documentFileName: data.documentFileName || data.receiptFileName || null,
       documentMimeType: data.documentMimeType || data.receiptMimeType || null,
       documentSize: data.documentSize || data.receiptSize || null,
-      merchant: data.merchant || null,
+      merchant,
       isRecurring: data.isRecurring ?? false,
       recurringDay: data.isRecurring ? data.recurringDay ?? null : null,
     });
@@ -89,34 +121,51 @@ export class TransactionService {
       throw new Error('Transaction not found or unauthorized');
     }
 
-    const resolved = await MetaResolutionService.resolveForTransaction(data);
-    const updateData = {
+    const resolved = await MetaResolutionService.resolveForTransaction({
       ...data,
-      ...(resolved.categoryId && { categoryId: resolved.categoryId }),
-      ...(resolved.currencyId && { currencyId: resolved.currencyId }),
-      ...(resolved.paymentTypeId && { paymentTypeId: resolved.paymentTypeId }),
-      ...(resolved.budgetDepositTypeId && { budgetDepositTypeId: resolved.budgetDepositTypeId }),
-      ...(resolved.budgetTypeId && { budgetTypeId: resolved.budgetTypeId }),
-    };
+      type: data.type ?? original.type,
+    });
+    const categoryRecord = resolved.categoryId
+      ? await MetaRepository.findCategoryById(resolved.categoryId)
+      : null;
+    const resolvedType = resolveLedgerType(
+      (data.type ?? original.type) as 'DEBIT' | 'CREDIT',
+      categoryRecord,
+    );
 
-    if (data.title || data.merchant) {
-      updateData.title = data.title || data.merchant;
+    const updatePayload: Prisma.TransactionUncheckedUpdateInput = {};
+
+    if (data.type !== undefined || categoryRecord?.type) updatePayload.type = resolvedType;
+    if (data.amount !== undefined) updatePayload.amount = data.amount;
+    if (data.transactionDate !== undefined) updatePayload.transactionDate = data.transactionDate;
+    if (data.notes !== undefined) updatePayload.notes = data.notes;
+    if (data.description !== undefined) updatePayload.description = data.description;
+    if (data.documentUrl !== undefined) updatePayload.documentUrl = data.documentUrl;
+    if (data.documentFileName !== undefined) updatePayload.documentFileName = data.documentFileName;
+    if (data.documentMimeType !== undefined) updatePayload.documentMimeType = data.documentMimeType;
+    if (data.documentSize !== undefined) updatePayload.documentSize = data.documentSize;
+
+    if (data.title !== undefined) {
+      updatePayload.title = normalizeText(data.title) || normalizeText(data.merchant) || original.title;
+    }
+    if (data.merchant !== undefined) {
+      updatePayload.merchant = normalizeText(data.merchant);
     }
 
-    // Keep recurring fields consistent: clear the day when not recurring
-    if (updateData.isRecurring !== undefined) {
-      updateData.recurringDay = updateData.isRecurring ? (data.recurringDay ?? null) : null;
+    if (resolved.categoryId) updatePayload.categoryId = resolved.categoryId;
+    if (resolved.currencyId) updatePayload.currencyId = resolved.currencyId;
+    if (resolved.paymentTypeId) updatePayload.paymentTypeId = resolved.paymentTypeId;
+    if (resolved.budgetDepositTypeId) updatePayload.budgetDepositTypeId = resolved.budgetDepositTypeId;
+    if (resolved.budgetTypeId) updatePayload.budgetTypeId = resolved.budgetTypeId;
+
+    if (data.isRecurring !== undefined) {
+      updatePayload.isRecurring = data.isRecurring;
+      updatePayload.recurringDay = data.isRecurring ? data.recurringDay ?? null : null;
+    } else if (data.recurringDay !== undefined) {
+      updatePayload.recurringDay = data.recurringDay;
     }
 
-    delete updateData.category;
-    delete updateData.currency;
-    delete updateData.paymentType;
-    delete updateData.merchant;
-    delete updateData.budgetDepositType;
-    delete updateData.budgetType;
-    delete updateData.categoryName;
-
-    const updated = await TransactionRepository.update(id, updateData as Record<string, unknown>);
+    const updated = await TransactionRepository.update(id, updatePayload);
 
     await TransactionRepository.createAudit({
       transactionId: id,
@@ -182,29 +231,21 @@ export class TransactionService {
 
     for (const txn of recurring) {
       const recurringDay = txn.recurringDay ?? txn.transactionDate.getDate();
-      const startYear = txn.transactionDate.getFullYear();
-      const startMonth = txn.transactionDate.getMonth();
+      const firstScheduleYm = firstRecurringScheduleMonthYm(txn.transactionDate);
       const currentYear = today.getFullYear();
       const currentMonth = today.getMonth();
 
       let activeDue: Date | null = null;
 
-      // Walk months from the original month up to the current month
-      for (
-        let ym = startYear * 12 + startMonth;
-        ym <= currentYear * 12 + currentMonth;
-        ym += 1
-      ) {
+      for (let ym = firstScheduleYm; ym <= currentYear * 12 + currentMonth; ym += 1) {
         const year = Math.floor(ym / 12);
         const month = ym % 12;
         const day = TransactionService.monthDayClamped(year, month, recurringDay);
         const due = new Date(year, month, day);
         const dayStart = new Date(due);
         dayStart.setHours(0, 0, 0, 0);
-        // Window opens 2 days before the due date
         const windowOpen = new Date(dayStart.getTime() - 2 * 24 * 60 * 60 * 1000);
         if (windowOpen.getTime() <= today.getTime()) {
-          // Latest matching window wins -> older months drop off the list
           activeDue = dayStart;
         }
       }

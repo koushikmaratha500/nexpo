@@ -6,6 +6,8 @@ import {
   apiPost,
   apiUpload,
   formatDate,
+  isLedgerIncomeTransaction,
+  parseTransactionAmount,
   type PaginatedResponse,
   type PendingRecurring,
   type Transaction,
@@ -19,21 +21,21 @@ function mapDbTransaction(dbTxn: Record<string, unknown>): Transaction {
   const type = dbTxn.type as TransactionType;
   const isCredit = type === 'CREDIT';
   const user = dbTxn.user as { firstName?: string; lastName?: string } | undefined;
-  const category = dbTxn.category as { name?: string; code?: string } | undefined;
+  const category = dbTxn.category as { name?: string; code?: string; type?: TransactionType } | undefined;
   const budgetDepositType = dbTxn.budgetDepositType as { name?: string } | undefined;
   const paymentType = dbTxn.paymentType as { name?: string } | undefined;
   const currency = dbTxn.currency as { code?: string } | undefined;
-  const amount =
-    typeof dbTxn.amount === 'string' ? parseFloat(dbTxn.amount) : (dbTxn.amount as number);
+  const amount = parseTransactionAmount(dbTxn.amount);
 
   return {
     id: String(dbTxn.id),
     type,
+    categoryType: category?.type,
     title: String(dbTxn.title || dbTxn.merchant || 'Transaction Title'),
     merchant: dbTxn.merchant ? String(dbTxn.merchant) : undefined,
     description: dbTxn.description ? String(dbTxn.description) : undefined,
     category: isCredit
-      ? budgetDepositType?.name || 'Other'
+      ? category?.name || category?.code || 'Other'
       : category?.name || category?.code || 'Food',
     date: formatDate(String(dbTxn.transactionDate || dbTxn.date || '')),
     status: (isCredit ? 'VERIFIED' : 'PENDING') as Transaction['status'],
@@ -78,6 +80,31 @@ async function fetchAllTransactionPages(filters?: {
   } while (allItems.length < total && page <= MAX_FETCH_PAGES);
 
   return allItems;
+}
+
+function appendTransactionFormFields(
+  formData: FormData,
+  txnData: Partial<Transaction> & { type: TransactionType },
+) {
+  formData.append('type', txnData.type);
+  if (txnData.title !== undefined) formData.append('title', txnData.title);
+  if (txnData.merchant !== undefined) formData.append('merchant', txnData.merchant);
+  if (txnData.category) formData.append('category', txnData.category);
+  if (txnData.amount !== undefined) formData.append('amount', String(txnData.amount));
+  if (txnData.date) formData.append('transactionDate', txnData.date);
+  if (txnData.currency) formData.append('currency', txnData.currency);
+  if (txnData.notes !== undefined) formData.append('notes', txnData.notes || '');
+  if (txnData.isRecurring !== undefined) formData.append('isRecurring', String(txnData.isRecurring));
+  if (txnData.recurringDay !== undefined && txnData.recurringDay !== null) {
+    formData.append('recurringDay', String(txnData.recurringDay));
+  }
+  if (txnData.type === 'CREDIT') {
+    const depositMethod = txnData.depositType || txnData.paymentType || 'Account';
+    formData.append('depositType', depositMethod);
+    formData.append('paymentType', depositMethod);
+  } else if (txnData.paymentType) {
+    formData.append('paymentType', txnData.paymentType);
+  }
 }
 
 interface TransactionState {
@@ -134,19 +161,12 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const formData = new FormData();
-      formData.append('type', txnData.type);
-      formData.append('title', txnData.merchant || txnData.title || '');
-      formData.append('merchant', txnData.merchant || txnData.title || '');
-      formData.append('category', txnData.category || '');
-      formData.append('amount', String(txnData.amount));
-      formData.append('transactionDate', txnData.date || '');
-      formData.append('paymentType', txnData.paymentType || (txnData.type === 'CREDIT' ? 'Account' : 'Credit Card'));
-      formData.append('notes', txnData.notes || txnData.merchant || txnData.title || '');
-      formData.append('currency', txnData.currency || 'INR');
-      formData.append('isRecurring', String(txnData.isRecurring ?? false));
-      if (txnData.isRecurring && txnData.recurringDay != null) {
-        formData.append('recurringDay', String(txnData.recurringDay));
-      }
+      appendTransactionFormFields(formData, {
+        ...txnData,
+        type: txnData.type,
+        isRecurring: txnData.isRecurring ?? false,
+        currency: txnData.currency || 'INR',
+      });
       if (file) {
         formData.append('file', { uri: file.uri, name: file.name, type: file.type } as unknown as Blob);
       }
@@ -164,19 +184,8 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const formData = new FormData();
-      if (txnData.type) formData.append('type', txnData.type);
-      if (txnData.title || txnData.merchant) formData.append('title', txnData.merchant || txnData.title || '');
-      if (txnData.merchant) formData.append('merchant', txnData.merchant);
-      if (txnData.category) formData.append('category', txnData.category);
-      if (txnData.amount !== undefined) formData.append('amount', String(txnData.amount));
-      if (txnData.date) formData.append('transactionDate', txnData.date);
-      if (txnData.paymentType) formData.append('paymentType', txnData.paymentType);
-      if (txnData.notes !== undefined) formData.append('notes', txnData.notes || '');
-      if (txnData.currency) formData.append('currency', txnData.currency);
-      if (txnData.isRecurring !== undefined) formData.append('isRecurring', String(txnData.isRecurring));
-      if (txnData.recurringDay !== undefined) {
-        formData.append('recurringDay', txnData.recurringDay == null ? '' : String(txnData.recurringDay));
-      }
+      const type = txnData.type ?? 'DEBIT';
+      appendTransactionFormFields(formData, { ...txnData, type });
       if (txnData.documentName !== undefined) formData.append('documentFileName', txnData.documentName || '');
       if (txnData.documentName === '') formData.append('documentUrl', '');
       if (file) {

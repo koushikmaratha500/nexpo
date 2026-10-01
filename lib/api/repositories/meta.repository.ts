@@ -69,6 +69,12 @@ export class MetaRepository {
     });
   }
 
+  static async findCategoryById(id: string) {
+    return prisma.category.findFirst({
+      where: { id, status: 'A' },
+    });
+  }
+
   static async findOrCreateCategory(name: string) {
     let category = await prisma.category.findFirst({
       where: {

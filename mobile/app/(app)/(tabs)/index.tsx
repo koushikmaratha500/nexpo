@@ -4,6 +4,8 @@ import {
   API_ROUTES,
   apiGet,
   formatCurrency,
+  isLedgerExpenseTransaction,
+  isLedgerIncomeTransaction,
   parseDate,
   type PersonalReminder,
 } from '@nexpo/shared';
@@ -37,8 +39,14 @@ export default function DashboardScreen() {
     });
   }, [transactions]);
 
-  const expenses = useMemo(() => monthTransactions.filter((t) => t.type === 'DEBIT'), [monthTransactions]);
-  const credits = useMemo(() => monthTransactions.filter((t) => t.type === 'CREDIT'), [monthTransactions]);
+  const expenses = useMemo(
+    () => monthTransactions.filter((t) => isLedgerExpenseTransaction(t)),
+    [monthTransactions],
+  );
+  const credits = useMemo(
+    () => monthTransactions.filter((t) => isLedgerIncomeTransaction(t)),
+    [monthTransactions],
+  );
 
   const totalSpend = expenses.reduce((sum, item) => sum + item.amount, 0);
   const todaySpend = expenses

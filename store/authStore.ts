@@ -10,6 +10,8 @@ export interface UserState {
   countryId?: string | null;
   currencyId?: string | null;
   role: 'ADMIN' | 'CUSTOMER';
+  avatar?: string;
+  profileImageUrl?: string | null;
 }
 
 interface AuthState {

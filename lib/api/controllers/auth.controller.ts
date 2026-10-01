@@ -26,7 +26,9 @@ function serializeCustomerUser(user: {
   email: string | null;
   countryId: string | null;
   currencyId: string | null;
+  profileImageUrl?: string | null;
 }) {
+  const profileImageUrl = user.profileImageUrl || null;
   return {
     username: user.username || '',
     firstName: user.firstName,
@@ -35,6 +37,8 @@ function serializeCustomerUser(user: {
     email: user.email || '',
     countryId: user.countryId,
     currencyId: user.currencyId,
+    profileImageUrl,
+    avatar: profileImageUrl || undefined,
     role: 'CUSTOMER' as const,
   };
 }
