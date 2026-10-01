@@ -10,7 +10,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "eslint .",
+    "verify": "npm run lint && npm run build",
     "postinstall": "prisma generate",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
@@ -33,7 +34,11 @@
     "mobile:build:preview": "npm run build:preview --workspace=mobile",
     "mobile:build:production": "npm run build:production --workspace=mobile",
     "brand:generate": "node scripts/generate-brand-assets.mjs",
-    "brand:check": "node scripts/generate-brand-assets.mjs"
+    "brand:check": "node scripts/generate-brand-assets.mjs",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{js,mjs,ts,tsx}": "eslint --max-warnings 0"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"
@@ -73,6 +78,8 @@
     "react-native-css-interop": "0.2.7"
   },
   "devDependencies": {
+    "@commitlint/cli": "^21.2.3",
+    "@commitlint/config-conventional": "^21.2.3",
     "@tailwindcss/postcss": "^4",
     "@trigger.dev/build": "^4.5.16",
     "@types/node": "^20",
@@ -81,6 +88,8 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.7",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0",
     "prisma": "7.10.0",
     "tailwindcss": "^4",
     "trigger.dev": "^4.5.16",
