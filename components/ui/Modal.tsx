@@ -14,6 +14,8 @@ interface ModalProps {
   customHeader?: boolean;
   cardPadding?: string;
   dismissible?: boolean; // when false the backdrop click does not close the modal
+  closeOnEscape?: boolean; // when false, Escape does not close the modal
+  showCloseButton?: boolean; // header close icon (only when customHeader is false)
 }
 
 export function Modal({
@@ -27,6 +29,8 @@ export function Modal({
   customHeader = false,
   cardPadding = 'p-6',
   dismissible = true,
+  closeOnEscape = true,
+  showCloseButton = true,
 }: ModalProps) {
   // Prevent background scroll when modal is open
   useEffect(() => {
@@ -39,6 +43,20 @@ export function Modal({
       document.body.style.overflow = '';
     };
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || closeOnEscape) {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [isOpen, closeOnEscape]);
 
   if (!isOpen) return null;
 
@@ -63,12 +81,15 @@ export function Modal({
                   {subtitle && <p className="font-label-md text-label-md text-on-surface-variant mt-1">{subtitle}</p>}
                 </div>
               </div>
-              <button 
-                onClick={onClose}
-                className="text-on-surface-variant hover:text-primary p-1 rounded-full hover:bg-surface-container-low transition-colors"
-              >
-                <span className="material-symbols-outlined text-md">close</span>
-              </button>
+              {showCloseButton ? (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="text-on-surface-variant hover:text-primary p-1 rounded-full hover:bg-surface-container-low transition-colors"
+                >
+                  <span className="material-symbols-outlined text-md">close</span>
+                </button>
+              ) : null}
             </div>
           )}
           

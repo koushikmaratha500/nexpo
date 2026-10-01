@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { BRAND_DESCRIPTION, BRAND_NAME, BRAND_TAGLINE } from '@/lib/brand/constants';
 import { useAuth } from '@/components/auth/AuthContext';
 import { PricingSection } from '@/components/marketing/PricingSection';
+import { SITE_DOCUMENT_FOOTER_LINKS } from '@/lib/marketing/siteDocuments';
 
 const BASE_NAV_LINKS = [
   { href: '#features', label: 'Features' },
@@ -336,8 +337,8 @@ export function LandingPage() {
       </section>
 
       <footer className="bg-surface-dark px-lg py-2xl text-white/80">
-        <div className="mx-auto grid max-w-6xl gap-2xl md:grid-cols-4">
-          <div className="md:col-span-2">
+        <div className="mx-auto grid max-w-6xl gap-2xl sm:grid-cols-2 lg:grid-cols-5">
+          <div className="sm:col-span-2 lg:col-span-2">
             <BrandLogo variant="full" theme="light" size="sm" />
             <p className="mt-md max-w-sm font-body-md text-body-md text-white/60">{BRAND_DESCRIPTION}</p>
             <p className="mt-lg font-label-md text-label-md text-white/40">
@@ -379,6 +380,18 @@ export function LandingPage() {
                   </li>
                 </>
               )}
+            </ul>
+          </div>
+          <div>
+            <p className="font-label-md text-label-md font-bold uppercase tracking-widest text-white/50">Legal</p>
+            <ul className="mt-md space-y-sm font-body-md text-body-md">
+              {SITE_DOCUMENT_FOOTER_LINKS.map((link) => (
+                <li key={link.href}>
+                  <Link href={link.href} className="hover:text-white">
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
           <div>
