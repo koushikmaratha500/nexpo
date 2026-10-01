@@ -1,7 +1,7 @@
 import { TransactionRepository } from '../repositories/transaction.repository';
 import { MetaResolutionService } from './meta-resolution.service';
 import { MetaRepository } from '../repositories/meta.repository';
-import { isIncomeCategoryName } from '@nexpo/shared';
+import { isIncomeCategoryName } from '@/lib/transactions/ledger';
 import { PlanService } from './plan.service';
 import { AuditAction, Prisma } from '@prisma/client';
 import { createTransactionSchema } from '../dtos/transaction.dto';
