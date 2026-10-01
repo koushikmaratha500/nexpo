@@ -47,7 +47,7 @@ export default function CustomerSettingsPage() {
   const mobile = user?.mobile || user?.phone || '';
   const [countryId, setCountryId] = useState(() => user?.countryId || '');
   const [currencyId, setCurrencyId] = useState(() => user?.currencyId || '');
-  const [avatar, setAvatar] = useState(() => user?.avatar || '');
+  const [avatar, setAvatar] = useState(() => user?.avatar || user?.profileImageUrl || '');
 
   const [countries, setCountries] = useState<CountryOption[]>([]);
   const [currencies, setCurrencies] = useState<CurrencyOption[]>([]);
@@ -57,7 +57,6 @@ export default function CustomerSettingsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
-  const metadataFetchedRef = useRef(false);
   const checkoutHandledRef = useRef(false);
 
   useEffect(() => {
@@ -80,22 +79,47 @@ export default function CustomerSettingsPage() {
     }
   }, [searchParams, addToast, refresh, pathname, plan?.plan]);
 
-  // Load countries & currencies on mount
+  const profileFetchedRef = useRef(false);
+
+  // Load profile + countries & currencies on mount
   useEffect(() => {
-    if (metadataFetchedRef.current) return;
-    metadataFetchedRef.current = true;
-    async function loadMetadata() {
+    if (profileFetchedRef.current) return;
+    profileFetchedRef.current = true;
+
+    async function loadProfileAndMetadata() {
       try {
-        const res = await axios.get('/api/user/metadata');
-        setCountries(res.data.countries || []);
-        setCurrencies(res.data.currencies || []);
+        const [profileRes, metaRes] = await Promise.all([
+          axios.get('/api/user/auth/profile'),
+          axios.get('/api/user/metadata'),
+        ]);
+        const profile = profileRes.data;
+        if (profile.firstName) setFirstName(profile.firstName);
+        if (profile.lastName !== undefined) setLastName(profile.lastName || '');
+        if (profile.username) setUsername(profile.username);
+        if (profile.countryId) setCountryId(profile.countryId);
+        if (profile.currencyId) setCurrencyId(profile.currencyId);
+        const imageUrl = profile.profileImageUrl || profile.avatar;
+        if (imageUrl) {
+          setAvatar(imageUrl);
+          updateUser({ avatar: imageUrl, profileImageUrl: imageUrl });
+        }
+        setCountries(metaRes.data.countries || []);
+        setCurrencies(metaRes.data.currencies || []);
       } catch (err) {
-        console.error('Failed to load country/currency metadata:', err);
-        metadataFetchedRef.current = false;
+        console.error('Failed to load profile or metadata:', err);
+        profileFetchedRef.current = false;
       }
     }
-    loadMetadata();
-  }, []);
+    void loadProfileAndMetadata();
+  }, [updateUser]);
+
+  // Keep settings preview in sync when global auth user updates (e.g. header after upload)
+  useEffect(() => {
+    const imageUrl = user?.avatar || user?.profileImageUrl;
+    if (imageUrl && imageUrl !== avatar) {
+      setAvatar(imageUrl);
+    }
+  }, [user?.avatar, user?.profileImageUrl, avatar]);
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -115,7 +139,10 @@ export default function CustomerSettingsPage() {
           },
         });
 
-        setAvatar(res.data.url);
+        const imageUrl = res.data.url as string;
+        setAvatar(imageUrl);
+        await axios.patch('/api/user/auth/profile', { profileImageUrl: imageUrl });
+        updateUser({ avatar: imageUrl, profileImageUrl: imageUrl });
         addToast('Profile image uploaded successfully!', 'success');
       } catch (err: unknown) {
         console.warn('Failed to upload avatar to backend:', err);
@@ -144,14 +171,17 @@ export default function CustomerSettingsPage() {
 
       if (response.data) {
         // Sync context state
+        const imageUrl = response.data?.profileImageUrl || response.data?.avatar || avatar;
         updateUser({
           username,
           firstName,
           lastName,
-          avatar,
+          avatar: imageUrl || undefined,
+          profileImageUrl: imageUrl || null,
           countryId,
           currencyId,
         });
+        if (imageUrl) setAvatar(imageUrl);
         addToast('Profile details updated successfully!', 'success');
       }
     } catch (err: unknown) {

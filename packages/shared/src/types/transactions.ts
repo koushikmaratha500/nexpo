@@ -19,6 +19,7 @@ export interface Transaction {
   depositType?: 'Cash' | 'Account';
   isRecurring?: boolean;
   recurringDay?: number | null;
+  categoryType?: TransactionType;
 }
 
 export interface PendingRecurring {

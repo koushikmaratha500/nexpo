@@ -7,6 +7,8 @@ function str(data: Record<string, unknown>, key: string): string | undefined {
 
 export class MetaResolutionService {
   static async resolveForTransaction(data: Record<string, unknown>) {
+    const isCredit = str(data, 'type') === 'CREDIT';
+
     let categoryId = str(data, 'categoryId') || null;
     const categoryName = str(data, 'category') || str(data, 'categoryName');
     if (!categoryId && categoryName) {
@@ -23,13 +25,19 @@ export class MetaResolutionService {
     }
 
     let paymentTypeId = str(data, 'paymentTypeId') || null;
-    const paymentTypeName = str(data, 'paymentType') || str(data, 'paymentTypeName') || 'Credit Card';
+    const paymentTypeName =
+      str(data, 'paymentType') ||
+      str(data, 'paymentTypeName') ||
+      (isCredit ? str(data, 'depositType') || 'Account' : 'Credit Card');
     if (!paymentTypeId) {
       paymentTypeId = (await MetaRepository.findOrCreatePaymentType(paymentTypeName)).id;
     }
 
     let budgetDepositTypeId = str(data, 'budgetDepositTypeId') || null;
-    const depositTypeName = str(data, 'budgetDepositType') || str(data, 'category');
+    const depositTypeName =
+      str(data, 'budgetDepositType') ||
+      str(data, 'depositType') ||
+      (!isCredit ? categoryName : undefined);
     if (!budgetDepositTypeId && depositTypeName) {
       budgetDepositTypeId = (await MetaRepository.findOrCreateBudgetDepositType(depositTypeName)).id;
     }

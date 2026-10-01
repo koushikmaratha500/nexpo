@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { useAuth } from '@/components/auth/AuthContext';
+import { useAuthStore } from '@/store/authStore';
 import { useThemeStore } from '@/store/themeStore';
 import { NotificationBell } from '@/components/features/notifications';
 
@@ -19,6 +20,7 @@ export function Header({
   showNotifications = false,
 }: HeaderProps) {
   const { user } = useAuth();
+  const avatarUrl = useAuthStore((s) => s.user?.avatar || s.user?.profileImageUrl || '');
   const { isDark, toggleTheme } = useThemeStore();
 
   const fullName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') : '';
@@ -74,9 +76,9 @@ export function Header({
           {/* User Profile */}
           {user && (
             <div className="flex items-center gap-2">
-              {user.avatar ? (
+              {avatarUrl ? (
                 <img
-                  src={user.avatar}
+                  src={avatarUrl}
                   alt={fullName}
                   className="w-8 h-8 rounded-full border border-outline-variant object-cover"
                 />

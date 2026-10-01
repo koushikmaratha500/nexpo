@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import axios from 'axios';
 import { formatDate } from '@/lib/date';
+import { isLedgerIncomeTransaction, parseTransactionAmount } from '@/lib/transactions/ledger';
 import type { PaginatedResponse } from '@/types/api';
 
 export type TransactionType = 'DEBIT' | 'CREDIT';
@@ -32,6 +33,7 @@ export interface Transaction {
   // Recurring support
   isRecurring?: boolean;
   recurringDay?: number | null;
+  categoryType?: TransactionType;
 }
 
 export interface PendingRecurring {
@@ -55,16 +57,19 @@ const mapDbTransactionToTransaction = (dbTxn: any): Transaction => {
 
   const base = {
     id: dbTxn.id,
-    type: dbTxn.type as TransactionType,
+    type: String(dbTxn.type).toUpperCase() as TransactionType,
+    categoryType: dbTxn.category?.type
+      ? (String(dbTxn.category.type).toUpperCase() as TransactionType)
+      : undefined,
     title: dbTxn.title || dbTxn.merchant || 'Transaction Title',
     merchant: dbTxn.merchant || undefined,
     description: dbTxn.description || dbTxn.merchant || undefined,
     category: isCredit
-      ? (dbTxn.budgetDepositType?.name || 'Other')
+      ? (dbTxn.category?.name || dbTxn.category?.code || 'Other')
       : (dbTxn.category?.name || dbTxn.category?.code || 'Food'),
     date: formatDate(dbTxn.transactionDate || dbTxn.date),
     status: (isCredit ? 'VERIFIED' : 'PENDING') as 'VERIFIED' | 'PENDING' | 'DECLINED',
-    amount: typeof dbTxn.amount === 'string' ? parseFloat(dbTxn.amount) : dbTxn.amount,
+    amount: parseTransactionAmount(dbTxn.amount),
     submittedBy: dbTxn.user ? `${dbTxn.user.firstName || ''} ${dbTxn.user.lastName || ''}`.trim() : 'Alex Sterling',
     paymentType: (dbTxn.paymentType?.name || (isCredit ? 'Account' : 'Credit Card')),
     currency: dbTxn.currency?.code || 'INR',
@@ -127,6 +132,29 @@ const getLocalStorageTransactions = (): Transaction[] => {
   }
 };
 
+function appendTransactionFormFields(formData: FormData, txnData: Partial<Transaction> & { type: TransactionType }) {
+  formData.append('type', txnData.type);
+  if (txnData.title !== undefined) formData.append('title', txnData.title);
+  if (txnData.merchant !== undefined) formData.append('merchant', txnData.merchant);
+  if (txnData.category) formData.append('category', txnData.category);
+  if (txnData.amount !== undefined) formData.append('amount', String(txnData.amount));
+  if (txnData.date) formData.append('transactionDate', txnData.date);
+  if (txnData.currency) formData.append('currency', txnData.currency);
+  if (txnData.notes !== undefined) formData.append('notes', txnData.notes || '');
+  if (txnData.isRecurring !== undefined) formData.append('isRecurring', String(txnData.isRecurring));
+  if (txnData.recurringDay !== undefined && txnData.recurringDay !== null) {
+    formData.append('recurringDay', String(txnData.recurringDay));
+  }
+
+  if (txnData.type === 'CREDIT') {
+    const depositMethod = txnData.depositType || txnData.paymentType || 'Account';
+    formData.append('depositType', depositMethod);
+    formData.append('paymentType', depositMethod);
+  } else if (txnData.paymentType) {
+    formData.append('paymentType', txnData.paymentType);
+  }
+}
+
 const setLocalStorageTransactions = (transactions: Transaction[]) => {
   if (typeof window === 'undefined') return;
   try {
@@ -176,19 +204,12 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const formData = new FormData();
-      formData.append('type', txnData.type);
-      formData.append('title', txnData.merchant || txnData.title || '');
-      formData.append('merchant', txnData.merchant || txnData.title || '');
-      formData.append('category', txnData.category || '');
-      formData.append('amount', String(txnData.amount));
-      formData.append('transactionDate', txnData.date || '');
-      formData.append('paymentType', txnData.paymentType || (txnData.type === 'CREDIT' ? 'Account' : 'Credit Card'));
-      formData.append('notes', txnData.notes || txnData.merchant || txnData.title || '');
-      formData.append('currency', txnData.currency || 'INR');
-      formData.append('isRecurring', String(txnData.isRecurring ?? false));
-      if (txnData.isRecurring && txnData.recurringDay != null) {
-        formData.append('recurringDay', String(txnData.recurringDay));
-      }
+      appendTransactionFormFields(formData, {
+        ...txnData,
+        type: txnData.type,
+        isRecurring: txnData.isRecurring ?? false,
+        currency: txnData.currency || 'INR',
+      });
 
       if (file) {
         formData.append('file', file);
@@ -211,19 +232,8 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const formData = new FormData();
-      if (txnData.type) formData.append('type', txnData.type);
-      if (txnData.title || txnData.merchant) formData.append('title', txnData.merchant || txnData.title || '');
-      if (txnData.merchant) formData.append('merchant', txnData.merchant);
-      if (txnData.category) formData.append('category', txnData.category);
-      if (txnData.amount !== undefined) formData.append('amount', String(txnData.amount));
-      if (txnData.date) formData.append('transactionDate', txnData.date);
-      if (txnData.paymentType) formData.append('paymentType', txnData.paymentType);
-      if (txnData.notes !== undefined) formData.append('notes', txnData.notes || '');
-      if (txnData.currency) formData.append('currency', txnData.currency);
-      if (txnData.isRecurring !== undefined) formData.append('isRecurring', String(txnData.isRecurring));
-      if (txnData.recurringDay !== undefined) {
-        formData.append('recurringDay', txnData.recurringDay == null ? '' : String(txnData.recurringDay));
-      }
+      const type = txnData.type ?? 'DEBIT';
+      appendTransactionFormFields(formData, { ...txnData, type });
       // If documentName is provided (including empty string to clear), send it to the API
       if (txnData.documentName !== undefined) formData.append('documentFileName', txnData.documentName || '');
       // When clearing, also clear the URL
