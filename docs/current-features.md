@@ -408,8 +408,9 @@ Config: `OPENROUTER_API_KEY`, `AI_ENABLED`, model overrides in `lib/ai/config.ts
 | `billing-lifecycle-dispatch` | 08:00 | Subscription lifecycle |
 | `purge-expired-receipt-shares` | 02:30 | Clean expired receipt tokens |
 | `daily-health-check` | 06:00 | Platform health |
+| `monthly-digest-dispatch` | 1st @ 09:00 | Previous month money digest (email) |
 
-Manual fallback: `POST /api/internal/reminders/dispatch`, `POST /api/internal/billing/dispatch`
+Manual fallback: `POST /api/internal/reminders/dispatch`, `POST /api/internal/billing/dispatch`, `POST /api/internal/monthly-digest`
 
 ### Public APIs
 

@@ -19,6 +19,7 @@ const DEFAULT_PREFERENCES = {
   emailEnabled: true,
   pushEnabled: true,
   groupActivity: true,
+  monthlyDigestEnabled: true,
 };
 
 export class NotificationService {
@@ -35,6 +36,7 @@ export class NotificationService {
       emailEnabled: prefs.emailEnabled,
       pushEnabled: prefs.pushEnabled,
       groupActivity: prefs.groupActivity,
+      monthlyDigestEnabled: prefs.monthlyDigestEnabled,
       adminPolicy: {
         inAppEnabled: adminSettings.notifications.inAppEnabled,
         emailEnabled:
@@ -61,6 +63,12 @@ export class NotificationService {
     if (data.pushEnabled === true && !adminSettings.notifications.pushEnabled) {
       throw new HttpError(400, 'Push notifications are disabled by admin policy');
     }
+    if (
+      data.monthlyDigestEnabled === true &&
+      (!adminSettings.notifications.emailRemindersEnabled || !adminSettings.resendEnabled)
+    ) {
+      throw new HttpError(400, 'Monthly digest emails are disabled by admin policy');
+    }
 
     const updated = await NotificationPreferenceRepository.upsert(userId, data);
     const prefs = {
@@ -68,6 +76,7 @@ export class NotificationService {
       emailEnabled: updated.emailEnabled,
       pushEnabled: updated.pushEnabled,
       groupActivity: updated.groupActivity,
+      monthlyDigestEnabled: updated.monthlyDigestEnabled,
     };
 
     return {
@@ -293,6 +302,8 @@ export class NotificationService {
       email: prefs.emailEnabled && prefs.adminPolicy.emailEnabled,
       push: prefs.pushEnabled && prefs.adminPolicy.pushEnabled,
       groupActivity: prefs.groupActivity,
+      monthlyDigest:
+        prefs.monthlyDigestEnabled && prefs.emailEnabled && prefs.adminPolicy.emailEnabled,
     };
   }
 

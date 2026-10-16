@@ -125,6 +125,8 @@ export class NotificationPreferenceRepository {
         emailEnabled: typeof data.emailEnabled === 'boolean' ? data.emailEnabled : true,
         pushEnabled: typeof data.pushEnabled === 'boolean' ? data.pushEnabled : true,
         groupActivity: typeof data.groupActivity === 'boolean' ? data.groupActivity : true,
+        monthlyDigestEnabled:
+          typeof data.monthlyDigestEnabled === 'boolean' ? data.monthlyDigestEnabled : true,
       },
       update: data,
     });
