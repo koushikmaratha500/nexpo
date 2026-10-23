@@ -1,6 +1,23 @@
+import { FREEMIUM_LIMITS, PLAN_PRICES_INR, TRIAL_DAYS, formatInr } from '@/lib/billing/catalog';
+
+// Set NEXT_PUBLIC_SHOW_PRICING=false to hide every price on the marketing site (mirrors the admin pricing switch).
+export const SHOW_PRICING = process.env.NEXT_PUBLIC_SHOW_PRICING !== 'false';
+
 export const FAQS = [
   { q: 'What is PaysaSuchan?', a: 'PaysaSuchan is a money app for individuals and groups. You keep a personal ledger of income and expenses, split shared costs with friends or flatmates, set payment reminders, and ask an AI assistant questions about your own spending.' },
   { q: 'How does group expense splitting work?', a: 'Create a group, invite people by username, email or phone, and add an expense. Split it equally, by custom amounts, by percentages, or leave specific members out. Balances show who owes what. Any leftover paisa goes to the payer so totals always match.' },
+  {
+    q: 'What does it cost?',
+    a: `Every account starts with a ${TRIAL_DAYS}-day free trial. After that, Starter is ${formatInr(PLAN_PRICES_INR.starterMonthly)} a month or ${formatInr(PLAN_PRICES_INR.starterYearly)} a year, and Pro is a one-time ${formatInr(PLAN_PRICES_INR.proLifetime)} for lifetime access. Prices are before GST, and you get a GST invoice by email.`,
+  },
+  {
+    q: 'What happens when my trial ends?',
+    a: `You can still view all your data, but adding or editing needs a paid plan. The trial includes up to ${FREEMIUM_LIMITS.personalTransactions} personal transactions, ${FREEMIUM_LIMITS.groups} groups of up to ${FREEMIUM_LIMITS.membersPerGroup} people, and limited AI messages and receipt scans.`,
+  },
+  {
+    q: 'Can I share a receipt with someone who has no account?',
+    a: 'Yes. Create a view-only link to a transaction. Anyone can open it without logging in, it shows a clean preview in chat apps, and it expires after a set time. You can revoke it any time.',
+  },
   { q: 'Can I scan receipts?', a: 'Yes. Upload a receipt image or PDF and AI reads the amount, date, merchant, type and category into the form. You review it before saving.' },
   { q: 'What can the AI assistant see?', a: 'Only your own transactions, read-only. It cannot add, edit or delete anything, and every figure it quotes comes from your data, not from guesswork. It is not professional financial advice.' },
   { q: 'Is my data secure?', a: 'Sessions use signed tokens checked against our database, sign-in and API calls are rate limited, uploads are type- and size-checked, and one-time codes expire after 15 minutes with limited attempts. See our Privacy Policy for details.' },

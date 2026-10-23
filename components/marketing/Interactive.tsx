@@ -1,14 +1,57 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useRef, useState, type ReactNode, type PointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode, type PointerEvent } from 'react';
+import { FREEMIUM_LIMITS, PLAN_PRICES_INR, TRIAL_DAYS, formatInr } from '@/lib/billing/catalog';
 
 const MEMBERS = ['You', 'Asha', 'Ravi', 'Meera'];
 const inr = (n: number) => '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function useReducedMotion() {
+  const [reduced, setReduced] = useState(
+    () => typeof window !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches,
+  );
+  useEffect(() => {
+    const mq = matchMedia('(prefers-reduced-motion: reduce)');
+    const onChange = () => setReduced(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  return reduced;
+}
+
+const DEMO_TOASTS = ['Asha paid you ₹600', 'Rent reminder: due in 3 days', 'Receipt scanned ✓', 'Ravi joined Flat 402'];
+
+function ToastLoop() {
+  const reduced = useReducedMotion();
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    if (reduced) return;
+    const id = setInterval(() => setI((v) => (v + 1) % DEMO_TOASTS.length), 3200);
+    return () => clearInterval(id);
+  }, [reduced]);
+  return (
+    <div aria-hidden className="ps:pointer-events-none ps:absolute ps:-bottom-5 ps:left-4 ps:z-10 ps:sm:-left-6">
+      <p
+        key={reduced ? 'static' : i}
+        className="ps:max-w-[min(100%,16rem)] ps:rounded-2xl ps:bg-ink ps:px-4 ps:py-2.5 ps:text-sm ps:font-medium ps:text-white ps:shadow-xl ps:ring-1 ps:ring-white/10 ps:motion-safe:animate-rise-in"
+      >
+        🔔 {DEMO_TOASTS[reduced ? 0 : i]}
+      </p>
+    </div>
+  );
+}
 
 /** Live equal-split demo. Leftover paisa goes to the first included member (the payer). */
 export function SplitDemo() {
   const [total, setTotal] = useState(2400);
   const [inc, setInc] = useState([true, true, true, true]);
+  const [burst, setBurst] = useState(0);
+  const [done, setDone] = useState(false);
+  const settle = () => {
+    setBurst((b) => b + 1);
+    setDone(true);
+    setTimeout(() => setDone(false), 2200);
+  };
   const n = inc.filter(Boolean).length;
   const cents = Math.round(total * 100);
   const base = n ? Math.floor(cents / n) : 0;
@@ -18,6 +61,19 @@ export function SplitDemo() {
 
   return (
     <div className="ps:relative ps:rounded-3xl ps:bg-white ps:p-6 ps:shadow-[0_30px_80px_-30px_rgba(76,29,149,.45)] ps:ring-1 ps:ring-ink/5">
+      {burst > 0 && (
+        <div key={burst} aria-hidden className="ps:pointer-events-none ps:absolute ps:inset-0 ps:overflow-hidden ps:rounded-3xl">
+          {Array.from({ length: 16 }, (_, k) => (
+            <span
+              key={k}
+              style={{ left: `${((k * 53) % 94) + 2}%`, animationDelay: `${k * 45}ms` }}
+              className="ps:absolute ps:top-0 ps:grid ps:size-6 ps:place-items-center ps:rounded-full ps:bg-gold ps:text-xs ps:font-bold ps:text-[#7a4a0a] ps:opacity-0 ps:motion-safe:animate-fall"
+            >
+              ₹
+            </span>
+          ))}
+        </div>
+      )}
       <div className="ps:flex ps:items-baseline ps:justify-between ps:gap-3">
         <div>
           <p className="ps:text-sm ps:text-ink/55">Dinner at Toit · Flatmates</p>
@@ -48,19 +104,30 @@ export function SplitDemo() {
           </li>
         ))}
       </ul>
-      <p className="ps:mt-4 ps:text-xs ps:text-ink/50">Tap a name to leave them out. The rest is re-split instantly, to the paisa.</p>
+      <button
+        type="button"
+        onClick={settle}
+        className={`ps:mt-4 ps:w-full ps:rounded-xl ps:py-3 ps:font-semibold ps:transition ps:focus-visible:outline-2 ps:focus-visible:outline-brand ${done ? 'ps:bg-mint ps:text-white' : 'ps:bg-ink ps:text-white ps:hover:bg-brand'}`}
+      >
+        {done ? 'Everyone is square ✓' : 'Settle up 🎉'}
+      </button>
+      <p className="ps:mt-3 ps:text-xs ps:text-ink/50">Tap a name to leave them out. The rest is re-split instantly, to the paisa.</p>
+      <ToastLoop />
     </div>
   );
 }
 
 /* ---------- Hero: pointer spotlight + parallax floating chips ---------- */
-const CHIPS: [string, string, string, number][] = [
-  ['Swiggy −₹450', '4%', '12%', 20], ['Salary +₹1,20,000', '46%', '5%', -16], ['Rent due in 3 days', '1%', '80%', 24],
-  ['Asha paid you ₹600', '44%', '90%', -22], ['Receipt scanned ✓', '93%', '44%', 16],
+const CHIPS: [string, Record<string, string>, number][] = [
+  ['Swiggy −₹450', { left: '3%', top: '7%' }, 8],
+  ['Salary +₹1,20,000', { left: '42%', top: '5%' }, -8],
+  ['Rent due in 3 days', { left: '3%', bottom: '90px' }, 10],
 ];
 export function Hero({ children }: { children: ReactNode }) {
   const ref = useRef<HTMLElement>(null);
+  const reduced = useReducedMotion();
   const move = (e: PointerEvent) => {
+    if (reduced) return;
     const el = ref.current!; const r = el.getBoundingClientRect();
     const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
     el.style.setProperty('--mx', x * 100 + '%'); el.style.setProperty('--my', y * 100 + '%');
@@ -70,9 +137,16 @@ export function Hero({ children }: { children: ReactNode }) {
     <section ref={ref} onPointerMove={move}
       style={{ background: 'radial-gradient(620px circle at var(--mx,72%) var(--my,28%), rgba(139,92,246,.5), transparent 60%), #14112b' }}
       className="ps:relative ps:overflow-hidden ps:text-white">
-      {CHIPS.map(([t, x, y, d]) => (
-        <div key={t} aria-hidden className="ps:pointer-events-none ps:absolute ps:hidden ps:lg:block" style={{ left: x, top: y, transform: `translate3d(calc(var(--px,0)*${d}px),calc(var(--py,0)*${d}px),0)` }}>
-          <span className="ps:block ps:rounded-full ps:bg-white/10 ps:px-4 ps:py-2 ps:text-sm ps:font-medium ps:text-white/80 ps:ring-1 ps:ring-white/15 ps:backdrop-blur ps:motion-safe:animate-bob">{t}</span>
+      {CHIPS.map(([t, pos, d]) => (
+        <div
+          key={t}
+          aria-hidden
+          className="ps:pointer-events-none ps:absolute ps:hidden ps:xl:block"
+          style={{ ...pos, transform: `translate3d(calc(var(--px,0)*${d}px),calc(var(--py,0)*${d}px),0)` }}
+        >
+          <span className="ps:block ps:whitespace-nowrap ps:rounded-full ps:bg-white/10 ps:px-4 ps:py-2 ps:text-sm ps:font-medium ps:text-white/80 ps:ring-1 ps:ring-white/15 ps:backdrop-blur ps:motion-safe:animate-bob">
+            {t}
+          </span>
         </div>
       ))}
       {children}
@@ -89,8 +163,23 @@ const STEPS = [
 ];
 function StepVisual({ i }: { i: number }) {
   const row = 'ps:flex ps:justify-between ps:rounded-xl ps:bg-white/10 ps:px-4 ps:py-3';
-  if (i === 0) return (<div className="ps:space-y-3"><p className="ps:text-sm ps:text-white/60">Extracting from receipt…</p>
-    {[['Merchant', 'Fresh Mart'], ['Amount', '₹1,499.40'], ['Date', '5 Aug 2026'], ['Category', 'Groceries']].map(([a, b]) => <div key={a} className={row}><span className="ps:text-white/60">{a}</span><b>{b}</b></div>)}</div>);
+  if (i === 0) {
+    return (
+      <div className="ps:relative ps:space-y-3">
+        <span
+          aria-hidden
+          className="ps:pointer-events-none ps:absolute ps:inset-x-0 ps:z-10 ps:h-0.5 ps:bg-gradient-to-r ps:from-transparent ps:via-gold ps:to-transparent ps:motion-safe:animate-scan"
+        />
+        <p className="ps:text-sm ps:text-white/60">Extracting from receipt…</p>
+        {[['Merchant', 'Fresh Mart'], ['Amount', '₹1,499.40'], ['Date', '5 Aug 2026'], ['Category', 'Groceries']].map(([a, b]) => (
+          <div key={a} className={row}>
+            <span className="ps:text-white/60">{a}</span>
+            <b>{b}</b>
+          </div>
+        ))}
+      </div>
+    );
+  }
   if (i === 1) return (<div className="ps:grid ps:grid-cols-2 ps:gap-3">{['You', 'Asha', 'Ravi', 'Meera'].map((m) => <div key={m} className="ps:rounded-2xl ps:bg-white/10 ps:p-4 ps:text-center"><span className="ps:mx-auto ps:grid ps:size-10 ps:place-items-center ps:rounded-full ps:bg-brand ps:font-bold">{m[0]}</span><p className="ps:mt-2 ps:text-sm ps:text-white/60">{m}</p><b className="ps:text-xl">₹600</b></div>)}</div>);
   if (i === 2) return (<div className="ps:space-y-3">{[['Rent', '1 Oct · monthly'], ['Wi-Fi', '5 Oct · monthly'], ['Flat dues', '7 Oct · group']].map(([a, b]) => <div key={a} className={row}><span><span className="ps:inline-block ps:origin-top ps:motion-safe:animate-wiggle">🔔</span> {a}</span><span className="ps:text-white/60">{b}</span></div>)}</div>);
   return (<div className="ps:space-y-3"><p className="ps:ml-auto ps:w-fit ps:rounded-2xl ps:bg-brand ps:px-4 ps:py-2">Why was July so high?</p><p className="ps:rounded-2xl ps:bg-white/10 ps:px-4 ps:py-3 ps:leading-7">Groceries rose to ₹2,950 and three subscriptions billed in the same week.</p></div>);
@@ -242,6 +331,308 @@ export function MobileMenu({ links }: { links: string[][] }) {
           ))}
         </nav>
       )}
+    </div>
+  );
+}
+
+const STARTER_YEARLY_SAVINGS_INR =
+  PLAN_PRICES_INR.starterMonthly * 12 - PLAN_PRICES_INR.starterYearly;
+
+/* ---------- Pricing: monthly / yearly toggle ---------- */
+export function Pricing() {
+  const [yearly, setYearly] = useState(false);
+  const plans = useMemo(
+    () => [
+      {
+        name: 'Free trial',
+        price: formatInr(0),
+        note: `for ${TRIAL_DAYS} days`,
+        feats: [
+          `Up to ${FREEMIUM_LIMITS.personalTransactions} personal transactions`,
+          `Up to ${FREEMIUM_LIMITS.groups} groups, ${FREEMIUM_LIMITS.membersPerGroup} people each`,
+          'Limited AI messages and receipt scans',
+        ],
+        cta: 'Start free trial',
+      },
+      {
+        name: 'Starter',
+        price: yearly ? formatInr(PLAN_PRICES_INR.starterYearly) : formatInr(PLAN_PRICES_INR.starterMonthly),
+        note: yearly
+          ? `per year · save ${formatInr(STARTER_YEARLY_SAVINGS_INR)}`
+          : 'per month',
+        feats: ['No usage limits', 'Groups, reminders, reports and AI', 'GST invoice by email'],
+        cta: 'Choose Starter',
+        hot: true,
+      },
+      {
+        name: 'Pro',
+        price: formatInr(PLAN_PRICES_INR.proLifetime),
+        note: 'one time · lifetime',
+        feats: ['Everything in Starter', 'Pay once, use for life', 'Priority support'],
+        cta: 'Go Pro',
+      },
+    ],
+    [yearly],
+  );
+  return (
+    <div>
+      <div className="ps:flex ps:flex-col ps:gap-6 ps:sm:flex-row ps:sm:flex-wrap ps:sm:items-end ps:sm:justify-between">
+        <h2 className="ps:max-w-md ps:text-3xl ps:font-extrabold ps:tracking-tight ps:sm:text-4xl">Simple pricing. Start free.</h2>
+        <div role="group" aria-label="Billing period" className="ps:flex ps:w-fit ps:rounded-full ps:bg-white ps:p-1 ps:ring-1 ps:ring-ink/10">
+          {[['Monthly', false], ['Yearly', true]].map(([l, v]) => (
+            <button
+              key={String(l)}
+              type="button"
+              aria-pressed={yearly === v}
+              onClick={() => setYearly(v as boolean)}
+              className={`ps:rounded-full ps:px-5 ps:py-2 ps:text-sm ps:font-semibold ps:transition ${yearly === v ? 'ps:bg-brand ps:text-white' : 'ps:text-ink/60'}`}
+            >
+              {l as string}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="ps:mt-10 ps:grid ps:gap-5 ps:md:grid-cols-3">
+        {plans.map((p) => (
+          <Tilt key={p.name} subtleGlow={Boolean(p.hot)} className="ps:h-full ps:rounded-3xl">
+            <div
+              className={`ps:flex ps:h-full ps:flex-col ps:rounded-3xl ps:p-6 ps:transition ps:sm:p-7 ps:hover:-translate-y-1 ${p.hot ? 'ps:bg-ink ps:text-white ps:shadow-2xl ps:shadow-brand/30 ps:md:scale-[1.03]' : 'ps:bg-white ps:ring-1 ps:ring-ink/5'}`}
+            >
+              <p className={`ps:text-sm ps:font-bold ${p.hot ? 'ps:text-gold' : 'ps:text-brand'}`}>
+                {p.name}
+                {p.hot && ' · most popular'}
+              </p>
+              <p className="ps:mt-3 ps:text-4xl ps:font-extrabold ps:tabular-nums ps:sm:text-5xl">{p.price}</p>
+              <p className={`ps:mt-1 ps:text-sm ${p.hot ? 'ps:text-white/60' : 'ps:text-ink/55'}`}>{p.note}</p>
+              <ul className="ps:mt-6 ps:flex-1 ps:space-y-2 ps:text-sm ps:leading-6">
+                {p.feats.map((f) => (
+                  <li key={f} className="ps:flex ps:gap-2">
+                    <span className="ps:text-mint">✓</span>
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href="/auth/register"
+                className={`ps:mt-7 ps:block ps:rounded-full ps:py-3 ps:text-center ps:font-semibold ps:transition ${p.hot ? 'ps:bg-white ps:text-brand-deep ps:hover:bg-brand-soft' : 'ps:bg-brand ps:text-white ps:hover:bg-brand-deep'}`}
+              >
+                {p.cta}
+              </Link>
+            </div>
+          </Tilt>
+        ))}
+      </div>
+      <p className="ps:mt-6 ps:text-sm ps:text-ink/55">
+        Prices are before GST. Pay with Razorpay or Stripe. After a trial you can still view your data.
+      </p>
+    </div>
+  );
+}
+
+/* ---------- Stories: pick who you are ---------- */
+const STORIES: [string, string, string[]][] = [
+  ['Solo', 'Track your month', ['Sign up', 'Add expenses as they happen', 'Scan a receipt', 'Check your dashboard']],
+  ['Roommates', 'Split rent and utilities', ['Create a group', 'Invite by username', 'Add the rent, split equally', 'See who owes whom']],
+  ['Trips', 'Settle up after Goa', ['Create the trip group', 'Everyone adds their spends', 'Leave out who skipped dinner', 'Export the settlement list']],
+  ['Bills', 'Never miss a due date', ['Create a reminder', 'Repeat monthly', 'Get notified', 'Mark done or snooze']],
+];
+
+export function Stories() {
+  const [i, setI] = useState(0);
+  const [, title, steps] = STORIES[i];
+  return (
+    <div>
+      <div role="tablist" aria-label="Who are you?" className="ps:flex ps:flex-wrap ps:gap-2">
+        {STORIES.map(([n], k) => (
+          <button
+            key={n}
+            type="button"
+            role="tab"
+            aria-selected={i === k}
+            onClick={() => setI(k)}
+            className={`ps:rounded-full ps:px-4 ps:py-2.5 ps:text-sm ps:font-semibold ps:transition ps:sm:px-5 ${i === k ? 'ps:bg-brand ps:text-white' : 'ps:bg-white ps:text-ink/70 ps:ring-1 ps:ring-ink/10 ps:hover:text-brand'}`}
+          >
+            {n}
+          </button>
+        ))}
+      </div>
+      <p key={title} className="ps:mt-8 ps:text-xl ps:font-bold ps:sm:text-2xl">{title}</p>
+      <ol key={i} className="ps:mt-6 ps:grid ps:gap-3 ps:sm:grid-cols-2 ps:lg:grid-cols-4">
+        {steps.map((st, k) => (
+          <li
+            key={st}
+            style={{ animationDelay: `${k * 90}ms` }}
+            className="ps:flex ps:items-center ps:gap-3 ps:rounded-2xl ps:bg-white ps:p-4 ps:ring-1 ps:ring-ink/5 ps:motion-safe:animate-rise-in"
+          >
+            <span className="ps:grid ps:size-8 ps:shrink-0 ps:place-items-center ps:rounded-full ps:bg-brand-soft ps:text-sm ps:font-bold ps:text-brand">
+              {k + 1}
+            </span>
+            <span className="ps:font-medium">{st}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+/* ---------- Delight: rotating word, magnetic button, tilt cards, quiz ---------- */
+const ROTATING_WORDS = ['shared', 'split', 'tracked', 'remembered'];
+
+export function RotatingWord() {
+  const reduced = useReducedMotion();
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    if (reduced) return;
+    const id = setInterval(() => setI((v) => (v + 1) % ROTATING_WORDS.length), 2200);
+    return () => clearInterval(id);
+  }, [reduced]);
+  const active = reduced ? 0 : i;
+  return (
+    <span className="ps:mt-1 ps:block ps:grid ps:w-fit ps:justify-items-start">
+      {ROTATING_WORDS.map((w, k) => (
+        <span
+          key={w}
+          aria-hidden={k !== active}
+          className={`ps:col-start-1 ps:row-start-1 ps:bg-gradient-to-r ps:from-violet-300 ps:to-gold ps:bg-clip-text ps:text-transparent ps:transition-all ps:duration-500 ps:motion-reduce:transition-none ${k === active ? 'ps:translate-y-0 ps:opacity-100' : 'ps:-translate-y-3 ps:opacity-0'}`}
+        >
+          {w}.
+        </span>
+      ))}
+    </span>
+  );
+}
+
+export function Magnetic({ href, className, children }: { href: string; className: string; children: ReactNode }) {
+  const ref = useRef<HTMLAnchorElement>(null);
+  const reduced = useReducedMotion();
+  const move = (e: PointerEvent<HTMLAnchorElement>) => {
+    if (reduced) return;
+    const el = ref.current!;
+    const r = el.getBoundingClientRect();
+    el.style.transform = `translate(${(e.clientX - r.left - r.width / 2) * 0.25}px,${(e.clientY - r.top - r.height / 2) * 0.35}px)`;
+  };
+  const reset = () => {
+    if (ref.current) ref.current.style.transform = '';
+  };
+  return (
+    <Link
+      ref={ref}
+      href={href}
+      onPointerMove={move}
+      onPointerLeave={reset}
+      className={`${className} ps:transition-transform ps:duration-200 ps:motion-reduce:transform-none`}
+    >
+      {children}
+    </Link>
+  );
+}
+
+export function Tilt({
+  children,
+  className = '',
+  subtleGlow = false,
+}: {
+  children: ReactNode;
+  className?: string;
+  subtleGlow?: boolean;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const reduced = useReducedMotion();
+  const move = (e: PointerEvent) => {
+    if (reduced) return;
+    const el = ref.current!;
+    const r = el.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width;
+    const y = (e.clientY - r.top) / r.height;
+    el.style.transform = `perspective(800px) rotateX(${(0.5 - y) * 8}deg) rotateY(${(x - 0.5) * 10}deg)`;
+    el.style.setProperty('--gx', `${x * 100}%`);
+    el.style.setProperty('--gy', `${y * 100}%`);
+  };
+  const reset = () => {
+    if (!ref.current) return;
+    ref.current.style.transform = '';
+  };
+  const glow = subtleGlow
+    ? 'radial-gradient(240px circle at var(--gx,50%) var(--gy,50%), rgba(139,92,246,.08), transparent 70%)'
+    : 'radial-gradient(240px circle at var(--gx,50%) var(--gy,50%), rgba(139,92,246,.18), transparent 70%)';
+  return (
+    <div
+      ref={ref}
+      onPointerMove={move}
+      onPointerLeave={reset}
+      className={`${className} ps:group/tilt ps:relative ps:transition-transform ps:duration-200 ps:motion-reduce:transform-none`}
+    >
+      {!reduced && (
+        <div
+          aria-hidden
+          className="ps:pointer-events-none ps:absolute ps:inset-0 ps:z-10 ps:rounded-[inherit] ps:opacity-0 ps:transition-opacity ps:group-hover/tilt:opacity-100 ps:group-focus-within/tilt:opacity-100"
+          style={{ background: glow }}
+        />
+      )}
+      <div className="ps:relative ps:z-0">{children}</div>
+    </div>
+  );
+}
+
+type MoodKey = 'S' | 'P' | 'R';
+const MOOD_QUIZ: [string, [string, MoodKey][]][] = [
+  ['Payday just landed. First move?', [['Move some to savings', 'S'], ['Pay back friends I owe', 'P'], ['Schedule every bill', 'R']]],
+  ['The group dinner bill arrives…', [['I quietly check the total', 'S'], ['I split it before dessert', 'P'], ['I already budgeted for it', 'R']]],
+  ['A payment reminder buzzes your phone. You…', [['Smile, it is handled', 'R'], ['Never needed one', 'S'], ['Forward it to the group', 'P']]],
+];
+const MOOD_RESULTS: Record<MoodKey, [string, string]> = {
+  S: ['The Saver', 'You guard every rupee. Reports and insight cards will show where the leaks hide.'],
+  P: ['The Splitter', 'You keep friendships and balances clean. Groups, custom splits and settlement lists are made for you.'],
+  R: ['The Planner', 'You live by due dates. Recurring entries and reminders can run your month for you.'],
+};
+
+function pickMood(answers: MoodKey[]): MoodKey {
+  const counts = { S: 0, P: 0, R: 0 };
+  for (const a of answers) counts[a] += 1;
+  return (['S', 'P', 'R'] as MoodKey[]).sort((a, b) => counts[b] - counts[a])[0];
+}
+
+export function MoneyMood() {
+  const [ans, setAns] = useState<MoodKey[]>([]);
+  const q = MOOD_QUIZ[ans.length];
+  const top = pickMood(ans);
+  return (
+    <div className="ps:relative ps:overflow-hidden ps:rounded-[2rem] ps:bg-gradient-to-br ps:from-brand ps:to-brand-deep ps:p-6 ps:text-white ps:sm:p-12">
+      <p className="ps:text-sm ps:font-bold ps:text-gold">30-second quiz</p>
+      <h2 className="ps:mt-2 ps:text-3xl ps:font-extrabold ps:tracking-tight ps:sm:text-4xl">What&apos;s your money mood?</h2>
+      <div className="ps:mt-8 ps:min-h-52" aria-live="polite">
+        {q ? (
+          <div key={ans.length} className="ps:motion-safe:animate-rise-in">
+            <p className="ps:mb-4 ps:text-lg ps:font-semibold ps:text-white/90">{ans.length + 1}/3 · {q[0]}</p>
+            <div className="ps:grid ps:gap-3 ps:sm:grid-cols-3">
+              {q[1].map(([t, k]) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setAns([...ans, k])}
+                  className="ps:rounded-2xl ps:bg-white/10 ps:p-4 ps:text-left ps:font-medium ps:ring-1 ps:ring-white/20 ps:transition ps:hover:-translate-y-1 ps:hover:bg-white ps:hover:text-brand-deep"
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="ps:motion-safe:animate-rise-in">
+            <p className="ps:text-4xl ps:font-extrabold">{MOOD_RESULTS[top][0]}</p>
+            <p className="ps:mt-3 ps:max-w-[52ch] ps:text-lg ps:leading-8 ps:text-white/80">{MOOD_RESULTS[top][1]}</p>
+            <div className="ps:mt-6 ps:flex ps:flex-wrap ps:gap-3">
+              <Link href="/auth/register" className="ps:rounded-full ps:bg-white ps:px-6 ps:py-3 ps:font-semibold ps:text-brand-deep ps:hover:bg-brand-soft">
+                Start free
+              </Link>
+              <button type="button" onClick={() => setAns([])} className="ps:rounded-full ps:px-6 ps:py-3 ps:font-semibold ps:ring-1 ps:ring-white/40 ps:hover:bg-white/10">
+                Retake
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+      <p className="ps:mt-4 ps:text-xs ps:text-white/55">Just for fun. Not financial advice.</p>
     </div>
   );
 }

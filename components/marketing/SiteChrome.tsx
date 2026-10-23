@@ -2,11 +2,14 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { Figtree } from 'next/font/google';
 import './marketing.css';
+import { SHOW_PRICING } from './content';
 import { MobileMenu, ScrollBar } from './Interactive';
 
 const figtree = Figtree({ subsets: ['latin'], display: 'swap' });
 
-const LINKS = [['How it works', '/#story'], ['AI assistant', '/#ai'], ['Security', '/#security'], ['FAQ', '/faq']];
+const LINKS = [['How it works', '/#story'], ['AI assistant', '/#ai'], ['Pricing', '/#pricing'], ['Security', '/#security'], ['FAQ', '/faq']].filter(
+  ([t]) => SHOW_PRICING || t !== 'Pricing',
+);
 
 export function Logo({ light = false }: { light?: boolean }) {
   return (
@@ -57,9 +60,15 @@ export function Footer() {
 export function MarketingShell({ children }: { children: ReactNode }) {
   return (
     <div className={`${figtree.className} ps:min-h-screen ps:overflow-x-clip ps:bg-paper ps:text-ink ps:antialiased`}>
+      <a
+        href="#main"
+        className="ps:sr-only ps:focus:not-sr-only ps:focus:fixed ps:focus:left-4 ps:focus:top-4 ps:focus:z-[60] ps:focus:rounded-full ps:focus:bg-brand ps:focus:px-4 ps:focus:py-2 ps:focus:text-white ps:focus:outline-none"
+      >
+        Skip to content
+      </a>
       <ScrollBar />
       <Nav />
-      <main>{children}</main>
+      <main id="main">{children}</main>
       <Footer />
     </div>
   );

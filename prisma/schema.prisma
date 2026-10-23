@@ -123,6 +123,14 @@ enum NotificationChannel {
   WHATSAPP
 }
 
+enum MonthlyDigestDeliveryStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  SKIPPED
+}
+
 enum PushPlatform {
   WEB
   IOS
@@ -219,6 +227,7 @@ model User {
   smsImportSettings UserSmsImportSettings?
   smsIngestMessages SmsIngestMessage[]
   transactionImportFingerprints TransactionImportFingerprint[]
+  monthlyDigestDeliveries MonthlyDigestDelivery[]
 
   @@index([accountLifecyclePurgeAt, accountLifecycleMode])
 }
@@ -444,6 +453,7 @@ model Transaction {
 
   @@index([userId])
   @@index([userId, lifecycleBatchId])
+  @@index([userId, groupId, status, transactionDate(sort: Desc)])
   @@index([groupId])
   @@index([createdByUserId])
   @@index([type])
@@ -787,15 +797,36 @@ model InAppNotification {
 }
 
 model UserNotificationPreference {
-  userId         String  @id
-  inAppEnabled   Boolean @default(true)
-  emailEnabled   Boolean @default(true)
-  pushEnabled    Boolean @default(true)
-  groupActivity  Boolean @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  userId                String  @id
+  inAppEnabled          Boolean @default(true)
+  emailEnabled          Boolean @default(true)
+  pushEnabled           Boolean @default(true)
+  groupActivity         Boolean @default(true)
+  monthlyDigestEnabled  Boolean @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model MonthlyDigestDelivery {
+  id            String                      @id @default(uuid())
+  userId        String
+  period        String
+  status        MonthlyDigestDeliveryStatus @default(PENDING)
+  resendEmailId String?
+  errorCode     String?
+  errorMessage  String?                     @db.Text
+  attemptCount  Int                         @default(0)
+  lastAttemptAt DateTime?
+  sentAt        DateTime?
+  createdAt     DateTime                    @default(now())
+  updatedAt     DateTime                    @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, period])
+  @@index([period, status])
 }
 
 model UserPushSubscription {
