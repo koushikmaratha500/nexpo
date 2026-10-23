@@ -453,6 +453,7 @@ model Transaction {
 
   @@index([userId])
   @@index([userId, lifecycleBatchId])
+  @@index([userId, groupId, status, transactionDate(sort: Desc)])
   @@index([groupId])
   @@index([createdByUserId])
   @@index([type])

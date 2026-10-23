@@ -73,6 +73,7 @@
     "remark-gfm": "^4.0.1",
     "resend": "^6.12.4",
     "stripe": "^22.6.1",
+    "swagger-ui-react": "^5.34.0",
     "zod": "^4.4.3",
     "zustand": "^5.0.14"
   },
@@ -88,6 +89,7 @@
     "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/swagger-ui-react": "^5.18.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.7",
     "husky": "^9.1.7",
