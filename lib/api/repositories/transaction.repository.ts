@@ -70,10 +70,32 @@ export class TransactionRepository {
     return { items, total };
   }
 
+  static personalWhere(userId: string): Prisma.TransactionWhereInput {
+    return { userId, groupId: null, status: { not: 'D' } };
+  }
+
   static async aggregateByType(type: 'DEBIT' | 'CREDIT', where: Prisma.TransactionWhereInput = {}) {
     return prisma.transaction.aggregate({
       where: { status: { not: 'D' }, type, ...where },
       _sum: { amount: true },
+    });
+  }
+
+  /** Personal ledger rows in a calendar date range (single query for dashboard/report slices). */
+  static async findPersonalInDateRange(userId: string, start: Date, end: Date) {
+    return prisma.transaction.findMany({
+      where: {
+        ...this.personalWhere(userId),
+        transactionDate: { gte: start, lte: end },
+      },
+      orderBy: { transactionDate: 'desc' },
+      include: {
+        category: true,
+        currency: true,
+        paymentType: true,
+        budgetDepositType: true,
+        budgetType: true,
+      },
     });
   }
 
@@ -91,7 +113,7 @@ export class TransactionRepository {
 
   static async findRecentForUser(userId: string, take = 5) {
     return prisma.transaction.findMany({
-      where: { userId, groupId: null, status: { not: 'D' } },
+      where: this.personalWhere(userId),
       orderBy: { transactionDate: 'desc' },
       take,
       include: {

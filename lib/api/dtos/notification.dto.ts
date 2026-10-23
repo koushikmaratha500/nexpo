@@ -15,6 +15,7 @@ export const updateNotificationPreferencesSchema = z.object({
   emailEnabled: z.boolean().optional(),
   pushEnabled: z.boolean().optional(),
   groupActivity: z.boolean().optional(),
+  monthlyDigestEnabled: z.boolean().optional(),
 });
 
 export const registerPushSubscriptionSchema = z.object({
@@ -30,6 +31,7 @@ export interface NotificationPreferencesResponse {
   emailEnabled: boolean;
   pushEnabled: boolean;
   groupActivity: boolean;
+  monthlyDigestEnabled: boolean;
   adminPolicy: {
     inAppEnabled: boolean;
     emailEnabled: boolean;

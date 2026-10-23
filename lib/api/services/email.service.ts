@@ -416,4 +416,97 @@ export class EmailService {
       return { success: false, error };
     }
   }
+
+  static async sendMonthlyDigestEmail(payload: {
+    to: string;
+    subject: string;
+    html: string;
+    text: string;
+    idempotencyKey: string;
+  }) {
+    if (!isResendEnabled()) {
+      console.log(`[Email Simulation] Monthly digest to user (idempotency: ${payload.idempotencyKey})`);
+      return { success: true, simulated: true as const, id: `sim-${payload.idempotencyKey}` };
+    }
+
+    const resend = getResendClient();
+    if (!resend) {
+      return { success: false, error: new Error('Resend client unavailable') };
+    }
+
+    try {
+      const result = await resend.emails.send(
+        {
+          from: getResendFromEmail(),
+          to: payload.to,
+          subject: payload.subject,
+          html: payload.html,
+          text: payload.text,
+        },
+        { idempotencyKey: payload.idempotencyKey },
+      );
+
+      if (result.error) {
+        return { success: false, error: new Error(formatSendError(result.error)) };
+      }
+
+      return { success: true, id: result.data?.id };
+    } catch (error) {
+      return { success: false, error };
+    }
+  }
+
+  static async sendMonthlyDigestBatch(
+    payloads: Array<{
+      to: string;
+      subject: string;
+      html: string;
+      text: string;
+    }>,
+  ) {
+    if (payloads.length === 0) {
+      return { success: true, results: [] as Array<{ success: boolean; id?: string; error?: unknown }> };
+    }
+
+    if (!isResendEnabled()) {
+      return {
+        success: true,
+        simulated: true as const,
+        results: payloads.map((_, i) => ({ success: true, id: `sim-batch-${i}` })),
+      };
+    }
+
+    const resend = getResendClient();
+    if (!resend) {
+      return { success: false, results: payloads.map(() => ({ success: false, error: new Error('Resend client unavailable') })) };
+    }
+
+    try {
+      const result = await resend.batch.send(
+        payloads.map((p) => ({
+          from: getResendFromEmail(),
+          to: p.to,
+          subject: p.subject,
+          html: p.html,
+          text: p.text,
+        })),
+      );
+
+      if (result.error) {
+        const err = new Error(formatSendError(result.error));
+        return { success: false, results: payloads.map(() => ({ success: false, error: err })) };
+      }
+
+      const ids = result.data?.data ?? [];
+      return {
+        success: true,
+        results: payloads.map((_, i) => ({
+          success: true,
+          id: ids[i]?.id,
+        })),
+      };
+    } catch (error) {
+      return { success: false, results: payloads.map(() => ({ success: false, error })) };
+    }
+  }
 }

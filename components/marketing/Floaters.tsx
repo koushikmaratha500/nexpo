@@ -19,9 +19,9 @@ const ANIM: Record<string, string> = {
 type F = [keyof typeof SHAPES, string, string, number, string, number, boolean?];
 const SCENES: Record<string, F[]> = {
   hero: [
-    ['coin', '6%', '14%', 54, 'bob', 0], ['receipt', '88%', '10%', 50, 'sway', 0.8], ['bell', '3%', '72%', 44, 'wiggle', 0.3],
-    ['pie', '92%', '70%', 58, 'turn', 0], ['spark', '30%', '6%', 18, 'twinkle', 0.5], ['spark', '72%', '90%', 16, 'twinkle', 1.4],
-    ['coin', '58%', '93%', 32, 'sway', 1.2, true], ['people', '40%', '84%', 64, 'bob', 0.6, true],
+    ['coin', '20%', '6%', 50, 'bob', 0], ['receipt', 'r:4%', '9%', 48, 'sway', 0.8], ['bell', 'r:22%', '6%', 40, 'wiggle', 0.3],
+    ['pie', 'r:2%', '84%', 52, 'turn', 0], ['spark', '30%', '14%', 18, 'twinkle', 0.5], ['spark', '72%', '90%', 16, 'twinkle', 1.4],
+    ['coin', '58%', '86%', 30, 'sway', 1.2, true], ['people', '40%', '84%', 60, 'bob', 0.6, true],
   ],
   ai: [
     ['spark', '8%', '12%', 20, 'twinkle', 0], ['spark', '92%', '20%', 16, 'twinkle', 1], ['spark', '50%', '92%', 22, 'twinkle', 2],
@@ -35,9 +35,17 @@ const SCENES: Record<string, F[]> = {
 
 export function FloatField({ scene }: { scene: 'hero' | 'ai' | 'cta' }) {
   return (
-    <div aria-hidden className="ps:pointer-events-none ps:absolute ps:inset-0 ps:overflow-hidden ps:opacity-60 ps:sm:opacity-100">
+    <div aria-hidden className="ps:pointer-events-none ps:absolute ps:inset-0 ps:z-0 ps:overflow-hidden ps:opacity-60 ps:sm:opacity-100">
       {SCENES[scene].map(([s, x, y, px, anim, d, hide], i) => (
-        <div key={i} className={`ps:absolute ${hide ? 'ps:hidden ps:md:block' : ''}`} style={{ left: x, top: y, width: `clamp(${Math.round(px * 0.55)}px, ${px / 11}vw, ${px}px)` }}>
+        <div
+          key={i}
+          className={`ps:absolute ${hide ? 'ps:hidden ps:md:block' : ''}`}
+          style={{
+            ...(x.startsWith('r:') ? { right: x.slice(2) } : { left: x }),
+            top: y,
+            width: `clamp(${Math.round(px * 0.55)}px, ${px / 11}vw, ${px}px)`,
+          }}
+        >
           <div className={ANIM[anim]} style={{ animationDelay: `${d}s` }}>{SHAPES[s]}</div>
         </div>
       ))}

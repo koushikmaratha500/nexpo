@@ -79,9 +79,16 @@ export interface TransactionResponse {
 }
 
 export interface DashboardMetricsResponse {
+  month: string;
   totalSpend: number;
-  totalBudget: number;
-  totalTransactions: number;
+  todaySpend: number;
+  totalDeposits: number;
+  chart: {
+    labels: string[];
+    income: number[];
+    expenses: number[];
+  };
+  categoryBreakdown: Array<{ name: string; percentage: number; color: string }>;
   recentTransactions: TransactionResponse[];
 }
 

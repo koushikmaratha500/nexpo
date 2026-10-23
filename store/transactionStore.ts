@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import axios from 'axios';
-import { formatDate } from '@/lib/date';
-import { isLedgerIncomeTransaction, parseTransactionAmount } from '@/lib/transactions/ledger';
+import { mapDbTransactionToClient } from '@/lib/transactions/map-client-transaction';
 import type { PaginatedResponse } from '@/types/api';
 
 export type TransactionType = 'DEBIT' | 'CREDIT';
@@ -50,46 +49,6 @@ export interface PendingRecurring {
   recurringDay?: number | null;
 }
 
-// Map database Prisma response to client Transaction interface
-const mapDbTransactionToTransaction = (dbTxn: any): Transaction => {
-  const isCredit = dbTxn.type === 'CREDIT';
-  const isDebit = dbTxn.type === 'DEBIT';
-
-  const base = {
-    id: dbTxn.id,
-    type: String(dbTxn.type).toUpperCase() as TransactionType,
-    categoryType: dbTxn.category?.type
-      ? (String(dbTxn.category.type).toUpperCase() as TransactionType)
-      : undefined,
-    title: dbTxn.title || dbTxn.merchant || 'Transaction Title',
-    merchant: dbTxn.merchant || undefined,
-    description: dbTxn.description || dbTxn.merchant || undefined,
-    category: isCredit
-      ? (dbTxn.category?.name || dbTxn.category?.code || 'Other')
-      : (dbTxn.category?.name || dbTxn.category?.code || 'Food'),
-    date: formatDate(dbTxn.transactionDate || dbTxn.date),
-    status: (isCredit ? 'VERIFIED' : 'PENDING') as 'VERIFIED' | 'PENDING' | 'DECLINED',
-    amount: parseTransactionAmount(dbTxn.amount),
-    submittedBy: dbTxn.user ? `${dbTxn.user.firstName || ''} ${dbTxn.user.lastName || ''}`.trim() : 'Alex Sterling',
-    paymentType: (dbTxn.paymentType?.name || (isCredit ? 'Account' : 'Credit Card')),
-    currency: dbTxn.currency?.code || 'INR',
-    notes: dbTxn.notes || undefined,
-    documentName: dbTxn.documentFileName || dbTxn.receiptFileName || undefined,
-    documentSize: dbTxn.documentSize ? `${(dbTxn.documentSize / 1024).toFixed(0)} KB` : undefined,
-    documentDate: dbTxn.documentFileName ? formatDate(dbTxn.transactionDate || dbTxn.date) : undefined,
-    documentUrl: dbTxn.documentUrl || dbTxn.receiptUrl || undefined,
-    receiptName: dbTxn.documentFileName || dbTxn.receiptFileName || undefined,
-    receiptSize: dbTxn.documentSize ? `${(dbTxn.documentSize / 1024).toFixed(0)} KB` : undefined,
-    receiptUrl: dbTxn.documentUrl || dbTxn.receiptUrl || undefined,
-    receiptDate: dbTxn.documentFileName ? formatDate(dbTxn.transactionDate || dbTxn.date) : undefined,
-    depositType: isCredit ? ((dbTxn.paymentType?.name || 'Account') as 'Cash' | 'Account') : undefined,
-    isRecurring: dbTxn.isRecurring ?? false,
-    recurringDay: dbTxn.recurringDay ?? null,
-  };
-
-  return base;
-};
-
 const LOCAL_STORAGE_KEY = 'nexpo_transactions_local';
 const FETCH_PAGE_SIZE = 100;
 const MAX_FETCH_PAGES = 50;
@@ -127,7 +86,7 @@ const getLocalStorageTransactions = (): Transaction[] => {
   try {
     const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
     return stored ? JSON.parse(stored) : [];
-  } catch (e) {
+  } catch {
     return [];
   }
 };
@@ -159,7 +118,9 @@ const setLocalStorageTransactions = (transactions: Transaction[]) => {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(transactions));
-  } catch (e) {}
+  } catch {
+    /* ignore quota / private mode */
+  }
 };
 
 interface TransactionState {
@@ -190,7 +151,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const items = await fetchAllTransactionPages(filters);
-      const mapped = items.map(mapDbTransactionToTransaction);
+      const mapped = items.map((item) => mapDbTransactionToClient(item as Record<string, unknown>) as Transaction);
       set({ transactions: mapped, isLoading: false });
       setLocalStorageTransactions(mapped);
     } catch (err: unknown) {
@@ -222,8 +183,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       set({ isLoading: false });
       await get().fetchTransactions();
       await get().fetchRecurring();
-    } catch (err: any) {
-      set({ isLoading: false, error: err.message || 'Failed to add transaction' });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to add transaction';
+      set({ isLoading: false, error: message });
       throw err;
     }
   },
@@ -250,8 +212,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       set({ isLoading: false });
       await get().fetchTransactions();
       await get().fetchRecurring();
-    } catch (err: any) {
-      set({ isLoading: false, error: err.message || 'Failed to update transaction' });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to update transaction';
+      set({ isLoading: false, error: message });
       throw err;
     }
   },
@@ -263,8 +226,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       set({ isLoading: false });
       await get().fetchTransactions();
       await get().fetchRecurring();
-    } catch (err: any) {
-      set({ isLoading: false, error: err.message || 'Failed to delete transaction' });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to delete transaction';
+      set({ isLoading: false, error: message });
       throw err;
     }
   },

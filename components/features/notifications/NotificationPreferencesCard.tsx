@@ -12,6 +12,7 @@ interface NotificationPreferences {
   emailEnabled: boolean;
   pushEnabled: boolean;
   groupActivity: boolean;
+  monthlyDigestEnabled: boolean;
   adminPolicy: {
     inAppEnabled: boolean;
     emailEnabled: boolean;
@@ -25,7 +26,9 @@ export function NotificationPreferencesCard() {
   const [prefs, setPrefs] = useState<NotificationPreferences | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [pushPermissionGranted, setPushPermissionGranted] = useState(false);
+  const [pushPermissionGranted, setPushPermissionGranted] = useState(
+    () => typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted',
+  );
 
   useEffect(() => {
     async function load() {
@@ -39,10 +42,6 @@ export function NotificationPreferencesCard() {
       }
     }
     load();
-
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      setPushPermissionGranted(Notification.permission === 'granted');
-    }
   }, [addToast]);
 
   const handleSave = async () => {
@@ -54,6 +53,7 @@ export function NotificationPreferencesCard() {
         emailEnabled: prefs.emailEnabled,
         pushEnabled: prefs.pushEnabled,
         groupActivity: prefs.groupActivity,
+        monthlyDigestEnabled: prefs.monthlyDigestEnabled,
       });
       setPrefs(response.data);
       addToast('Notification preferences saved.', 'success');
@@ -87,7 +87,12 @@ export function NotificationPreferencesCard() {
     );
   }
 
-  const toggle = (key: keyof Pick<NotificationPreferences, 'inAppEnabled' | 'emailEnabled' | 'pushEnabled' | 'groupActivity'>) => {
+  const toggle = (
+    key: keyof Pick<
+      NotificationPreferences,
+      'inAppEnabled' | 'emailEnabled' | 'pushEnabled' | 'groupActivity' | 'monthlyDigestEnabled'
+    >,
+  ) => {
     setPrefs((prev) => (prev ? { ...prev, [key]: !prev[key] } : prev));
   };
 
@@ -130,6 +135,23 @@ export function NotificationPreferencesCard() {
             checked={prefs.emailEnabled}
             disabled={!prefs.adminPolicy.emailEnabled}
             onChange={() => toggle('emailEnabled')}
+          />
+        </label>
+
+        <label className="flex items-start justify-between gap-4">
+          <span>
+            <span className="font-body-md font-bold text-on-surface block">Monthly money digest</span>
+            <span className="font-label-md text-on-surface-variant">
+              {prefs.adminPolicy.emailEnabled
+                ? 'First of each month: income, spending and category breakdown.'
+                : 'Disabled by admin or Resend is off.'}
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            checked={prefs.monthlyDigestEnabled}
+            disabled={!prefs.adminPolicy.emailEnabled}
+            onChange={() => toggle('monthlyDigestEnabled')}
           />
         </label>
 

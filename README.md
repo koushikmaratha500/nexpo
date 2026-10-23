@@ -55,6 +55,10 @@ NEXT_PUBLIC_ONESIGNAL_APP_ID=
 ONESIGNAL_APP_ID=
 ONESIGNAL_REST_API_KEY=
 REMINDER_DISPATCH_SECRET=      # protects POST /api/internal/reminders/dispatch
+MONTHLY_DIGEST_DISPATCH_SECRET= # protects POST /api/internal/monthly-digest (falls back to REMINDER_DISPATCH_SECRET)
+MONTHLY_DIGEST_EMAIL_LIMIT=3000
+MONTHLY_DIGEST_BATCH_SIZE=100
+MONTHLY_DIGEST_TEST_RECIPIENT=
 ```
 
 ### AI (Release 3.0)
@@ -159,6 +163,7 @@ npm run trigger:deploy
 | `billing-lifecycle-dispatch` | Daily 08:00 | Trial-ending emails + expire lapsed Starter subs |
 | `purge-expired-receipt-shares` | Daily 02:30 | Remove expired public receipt links |
 | `daily-health-check` | Daily 06:00 | DB / Redis / email / AI connectivity |
+| `monthly-digest-dispatch` | 1st of month 09:00 | Previous month money digest (off until `MONTHLY_DIGEST_SCHEDULER_ENABLED=true` on Trigger prod) |
 
 Manual fallback (same logic as Trigger tasks):
 
@@ -168,6 +173,11 @@ curl -X POST -H "x-reminder-dispatch-secret: $REMINDER_DISPATCH_SECRET" \
 
 curl -X POST -H "x-billing-dispatch-secret: $BILLING_DISPATCH_SECRET" \
   https://your-host/api/internal/billing/dispatch
+
+curl -X POST -H "Content-Type: application/json" \
+  -H "x-monthly-digest-dispatch-secret: $MONTHLY_DIGEST_DISPATCH_SECRET" \
+  -d '{"period":"previous_month","mode":"production"}' \
+  https://your-host/api/internal/monthly-digest
 ```
 
 ---
