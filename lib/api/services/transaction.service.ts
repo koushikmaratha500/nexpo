@@ -1,4 +1,7 @@
 import { TransactionRepository } from '../repositories/transaction.repository';
+import { invalidateUserDashboardCache } from './dashboard-cache.service';
+import { invalidateAdminDashboardCache } from './admin-dashboard-cache.service';
+import { sumPersonalLedgerTotals } from '@/lib/transactions/ledger-totals';
 import { MetaResolutionService } from './meta-resolution.service';
 import { MetaRepository } from '../repositories/meta.repository';
 import { isIncomeCategoryName } from '@/lib/transactions/ledger';
@@ -89,6 +92,8 @@ export class TransactionService {
       userAgent: meta.ua || null,
     });
 
+    await invalidateUserDashboardCache(userId);
+    await invalidateAdminDashboardCache();
     return transaction;
   }
 
@@ -100,10 +105,33 @@ export class TransactionService {
     category?: string;
     startDate?: Date;
     endDate?: Date;
+    endExclusive?: Date;
+    search?: string;
     page?: number;
     pageSize?: number;
+    includeTotals?: boolean;
   }) {
-    return TransactionRepository.findAll(params);
+    const result = await TransactionRepository.findAll(params);
+    if (!params.includeTotals) {
+      return result;
+    }
+
+    const where = TransactionRepository.buildListWhere(params);
+    const ledgerRows = await TransactionRepository.findLedgerRowsForWhere(where);
+    const totals = sumPersonalLedgerTotals(
+      ledgerRows.map((row) => ({
+        type: row.type,
+        amount: row.amount,
+        category: row.category?.name ?? null,
+        categoryType: row.category?.type ?? null,
+      })),
+    );
+
+    return {
+      ...result,
+      totalDebit: totals.totalExpenses,
+      totalCredit: totals.totalDeposits,
+    };
   }
 
   static async getTransactionById(id: string, userId?: string) {
@@ -176,6 +204,8 @@ export class TransactionService {
       userAgent: meta.ua || null,
     });
 
+    await invalidateUserDashboardCache(userId);
+    await invalidateAdminDashboardCache();
     return updated;
   }
 
@@ -196,6 +226,8 @@ export class TransactionService {
       userAgent: meta.ua || null,
     });
 
+    await invalidateUserDashboardCache(userId);
+    await invalidateAdminDashboardCache();
     return { success: true };
   }
 
@@ -290,6 +322,11 @@ export class TransactionService {
       dueDate: new Date(item.dueDate),
     }));
 
-    return TransactionRepository.approveRecurringBatch(userId, normalized, _meta);
+    const result = await TransactionRepository.approveRecurringBatch(userId, normalized, _meta);
+    if (result.created.length > 0) {
+      await invalidateUserDashboardCache(userId);
+      await invalidateAdminDashboardCache();
+    }
+    return result;
   }
 }

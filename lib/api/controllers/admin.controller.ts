@@ -5,6 +5,7 @@ import { AdminService } from '../services/admin.service';
 import { UserRepository } from '../repositories/user.repository';
 import { AdminRepository } from '../repositories/admin.repository';
 import { TransactionRepository } from '../repositories/transaction.repository';
+import { TransactionController } from './transaction.controller';
 import {
   createUserSchema,
   updateUserSchema,
@@ -15,7 +16,8 @@ import {
 } from '../dtos/admin.dto';
 
 export class AdminController extends BaseController {
-  static async getDashboard(_req: NextRequest) {
+  static async getDashboard(req: NextRequest) {
+    void req;
     return this.safeExecuteJson(
       async () => AdminService.getDashboard(),
       { fallbackMessage: 'Failed to fetch dashboard metrics' },
@@ -148,6 +150,10 @@ export class AdminController extends BaseController {
         },
       };
     }, { fallbackMessage: 'Failed to update plan' });
+  }
+
+  static async getUserTransactions(req: NextRequest, userId: string) {
+    return TransactionController.getAll(req, userId);
   }
 
   static async getUserExpenses(req: NextRequest, userId: string) {

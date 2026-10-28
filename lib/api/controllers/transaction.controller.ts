@@ -9,7 +9,7 @@ import {
   approveRecurringSchema,
   importTransactionSchema,
 } from '../dtos/transaction.dto';
-import { parsePaginationParams } from '../dtos/pagination.dto';
+import { parseTransactionListQuery } from '../dtos/transaction-list.dto';
 
 export class TransactionController extends BaseController {
   static async create(req: NextRequest, userId: string) {
@@ -39,29 +39,38 @@ export class TransactionController extends BaseController {
   static async getAll(req: NextRequest, userId?: string) {
     return this.safeExecuteJson(async () => {
       const { searchParams } = new URL(req.url);
-      const type = (searchParams.get('type') as 'DEBIT' | 'CREDIT') || undefined;
-      const categoryId = searchParams.get('categoryId') || undefined;
-      const category = searchParams.get('category') || undefined;
-      const startDateStr = searchParams.get('startDate');
-      const endDateStr = searchParams.get('endDate');
-      const { page, pageSize } = parsePaginationParams(searchParams);
+      const query = parseTransactionListQuery(searchParams);
+      const includeTotals = searchParams.get('includeTotals') === 'true';
 
       const result = await TransactionService.getTransactions({
         userId,
         groupId: null,
-        type,
-        categoryId,
-        category,
-        startDate: startDateStr ? new Date(startDateStr) : undefined,
-        endDate: endDateStr ? new Date(endDateStr) : undefined,
-        page,
-        pageSize,
+        type: query.type,
+        categoryId: query.categoryId,
+        category: query.category,
+        startDate: query.startDate,
+        endDate: query.endDate,
+        endExclusive: query.endExclusive,
+        search: query.search,
+        page: query.page,
+        pageSize: query.pageSize,
+        includeTotals,
       });
 
-      return {
+      const base = {
         items: TransactionRepository.serializeItems(result.items || []),
         total: result.total,
       };
+
+      if (includeTotals && 'totalDebit' in result && 'totalCredit' in result) {
+        return {
+          ...base,
+          totalDebit: result.totalDebit,
+          totalCredit: result.totalCredit,
+        };
+      }
+
+      return base;
     }, { fallbackMessage: 'Failed to fetch transactions' });
   }
 
