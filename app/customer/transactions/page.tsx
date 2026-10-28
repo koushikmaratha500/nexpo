@@ -12,7 +12,14 @@ import { useForm, useWatch, type UseFormRegister, type UseFormWatch, type FieldE
 import { useToast } from '@/hooks/useToast';
 import { dateToInputFormat } from '@/lib/date';
 import axios from 'axios';
-import { DocumentUploader, RecurringApprovalPanel, ImportExpensesModal } from '@/components/features/transactions';
+import {
+  DocumentUploader,
+  RecurringApprovalPanel,
+  ImportExpensesModal,
+  TransactionBrowseToolbar,
+  TransactionCalendarGrid,
+} from '@/components/features/transactions';
+import { useTransactionBrowse } from '@/hooks/useTransactionBrowse';
 import { PersonalTransactionActionsMenu } from '@/components/features/transactions/PersonalTransactionActionsMenu';
 import { TransactionDetailModal } from '@/components/features/transactions/TransactionDetailModal';
 import type { ReceiptExtraction } from '@/lib/ai/types';
@@ -371,7 +378,8 @@ function RecurringToggle({
 }
 
 export default function TransactionsPage() {
-  const { transactions, fetchTransactions, addTransaction, updateTransaction, deleteTransaction, isLoading, recurringItems, recurringLoading, fetchRecurring, approveRecurring } = useTransactionStore();
+  const { addTransaction, updateTransaction, deleteTransaction, recurringItems, recurringLoading, fetchRecurring, approveRecurring } = useTransactionStore();
+  const browse = useTransactionBrowse();
   const { user } = useAuth();
   const { addToast } = useToast();
   const [activeFilter, setActiveFilter] = useState<"ALL" | TransactionType>("ALL");
@@ -380,8 +388,6 @@ export default function TransactionsPage() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [paymentTypes, setPaymentTypes] = useState<PaymentTypeOption[]>([]);
   const [currencies, setCurrencies] = useState<CurrencyOption[]>([]);
@@ -464,15 +470,36 @@ export default function TransactionsPage() {
   const filteredAddCategories = filterCategoriesForType(selectedAddType);
   const filteredEditCategories = filterCategoriesForType(selectedEditType);
 
-  const hasFetchedRef = useRef(false);
   const metadataFetchedRef = useRef(false);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (hasFetchedRef.current) return;
-    hasFetchedRef.current = true;
-    fetchTransactions();
     fetchRecurring();
-  }, [fetchTransactions, fetchRecurring]);
+  }, [fetchRecurring]);
+
+  useEffect(() => {
+    browse.setFilters({
+      type: activeFilter === 'ALL' ? undefined : activeFilter,
+      search,
+    });
+    browse.setPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFilter]);
+
+  useEffect(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      browse.setFilters({
+        type: activeFilter === 'ALL' ? undefined : activeFilter,
+        search,
+      });
+      browse.setPage(1);
+    }, 300);
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   // Load all metadata (categories, payment types, currencies, deposit types) from DB
   useEffect(() => {
@@ -559,30 +586,18 @@ export default function TransactionsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const filteredTransactions = transactions.filter((t) => {
-    if (activeFilter !== "ALL" && t.type !== activeFilter) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      return t.title.toLowerCase().includes(q) ||
-             (t.merchant || '').toLowerCase().includes(q) ||
-             t.category.toLowerCase().includes(q);
-    }
-    return true;
-  });
-
-  const totalItems = filteredTransactions.length;
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedTransactions = filteredTransactions.slice(startIndex, startIndex + itemsPerPage);
+  const paginatedTransactions = browse.tableItems;
+  const totalItems = browse.total;
+  const isLoading = browse.isLoading;
 
   const handleItemsPerPageChange = (n: number) => {
-    setItemsPerPage(n);
-    setCurrentPage(1);
+    browse.setItemsPerPage(n);
   };
 
-  const totalDebit = filteredTransactions.filter((t) => t.type === 'DEBIT').reduce((sum, t) => sum + t.amount, 0);
-  const totalCredit = filteredTransactions.filter((t) => t.type === 'CREDIT').reduce((sum, t) => sum + t.amount, 0);
+  const totalDebit = browse.totalDebit;
+  const totalCredit = browse.totalCredit;
 
-  const resolveCategoryForForm = (value: string, type: TransactionType): string => {
+  const resolveCategoryForForm = (value: string): string => {
     const categoryMatch = categories.find(
       (c) =>
         c.name === value ||
@@ -607,7 +622,7 @@ export default function TransactionsPage() {
       type: t.type,
       title: t.title,
       merchant: t.merchant || '',
-      category: resolveCategoryForForm(t.category, t.type),
+      category: resolveCategoryForForm(t.category),
       amount: t.amount.toString(),
       date: dateToInputFormat(t.date),
       currency: t.currency,
@@ -624,6 +639,7 @@ export default function TransactionsPage() {
     if (window.confirm('Delete this transaction?')) {
       try {
         await deleteTransaction(id);
+        browse.refresh();
         addToast('Transaction deleted', 'success');
       } catch {
         addToast('Failed to delete transaction', 'error');
@@ -649,6 +665,7 @@ export default function TransactionsPage() {
         recurringDay: data.isRecurring ? Number(data.recurringDay) : null,
       }, addFile);
       addToast('Transaction added successfully!', 'success');
+      browse.refresh();
       setIsAddOpen(false);
       setAddFile(null);
     } catch {
@@ -682,6 +699,7 @@ export default function TransactionsPage() {
       }
       await updateTransaction(editingTransaction.id, txnData, editFile);
       addToast('Transaction updated successfully!', 'success');
+      browse.refresh();
       setIsEditOpen(false);
       setEditFile(null);
       setRemoveExistingDoc(false);
@@ -727,7 +745,25 @@ export default function TransactionsPage() {
       </div>
 
       {/* Recurring transactions awaiting approval (shown on top of page 1) */}
-      <RecurringApprovalPanel items={recurringItems} loading={recurringLoading} onApprove={approveRecurring} />
+      <RecurringApprovalPanel
+        items={recurringItems}
+        loading={recurringLoading}
+        onApprove={async (items) => {
+          const result = await approveRecurring(items);
+          browse.refresh();
+          return result;
+        }}
+      />
+
+      <TransactionBrowseToolbar
+        periodMode={browse.periodMode}
+        onPeriodChange={browse.setPeriodMode}
+        displayMode={browse.displayMode}
+        onDisplayModeChange={browse.setDisplayMode}
+        periodRange={browse.periodRange}
+        onNavigate={browse.navigatePeriod}
+        canNavigateForward={browse.periodMode !== 'ytd'}
+      />
 
       {/* Filters */}
       <Card className="bg-surface-container-lowest flex flex-col lg:flex-row gap-4 items-stretch lg:items-center px-lg py-md" glass={false}>
@@ -767,7 +803,19 @@ export default function TransactionsPage() {
         </div>
       </Card>
 
+      {browse.displayMode === 'calendar' ? (
+        <TransactionCalendarGrid
+          monthAnchor={browse.anchorDate}
+          transactions={browse.calendarItems}
+          onSelectTransaction={setViewingTransaction}
+          onSelectDay={(_date, dayTxns) => {
+            if (dayTxns.length === 1) setViewingTransaction(dayTxns[0]);
+          }}
+        />
+      ) : null}
+
       {/* Transactions table */}
+      {browse.displayMode === 'table' ? (
       <Card className="bg-surface-container-lowest p-0 overflow-hidden" glass={false}>
         <div className="px-6 py-4 border-b border-outline-variant bg-white/40">
           <h4 className="font-title-md text-title-md font-bold text-primary">Transaction Ledger</h4>
@@ -823,7 +871,7 @@ export default function TransactionsPage() {
                           onView={setViewingTransaction}
                           onEdit={handleOpenEdit}
                           onDelete={handleDelete}
-                          onConverted={() => fetchTransactions()}
+                          onConverted={() => browse.refresh()}
                         />
                       </div>
                     </TableCell>
@@ -841,13 +889,14 @@ export default function TransactionsPage() {
         </div>
 
         <TablePagination
-          currentPage={currentPage}
+          currentPage={browse.page}
           totalItems={totalItems}
-          itemsPerPage={itemsPerPage}
-          onPageChange={setCurrentPage}
+          itemsPerPage={browse.itemsPerPage}
+          onPageChange={browse.setPage}
           onItemsPerPageChange={handleItemsPerPageChange}
         />
       </Card>
+      ) : null}
 
       <Card className="bg-surface-container-lowest p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4" glass={false}>
         <div>
@@ -1113,7 +1162,7 @@ export default function TransactionsPage() {
         isOpen={isImportOpen}
         onClose={() => setIsImportOpen(false)}
         onImported={() => {
-          fetchTransactions();
+          browse.refresh();
           fetchRecurring();
         }}
       />

@@ -3,6 +3,8 @@ import customParseFormat from 'dayjs/plugin/customParseFormat';
 import { parseCsv, buildCsv } from '../utils/csv';
 import { MetaRepository } from '../repositories/meta.repository';
 import { TransactionRepository } from '../repositories/transaction.repository';
+import { invalidateUserDashboardCache } from './dashboard-cache.service';
+import { invalidateAdminDashboardCache } from './admin-dashboard-cache.service';
 import { PlanService } from './plan.service';
 
 dayjs.extend(customParseFormat);
@@ -419,6 +421,11 @@ export class ImportService {
       userId,
       payloads.map((p) => ({ data: p.data, meta: p.meta }))
     );
+
+    if (created.length > 0) {
+      await invalidateUserDashboardCache(userId);
+      await invalidateAdminDashboardCache();
+    }
 
     return { created, count: created.length };
   }

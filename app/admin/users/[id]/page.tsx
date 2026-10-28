@@ -5,11 +5,12 @@ import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table';
 import axios from 'axios';
 import { useToast } from '@/hooks/useToast';
 import { PasswordInput } from '@/components/forms/PasswordInput';
 import { formatSignupSource } from '@/lib/auth/signupSource';
+import { AdminUserTransactionBrowse } from '@/components/features/transactions';
+import type { Transaction } from '@/store/transactionStore';
 
 interface UserDetail {
   id: string;
@@ -62,13 +63,20 @@ interface ExpenseItem {
 interface AuditItem {
   id: string;
   action: string;
-  oldValue: any;
-  newValue: any;
+  oldValue: unknown;
+  newValue: unknown;
   ipAddress: string | null;
   userAgent: string | null;
   status: string;
   createdAt: string;
   transaction?: { id: string; title: string; merchant: string | null; amount: string | number; type: string } | null;
+}
+
+function apiErrorMessage(err: unknown, fallback: string): string {
+  if (axios.isAxiosError(err) && typeof err.response?.data?.error === 'string') {
+    return err.response.data.error;
+  }
+  return fallback;
 }
 
 function formatMoney(amount: string | number, symbol = '₹'): string {
@@ -161,9 +169,9 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
         setExpenses(expensesRes.data.items || []);
         setInvoices(invoicesRes.data || []);
         setAuditLogs(auditRes.data.items || []);
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (!isMounted) return;
-        const errMsg = err.response?.data?.error || 'Failed to load user details';
+        const errMsg = apiErrorMessage(err, 'Failed to load user details');
         setLoadError(errMsg);
         addToast(errMsg, 'error');
       } finally {
@@ -205,8 +213,8 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
         addToast('Customer updated successfully', 'success');
         setIsEditOpen(false);
       }
-    } catch (err: any) {
-      const errMsg = err.response?.data?.error || 'Failed to update customer';
+    } catch (err: unknown) {
+      const errMsg = apiErrorMessage(err, 'Failed to update customer');
       addToast(errMsg, 'error');
     } finally {
       setIsSubmitting(false);
@@ -231,8 +239,8 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
       await axios.post(`/api/admin/user/${user.id}/activate`);
       setUser(prev => prev ? { ...prev, status: 'A', emailVerified: true } : prev);
       addToast(user.status === 'B' ? 'Customer unblocked successfully' : 'Customer activated successfully', 'success');
-    } catch (err: any) {
-      const errMsg = err.response?.data?.error || 'Failed to activate customer';
+    } catch (err: unknown) {
+      const errMsg = apiErrorMessage(err, 'Failed to activate customer');
       addToast(errMsg, 'error');
     }
   };
@@ -246,8 +254,8 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
       setUser(prev => prev ? { ...prev, status: 'B' } : prev);
       setIsStatusConfirmOpen(false);
       addToast('Customer blocked successfully. Active sessions were terminated.', 'success');
-    } catch (err: any) {
-      const errMsg = err.response?.data?.error || 'Failed to block customer';
+    } catch (err: unknown) {
+      const errMsg = apiErrorMessage(err, 'Failed to block customer');
       addToast(errMsg, 'error');
     } finally {
       setIsSubmitting(false);
@@ -266,8 +274,8 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
         setIsDeleteOpen(false);
         router.push('/admin/users');
       }
-    } catch (err: any) {
-      const errMsg = err.response?.data?.error || 'Failed to delete customer';
+    } catch (err: unknown) {
+      const errMsg = apiErrorMessage(err, 'Failed to delete customer');
       addToast(errMsg, 'error');
     } finally {
       setIsSubmitting(false);
@@ -326,8 +334,8 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
         setResetPassword('');
         setResetForce(false);
       }
-    } catch (err: any) {
-      const errMsg = err.response?.data?.error || 'Failed to reset password';
+    } catch (err: unknown) {
+      const errMsg = apiErrorMessage(err, 'Failed to reset password');
       addToast(errMsg, 'error');
     } finally {
       setIsSubmitting(false);
@@ -401,6 +409,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
           {/* Avatar and Identity */}
           <div className="flex flex-col sm:flex-row items-center gap-md text-center sm:text-left">
             {user.profileImageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element -- admin profile URL may be external
               <img
                 src={user.profileImageUrl}
                 alt={userFullName}
@@ -689,71 +698,24 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
 
           {/* Expenses Log Tab Content */}
           {activeTab === 'expenses' && (
-            <>
-              {expenses.length === 0 ? (
-                <Card className="bg-surface-container-lowest p-lg text-center" glass={false}>
-                  <div className="py-xl flex flex-col items-center gap-md">
-                    <span className="material-symbols-outlined text-[48px] text-outline">receipt_long</span>
-                    <h3 className="font-title-md text-title-md font-bold text-primary">No Expense Records</h3>
-                    <p className="text-body-md text-on-surface-variant max-w-sm">This user hasn't submitted any corporate expenditures yet.</p>
-                  </div>
-                </Card>
-              ) : (
-                <Card className="bg-surface-container-lowest p-0 overflow-hidden" glass={false}>
-                  <div className="w-full overflow-x-auto scrollbar-hide">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Title</TableHead>
-                          <TableHead>Category</TableHead>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Payment</TableHead>
-                          <TableHead align="right">Amount</TableHead>
-                          <TableHead align="center">Action</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {expenses.map((exp) => (
-                          <TableRow key={exp.id}>
-                            <TableCell>
-                              <div className="flex flex-col">
-                                <span className="text-primary font-bold">{(exp.title || exp.merchant || 'Expense').slice(0, 20)}{(exp.title || exp.merchant || '').length > 20 ? '...' : ''}</span>
-                                <span className="text-[11px] text-on-surface-variant truncate max-w-[150px]">{exp.description || ''}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              {exp.category ? (
-                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-surface-container-high text-on-surface">
-                                  {exp.category.name}
-                                </span>
-                              ) : (
-                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-surface-variant text-on-surface-variant">
-                                  Uncategorized
-                                </span>
-                              )}
-                            </TableCell>
-                            <TableCell className="font-mono-data text-xs">{formatDate(exp.transactionDate)}</TableCell>
-                            <TableCell className="text-xs text-on-surface-variant">{exp.paymentType?.name || '—'}</TableCell>
-                            <TableCell align="right" className="font-bold text-primary text-sm">
-                              {formatMoney(exp.amount, exp.currency?.symbol || '₹')}
-                            </TableCell>
-                            <TableCell align="center">
-                              <button
-                                onClick={() => handleViewExpense(exp)}
-                                className="p-1 hover:bg-surface-container rounded-full text-on-surface-variant hover:text-primary transition-all"
-                                title="View Details"
-                              >
-                                <span className="material-symbols-outlined text-sm">visibility</span>
-                              </button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </Card>
-              )}
-            </>
+            <AdminUserTransactionBrowse
+              userId={id}
+              onViewTransaction={(txn: Transaction) => {
+                handleViewExpense({
+                  id: txn.id,
+                  title: txn.title,
+                  merchant: txn.merchant ?? null,
+                  description: txn.description ?? null,
+                  amount: txn.amount,
+                  transactionDate: txn.date,
+                  category: txn.category ? { name: txn.category } : null,
+                  currency: { symbol: txn.currency },
+                  paymentType: txn.paymentType ? { name: txn.paymentType } : null,
+                  notes: txn.notes ?? null,
+                  status: 'A',
+                } as ExpenseItem);
+              }}
+            />
           )}
 
           {/* Activity Trail Tab Content */}
@@ -839,7 +801,9 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
             <div className="relative">
               <select
                 value={editStatus}
-                onChange={(e) => setEditStatus(e.target.value as any)}
+                onChange={(e) =>
+                  setEditStatus(e.target.value as 'ACTIVE' | 'BLOCKED' | 'PENDING')
+                }
                 className="w-full h-12 px-md bg-white border border-outline-variant rounded-lg font-body-md text-body-md focus:ring-2 focus:ring-secondary/20 focus:border-secondary outline-none transition-all appearance-none"
               >
                 <option value="ACTIVE">ACTIVE</option>
@@ -1104,6 +1068,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
                           onLoad={() => setIsPreviewLoading(false)}
                         />
                       ) : (
+                        // eslint-disable-next-line @next/next/no-img-element -- receipt preview from stored URL
                         <img 
                           src={selectedExpense.documentUrl} 
                           alt={selectedExpense.documentFileName} 

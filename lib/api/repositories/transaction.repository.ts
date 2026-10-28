@@ -11,6 +11,9 @@ export interface TransactionQueryParams {
   category?: string;
   startDate?: Date;
   endDate?: Date;
+  /** Half-open upper bound: transactionDate < endExclusive */
+  endExclusive?: Date;
+  search?: string;
   page?: number;
   pageSize?: number;
 }
@@ -28,9 +31,9 @@ export class TransactionRepository {
     });
   }
 
-  static async findAll(params: TransactionQueryParams) {
-    const { userId, groupId, type, types, categoryId, category, startDate, endDate, page = 1, pageSize = 20 } = params;
-    const skip = (page - 1) * pageSize;
+  static buildListWhere(params: TransactionQueryParams): Prisma.TransactionWhereInput {
+    const { userId, groupId, type, types, categoryId, category, startDate, endDate, endExclusive, search } =
+      params;
 
     const where: Prisma.TransactionWhereInput = {
       status: { not: 'D' },
@@ -42,19 +45,40 @@ export class TransactionRepository {
 
     if (category) {
       where.budgetDepositType = {
-        name: { equals: category, mode: 'insensitive' }
+        name: { equals: category, mode: 'insensitive' },
       };
     }
 
-    if (startDate || endDate) {
+    if (startDate || endDate || endExclusive) {
       where.transactionDate = {};
       if (startDate) {
         where.transactionDate.gte = startDate;
       }
-      if (endDate) {
+      if (endExclusive) {
+        where.transactionDate.lt = endExclusive;
+      } else if (endDate) {
         where.transactionDate.lte = endDate;
       }
     }
+
+    const q = search?.trim();
+    if (q) {
+      where.OR = [
+        { title: { contains: q, mode: 'insensitive' } },
+        { merchant: { contains: q, mode: 'insensitive' } },
+        { description: { contains: q, mode: 'insensitive' } },
+        { category: { name: { contains: q, mode: 'insensitive' } } },
+        { budgetDepositType: { name: { contains: q, mode: 'insensitive' } } },
+      ];
+    }
+
+    return where;
+  }
+
+  static async findAll(params: TransactionQueryParams) {
+    const { page = 1, pageSize = 20 } = params;
+    const skip = (page - 1) * pageSize;
+    const where = this.buildListWhere(params);
 
     const [items, total] = await Promise.all([
       prisma.transaction.findMany({
@@ -78,6 +102,59 @@ export class TransactionRepository {
     return prisma.transaction.aggregate({
       where: { status: { not: 'D' }, type, ...where },
       _sum: { amount: true },
+    });
+  }
+
+  /** Global debit rows (amount + date + user country) for admin dashboard charts. */
+  static async findGlobalDebitChartRowsSince(start: Date) {
+    return prisma.transaction.findMany({
+      where: {
+        status: { not: 'D' },
+        type: 'DEBIT',
+        transactionDate: { gte: start },
+      },
+      select: {
+        amount: true,
+        transactionDate: true,
+        user: { select: { country: { select: { name: true } } } },
+      },
+    });
+  }
+
+  /** Minimal personal rows for ledger total computation (all-time or ranged). */
+  static async findPersonalLedgerRows(
+    userId: string,
+    range?: { start?: Date; endExclusive?: Date },
+  ) {
+    const dateFilter =
+      range?.start || range?.endExclusive
+        ? {
+            ...(range.start ? { gte: range.start } : {}),
+            ...(range.endExclusive ? { lt: range.endExclusive } : {}),
+          }
+        : undefined;
+
+    return prisma.transaction.findMany({
+      where: {
+        ...this.personalWhere(userId),
+        ...(dateFilter ? { transactionDate: dateFilter } : {}),
+      },
+      select: {
+        amount: true,
+        type: true,
+        category: { select: { name: true, type: true } },
+      },
+    });
+  }
+
+  static async findLedgerRowsForWhere(where: Prisma.TransactionWhereInput) {
+    return prisma.transaction.findMany({
+      where,
+      select: {
+        amount: true,
+        type: true,
+        category: { select: { name: true, type: true } },
+      },
     });
   }
 

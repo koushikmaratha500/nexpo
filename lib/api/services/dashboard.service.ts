@@ -5,8 +5,15 @@ import {
   isLedgerExpenseTransaction,
   isLedgerIncomeTransaction,
 } from '@/lib/transactions/ledger';
+import { sumPersonalLedgerTotals } from '@/lib/transactions/ledger-totals';
 import { parseTransactionCalendarDate } from '@/lib/date';
+import { calendarDayBoundsInTz } from '../utils/app-timezone';
 import type { CustomerDashboardPayload } from '../domain/customer-dashboard';
+import {
+  getCachedUserDashboard,
+  invalidateUserDashboardCache,
+  setCachedUserDashboard,
+} from './dashboard-cache.service';
 
 const CATEGORY_COLORS: Record<string, string> = {
   FOOD: 'bg-secondary',
@@ -18,36 +25,72 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 export type { CustomerDashboardPayload } from '../domain/customer-dashboard';
+export { invalidateUserDashboardCache };
 
 export class DashboardService {
   static async getCustomerDashboard(userId: string, monthYm?: string): Promise<CustomerDashboardPayload> {
     const month = monthYm ?? currentMonthLabel();
+
+    const cached = await getCachedUserDashboard(userId);
+    if (cached && cached.month === month) {
+      return cached;
+    }
+
+    const payload = await this.computeCustomerDashboard(userId, month);
+    try {
+      await setCachedUserDashboard(userId, payload);
+    } catch (error) {
+      console.warn('[dashboard] Failed to write cache for user', userId, error);
+    }
+    return payload;
+  }
+
+  private static async computeCustomerDashboard(
+    userId: string,
+    month: string,
+  ): Promise<CustomerDashboardPayload> {
     const range = monthRangeFromYm(month);
     if (!range) {
       throw new Error('Invalid month');
     }
 
-    const rows = await TransactionRepository.findPersonalInDateRange(userId, range.start, range.end);
-    const transactions = rows.map((row) =>
+    const todayBounds = calendarDayBoundsInTz(new Date());
+
+    const [allTimeRows, todayRows, monthRows] = await Promise.all([
+      TransactionRepository.findPersonalLedgerRows(userId),
+      TransactionRepository.findPersonalLedgerRows(userId, {
+        start: todayBounds.start,
+        endExclusive: todayBounds.endExclusive,
+      }),
+      TransactionRepository.findPersonalInDateRange(userId, range.start, range.end),
+    ]);
+
+    const allTimeTotals = sumPersonalLedgerTotals(
+      allTimeRows.map((row) => ({
+        type: row.type,
+        amount: row.amount,
+        category: row.category?.name ?? null,
+        categoryType: row.category?.type ?? null,
+      })),
+    );
+
+    const todayTotals = sumPersonalLedgerTotals(
+      todayRows.map((row) => ({
+        type: row.type,
+        amount: row.amount,
+        category: row.category?.name ?? null,
+        categoryType: row.category?.type ?? null,
+      })),
+    );
+
+    const transactions = monthRows.map((row) =>
       mapDbTransactionToClient(row as unknown as Record<string, unknown>),
     );
 
     const expenses = transactions.filter((t) => isLedgerExpenseTransaction(t));
     const credits = transactions.filter((t) => isLedgerIncomeTransaction(t));
 
-    const totalSpend = expenses.reduce((sum, item) => sum + item.amount, 0);
-    const totalDeposits = credits.reduce(
-      (sum, c) => sum + (Number.isFinite(c.amount) ? c.amount : 0),
-      0,
-    );
-
-    const today = new Date().toDateString();
-    const todaySpend = expenses
-      .filter((e) => {
-        const d = parseTransactionCalendarDate(e.date);
-        return d?.toDateString() === today;
-      })
-      .reduce((sum, item) => sum + item.amount, 0);
+    const monthSpend = expenses.reduce((sum, item) => sum + item.amount, 0);
 
     const daysInMonth = new Date(range.start.getFullYear(), range.start.getMonth() + 1, 0).getDate();
     const labels: string[] = [];
@@ -74,7 +117,7 @@ export class DashboardService {
 
     const categoryBreakdown = Object.entries(categoryGroups)
       .map(([name, amount]) => {
-        const pct = totalSpend > 0 ? Math.round((amount / totalSpend) * 100) : 0;
+        const pct = monthSpend > 0 ? Math.round((amount / monthSpend) * 100) : 0;
         return {
           name,
           percentage: pct,
@@ -94,9 +137,9 @@ export class DashboardService {
 
     return {
       month,
-      totalSpend,
-      todaySpend,
-      totalDeposits,
+      totalSpend: allTimeTotals.totalExpenses,
+      todaySpend: todayTotals.totalExpenses,
+      totalDeposits: allTimeTotals.totalDeposits,
       chart: { labels, income: incomeAmounts, expenses: expenseAmounts },
       categoryBreakdown,
       recentTransactions,
