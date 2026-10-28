@@ -1,15 +1,32 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table';
 import axios from 'axios';
 
+interface AdminDashboardMetrics {
+  userCount?: number;
+  totalExpenses?: number;
+  totalBudgets?: number;
+  openTicketsCount?: number;
+  recentExpenses?: RecentLedgerItem[];
+  monthlyLedgerFlow?: { month: string; value: number }[];
+  spendDistribution?: { region: string; amount: number; percentage: number }[];
+}
+
+interface RecentLedgerItem {
+  id: string;
+  title?: string | null;
+  merchant?: string | null;
+  amount: string | number;
+  user?: { firstName?: string | null; lastName?: string | null };
+  category?: { name?: string | null };
+}
+
 export default function AdminDashboard() {
-  const [metrics, setMetrics] = useState<any>(null);
-  const [allExpenses, setAllExpenses] = useState<any[]>([]);
+  const [metrics, setMetrics] = useState<AdminDashboardMetrics | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const hasFetchedRef = useRef(false);
 
@@ -21,12 +38,8 @@ export default function AdminDashboard() {
     async function loadData() {
       setIsLoading(true);
       try {
-        const [dashboardRes, reportsRes] = await Promise.all([
-          axios.get('/api/admin/dashboard'),
-          axios.get('/api/admin/reports?pageSize=1000')
-        ]);
+        const dashboardRes = await axios.get('/api/admin/dashboard');
         setMetrics(dashboardRes.data);
-        setAllExpenses(reportsRes.data.expenses?.items || []);
       } catch (err) {
         console.error('Failed to load admin dashboard data:', err);
       } finally {
@@ -37,43 +50,9 @@ export default function AdminDashboard() {
   }, []);
 
   // Group aggregate monthly spending dynamically for last 6 months
-  const monthlyLedgerFlow = useMemo(() => {
-    const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-    const now = new Date();
-    const result: { month: string; value: number }[] = [];
-
-    // Group expenses by month for the last 6 months
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const mName = months[d.getMonth()];
-      
-      const monthlyExp = allExpenses.filter((e) => {
-        const date = new Date(e.expenseDate);
-        return date.getMonth() === d.getMonth() && date.getFullYear() === d.getFullYear();
-      });
-      const expSum = monthlyExp.reduce((sum, e) => sum + (typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount), 0);
-      result.push({ month: mName, value: expSum });
-    }
-    return result;
-  }, [allExpenses]);
-
-  // Group aggregate spending by user country dynamically
-  const spendDistribution = useMemo(() => {
-    const total = allExpenses.reduce((sum, e) => sum + (typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount), 0);
-    const groups: Record<string, number> = {};
-    allExpenses.forEach((e) => {
-      const countryName = e.user?.country?.name || 'India';
-      groups[countryName] = (groups[countryName] || 0) + (typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount);
-    });
-
-    return Object.entries(groups)
-      .map(([region, amount]) => {
-        const pct = total > 0 ? Math.round((amount / total) * 100) : 0;
-        return { region, amount, percentage: pct };
-      })
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 4);
-  }, [allExpenses]);
+  const monthlyLedgerFlow: { month: string; value: number }[] = metrics?.monthlyLedgerFlow ?? [];
+  const spendDistribution: { region: string; amount: number; percentage: number }[] =
+    metrics?.spendDistribution ?? [];
 
   const totalUsersCount = metrics?.userCount || 0;
   const globalExpensesVolume = metrics?.totalExpenses || 0;
@@ -239,7 +218,7 @@ export default function AdminDashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {recentLedgerItems.map((item: any) => {
+                  {recentLedgerItems.map((item: RecentLedgerItem) => {
                     const fullName = [item.user?.firstName, item.user?.lastName].filter(Boolean).join(' ') || 'User';
                     return (
                       <TableRow key={item.id}>

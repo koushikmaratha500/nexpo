@@ -8,6 +8,13 @@ import { hashPassword } from './auth.service';
 import { AuditAction, AuthProvider, BillingInterval, BillingPlan } from '@prisma/client';
 import { CreateUserDto, UpdateUserDto, CreateAdminDto, UpdateAdminDto, ResetUserPasswordDto, GrantUserPlanDto } from '../dtos/admin.dto';
 import { PlanService } from './plan.service';
+import {
+  getCachedAdminDashboardCharts,
+  invalidateAdminDashboardCache,
+  setCachedAdminDashboardCharts,
+  type AdminDashboardChartPayload,
+} from './admin-dashboard-cache.service';
+import { parseTransactionAmount } from '@/lib/transactions/ledger';
 
 export interface RequestMeta {
   ip?: string | null;
@@ -21,7 +28,11 @@ export interface DashboardMetrics {
   openTicketsCount: number;
   recentExpenses: unknown[];
   recentBudgets: unknown[];
+  monthlyLedgerFlow: AdminDashboardChartPayload['monthlyLedgerFlow'];
+  spendDistribution: AdminDashboardChartPayload['spendDistribution'];
 }
+
+export { invalidateAdminDashboardCache };
 
 export interface UserOverview {
   totalExpenses: number;
@@ -52,6 +63,7 @@ export class AdminService {
       ticketCount,
       recentExpenses,
       recentBudgets,
+      charts,
     ] = await Promise.all([
       UserRepository.countActive(),
       TransactionRepository.aggregateByType('DEBIT'),
@@ -59,6 +71,7 @@ export class AdminService {
       SupportRepository.countActive(),
       TransactionRepository.findRecentByType('DEBIT', 5),
       TransactionRepository.findRecentByType('CREDIT', 5),
+      AdminService.resolveDashboardCharts(),
     ]);
 
     return {
@@ -68,7 +81,61 @@ export class AdminService {
       openTicketsCount: ticketCount,
       recentExpenses,
       recentBudgets,
+      monthlyLedgerFlow: charts.monthlyLedgerFlow,
+      spendDistribution: charts.spendDistribution,
     };
+  }
+
+  private static async resolveDashboardCharts(): Promise<AdminDashboardChartPayload> {
+    const cached = await getCachedAdminDashboardCharts();
+    if (cached) return cached;
+
+    const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    const now = new Date();
+    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+
+    const rows = await TransactionRepository.findGlobalDebitChartRowsSince(sixMonthsAgo);
+
+    const monthlyTotals = new Map<string, number>();
+    const countryTotals = new Map<string, number>();
+    let globalTotal = 0;
+
+    for (const row of rows) {
+      const amount = parseTransactionAmount(row.amount);
+      globalTotal += amount;
+      const d = row.transactionDate;
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      monthlyTotals.set(key, (monthlyTotals.get(key) || 0) + amount);
+      const country = row.user?.country?.name || 'India';
+      countryTotals.set(country, (countryTotals.get(country) || 0) + amount);
+    }
+
+    const monthlyLedgerFlow: AdminDashboardChartPayload['monthlyLedgerFlow'] = [];
+    for (let i = 5; i >= 0; i -= 1) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      monthlyLedgerFlow.push({
+        month: months[d.getMonth()],
+        value: monthlyTotals.get(key) || 0,
+      });
+    }
+
+    const spendDistribution = [...countryTotals.entries()]
+      .map(([region, amount]) => ({
+        region,
+        amount,
+        percentage: globalTotal > 0 ? Math.round((amount / globalTotal) * 100) : 0,
+      }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 4);
+
+    const payload = { monthlyLedgerFlow, spendDistribution };
+    try {
+      await setCachedAdminDashboardCharts(payload);
+    } catch (error) {
+      console.warn('[admin-dashboard] Failed to write chart cache', error);
+    }
+    return payload;
   }
 
   static async getReports(params: {
