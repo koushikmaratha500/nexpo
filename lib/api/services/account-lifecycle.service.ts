@@ -6,6 +6,8 @@ import { AccountLifecycleRepository } from '../repositories/account-lifecycle.re
 import { SessionRepository } from '../repositories/session.repository';
 import { UserRepository } from '../repositories/user.repository';
 import { AccountLifecycleOtpService } from './account-lifecycle-otp.service';
+import { invalidateUserDashboardCache } from './dashboard-cache.service';
+import { invalidateAdminDashboardCache } from './admin-dashboard-cache.service';
 
 export class AccountLifecycleService {
   static async getStatus(userId: string) {
@@ -88,6 +90,68 @@ export class AccountLifecycleService {
     };
   }
 
+  /**
+   * Admin-initiated immediate reset: hard-delete personal ledger data and import artifacts.
+   * The user account remains active; group transactions are not removed.
+   */
+  static async adminImmediateReset(
+    userId: string,
+    input: { confirmation: 'RESET' },
+    meta: { ip?: string; ua?: string; adminId?: string } = {},
+  ) {
+    if (input.confirmation !== 'RESET') {
+      throw new Error('Confirmation must be RESET');
+    }
+
+    const user = await AccountLifecycleRepository.findUserById(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    if (user.accountLifecycleMode === 'DELETE_PENDING') {
+      throw new Error(
+        'Account is scheduled for deletion. Restore or complete deletion before resetting.',
+      );
+    }
+
+    if (user.accountLifecycleMode === 'RESET_PENDING' && user.accountLifecycleBatchId) {
+      await AccountLifecycleRepository.hardDeleteResetBatch(userId, user.accountLifecycleBatchId);
+    }
+
+    const transactionsDeleted =
+      await AccountLifecycleRepository.hardDeleteAllPersonalTransactions(userId);
+    await AccountLifecycleRepository.clearPersonalImportArtifacts(userId);
+    const updated = await AccountLifecycleRepository.clearLifecycleFields(userId);
+
+    await SessionRepository.invalidateAllForUser(userId);
+
+    try {
+      await invalidateUserDashboardCache(userId);
+      await invalidateAdminDashboardCache();
+    } catch (error) {
+      console.warn('[account-lifecycle] Cache invalidation after admin reset failed', error);
+    }
+
+    await UserRepository.createAudit({
+      userId,
+      action: AuditAction.UPDATE,
+      newValue: {
+        action: 'admin_account_reset',
+        transactions_deleted: transactionsDeleted,
+        admin_id: meta.adminId ?? null,
+      },
+      ipAddress: meta.ip || null,
+      userAgent: meta.ua || null,
+      status: 'A',
+    });
+
+    return {
+      transactions_deleted: transactionsDeleted,
+      lifecycle: AccountLifecycleRepository.serializeLifecycle(updated),
+      sessions_invalidated: true,
+    };
+  }
+
   static async requestDelete(
     userId: string,
     input: AccountLifecycleActionDto,
@@ -97,7 +161,7 @@ export class AccountLifecycleService {
       throw new Error('Confirmation must be DELETE');
     }
 
-    const user = await this.assertActionAuthorized(userId, input);
+    await this.assertActionAuthorized(userId, input);
     const now = new Date();
 
     const updated = await AccountLifecycleRepository.updateUserLifecycle(userId, {

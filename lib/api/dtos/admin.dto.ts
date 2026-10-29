@@ -41,6 +41,12 @@ export const resetUserPasswordSchema = z.object({
 
 export type ResetUserPasswordDto = z.infer<typeof resetUserPasswordSchema>;
 
+export const adminResetUserAccountSchema = z.object({
+  confirmation: z.literal('RESET'),
+});
+
+export type AdminResetUserAccountDto = z.infer<typeof adminResetUserAccountSchema>;
+
 export const grantUserPlanSchema = z.object({
   plan: z.enum(['FREEMIUM', 'STARTER', 'PRO']),
   billingInterval: z.enum(['MONTH', 'YEAR']).optional(),

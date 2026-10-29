@@ -12,6 +12,7 @@ import {
   createAdminSchema,
   updateAdminSchema,
   resetUserPasswordSchema,
+  adminResetUserAccountSchema,
   grantUserPlanSchema,
 } from '../dtos/admin.dto';
 
@@ -107,6 +108,18 @@ export class AdminController extends BaseController {
         }),
       { fallbackMessage: 'Failed to activate user' },
     );
+  }
+
+  static async resetUserAccount(req: NextRequest, id: string, adminId: string) {
+    return this.safeExecuteJson(async () => {
+      const body = await req.json();
+      const validated = adminResetUserAccountSchema.parse(body);
+      return AdminService.resetUserAccount(id, validated, {
+        ip: req.headers.get('x-forwarded-for') || null,
+        ua: req.headers.get('user-agent') || null,
+        adminId,
+      });
+    }, { fallbackMessage: 'Failed to reset customer account' });
   }
 
   static async resetUserPassword(req: NextRequest, id: string) {
