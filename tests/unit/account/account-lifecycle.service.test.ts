@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AccountLifecycleService } from '@/lib/api/services/account-lifecycle.service';
 import { AccountLifecycleRepository } from '@/lib/api/repositories/account-lifecycle.repository';
 import { SessionRepository } from '@/lib/api/repositories/session.repository';
-import { UserRepository } from '@/lib/api/repositories/user.repository';
 import { AccountLifecycleOtpService } from '@/lib/api/services/account-lifecycle-otp.service';
 
 vi.mock('@/lib/api/repositories/account-lifecycle.repository', () => ({
@@ -12,12 +11,21 @@ vi.mock('@/lib/api/repositories/account-lifecycle.repository', () => ({
     markPersonalTransactionsForReset: vi.fn(),
     clearPersonalImportArtifacts: vi.fn(),
     hardDeleteResetBatch: vi.fn(),
+    hardDeleteAllPersonalTransactions: vi.fn(),
     restoreResetBatch: vi.fn(),
     clearLifecycleFields: vi.fn(),
     serializeLifecycle: vi.fn(),
     listDueForPurge: vi.fn(),
     hardDeleteUser: vi.fn(),
   },
+}));
+
+vi.mock('@/lib/api/services/dashboard-cache.service', () => ({
+  invalidateUserDashboardCache: vi.fn(),
+}));
+
+vi.mock('@/lib/api/services/admin-dashboard-cache.service', () => ({
+  invalidateAdminDashboardCache: vi.fn(),
 }));
 
 vi.mock('@/lib/api/repositories/session.repository', () => ({
@@ -51,6 +59,11 @@ const mockedUpdateLifecycle = vi.mocked(AccountLifecycleRepository.updateUserLif
 const mockedSerialize = vi.mocked(AccountLifecycleRepository.serializeLifecycle);
 const mockedVerifyOtp = vi.mocked(AccountLifecycleOtpService.verifyOtp);
 const mockedInvalidateSessions = vi.mocked(SessionRepository.invalidateAllForUser);
+const mockedHardDeleteAllPersonal = vi.mocked(
+  AccountLifecycleRepository.hardDeleteAllPersonalTransactions,
+);
+const mockedClearLifecycle = vi.mocked(AccountLifecycleRepository.clearLifecycleFields);
+const mockedClearArtifacts = vi.mocked(AccountLifecycleRepository.clearPersonalImportArtifacts);
 
 describe('AccountLifecycleService', () => {
   beforeEach(() => {
@@ -84,6 +97,30 @@ describe('AccountLifecycleService', () => {
       'user-1',
       expect.objectContaining({ accountLifecycleMode: 'RESET_PENDING' }),
     );
+  });
+
+  it('admin immediate reset hard-deletes personal ledger and signs user out', async () => {
+    mockedHardDeleteAllPersonal.mockResolvedValue(12);
+    mockedClearLifecycle.mockResolvedValue({ ...baseUser, accountLifecycleMode: 'ACTIVE' } as never);
+    mockedSerialize.mockReturnValue({
+      mode: 'ACTIVE',
+      requested_at: null,
+      purge_at: null,
+      days_remaining: null,
+      can_restore: false,
+    });
+
+    const result = await AccountLifecycleService.adminImmediateReset(
+      'user-1',
+      { confirmation: 'RESET' },
+      { adminId: 'admin-1' },
+    );
+
+    expect(mockedHardDeleteAllPersonal).toHaveBeenCalledWith('user-1');
+    expect(mockedClearArtifacts).toHaveBeenCalledWith('user-1');
+    expect(mockedClearLifecycle).toHaveBeenCalledWith('user-1');
+    expect(mockedInvalidateSessions).toHaveBeenCalledWith('user-1');
+    expect(result.transactions_deleted).toBe(12);
   });
 
   it('schedules delete and invalidates sessions', async () => {
