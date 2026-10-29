@@ -8,6 +8,8 @@ import { hashPassword } from './auth.service';
 import { AuditAction, AuthProvider, BillingInterval, BillingPlan } from '@prisma/client';
 import { CreateUserDto, UpdateUserDto, CreateAdminDto, UpdateAdminDto, ResetUserPasswordDto, GrantUserPlanDto } from '../dtos/admin.dto';
 import { PlanService } from './plan.service';
+import { AccountLifecycleService } from './account-lifecycle.service';
+import type { AdminResetUserAccountDto } from '../dtos/admin.dto';
 import {
   getCachedAdminDashboardCharts,
   invalidateAdminDashboardCache,
@@ -428,6 +430,29 @@ export class AdminService {
     });
 
     return { success: true, message: 'User soft-deleted successfully' };
+  }
+
+  static async resetUserAccount(
+    id: string,
+    dto: AdminResetUserAccountDto,
+    meta: RequestMeta & { adminId?: string } = {},
+  ) {
+    const original = await UserRepository.findById(id);
+    if (!original) {
+      throw new Error('User not found');
+    }
+
+    const result = await AccountLifecycleService.adminImmediateReset(
+      id,
+      { confirmation: dto.confirmation },
+      { ip: meta.ip ?? undefined, ua: meta.ua ?? undefined, adminId: meta.adminId },
+    );
+
+    return {
+      success: true,
+      message: 'Account reset complete. Personal transactions were permanently removed.',
+      ...result,
+    };
   }
 
   static async resetUserPassword(id: string, dto: ResetUserPasswordDto, meta: RequestMeta = {}) {

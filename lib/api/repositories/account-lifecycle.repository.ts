@@ -45,6 +45,28 @@ export class AccountLifecycleRepository {
     return result.count;
   }
 
+  /** Permanently removes every personal-ledger transaction for the user (all statuses). */
+  static async hardDeleteAllPersonalTransactions(userId: string): Promise<number> {
+    const transactions = await prisma.transaction.findMany({
+      where: { userId, groupId: null },
+      select: { id: true },
+    });
+    const ids = transactions.map((row) => row.id);
+    if (ids.length === 0) {
+      return 0;
+    }
+
+    await prisma.$transaction([
+      prisma.transactionShare.deleteMany({ where: { transactionId: { in: ids } } }),
+      prisma.groupExpenseSplit.deleteMany({ where: { transactionId: { in: ids } } }),
+      prisma.recurringTransactionAction.deleteMany({ where: { transactionId: { in: ids } } }),
+      prisma.transactionAudit.deleteMany({ where: { transactionId: { in: ids } } }),
+      prisma.transaction.deleteMany({ where: { id: { in: ids } } }),
+    ]);
+
+    return ids.length;
+  }
+
   static async hardDeleteResetBatch(userId: string, batchId: string): Promise<number> {
     const transactions = await prisma.transaction.findMany({
       where: { userId, lifecycleBatchId: batchId },

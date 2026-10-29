@@ -132,6 +132,8 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isResetOpen, setIsResetOpen] = useState(false);
+  const [isAccountResetOpen, setIsAccountResetOpen] = useState(false);
+  const [accountResetConfirm, setAccountResetConfirm] = useState('');
   const [isStatusConfirmOpen, setIsStatusConfirmOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<ExpenseItem | null>(null);
@@ -257,6 +259,37 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
     } catch (err: unknown) {
       const errMsg = apiErrorMessage(err, 'Failed to block customer');
       addToast(errMsg, 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleConfirmAccountReset = async () => {
+    if (!user) return;
+    if (accountResetConfirm.trim().toUpperCase() !== 'RESET') {
+      addToast('Type RESET to confirm account reset.', 'warning');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const response = await axios.post(`/api/admin/user/${user.id}/reset-account`, {
+        confirmation: 'RESET',
+      });
+      const deleted = response.data?.transactions_deleted ?? 0;
+      addToast(
+        `Account reset complete. ${deleted} personal transaction(s) permanently removed.`,
+        'success',
+      );
+      setIsAccountResetOpen(false);
+      setAccountResetConfirm('');
+      setExpenses([]);
+      setStats((prev) =>
+        prev
+          ? { ...prev, expenseCount: 0, totalExpenses: 0, totalBudgets: 0, budgetCount: 0 }
+          : prev,
+      );
+    } catch (err: unknown) {
+      addToast(apiErrorMessage(err, 'Failed to reset customer account'), 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -486,6 +519,17 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
                 {user.status === 'B' ? 'lock_open' : user.status === 'P' ? 'how_to_reg' : 'lock'}
               </span>
               <span>{user.status === 'P' ? 'Force Activate' : user.status === 'B' ? 'Activate Account' : 'Block Account'}</span>
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setAccountResetConfirm('');
+                setIsAccountResetOpen(true);
+              }}
+              className="px-3 py-2 hover:bg-warning-container/20 hover:text-on-warning-container"
+            >
+              <span className="material-symbols-outlined text-sm">restart_alt</span>
+              <span>Reset Account</span>
             </Button>
             <Button variant="ghost" onClick={() => setIsDeleteOpen(true)} className="px-3 py-2 text-error hover:bg-error-container/10">
               <span className="material-symbols-outlined text-sm">delete</span>
@@ -876,6 +920,60 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
               </svg>
             )}
             {isSubmitting ? 'Removing...' : 'Remove Account'}
+          </button>
+        </div>
+      </Modal>
+
+      {/* Reset Account (ledger wipe) Modal */}
+      <Modal
+        isOpen={isAccountResetOpen}
+        onClose={() => setIsAccountResetOpen(false)}
+        title="Reset Customer Account"
+        customHeader={true}
+        cardPadding="p-0"
+        maxWidth="max-w-md"
+      >
+        <div className="pt-xl px-xl flex flex-col items-center text-center">
+          <div className="w-16 h-16 rounded-full bg-warning-container flex items-center justify-center mb-md">
+            <span className="material-symbols-outlined text-on-warning-container text-[32px]">restart_alt</span>
+          </div>
+          <h2 className="font-headline-md text-headline-md text-on-surface mb-sm font-black">Reset this account?</h2>
+          <p className="font-body-md text-body-md text-on-surface-variant max-w-sm leading-relaxed text-left">
+            This permanently deletes the customer&apos;s personal transactions, import fingerprints, and SMS
+            import history. The login account stays active; group expenses are not removed. Active sessions
+            are signed out immediately. This cannot be undone.
+          </p>
+        </div>
+
+        <div className="mx-xl my-lg p-md bg-surface-container rounded-lg border border-outline-variant">
+          <p className="font-label-md text-label-md text-on-surface-variant uppercase font-bold text-left mb-2">
+            Type RESET to confirm
+          </p>
+          <input
+            type="text"
+            value={accountResetConfirm}
+            onChange={(e) => setAccountResetConfirm(e.target.value)}
+            placeholder="RESET"
+            className="w-full h-11 px-md bg-white border border-outline-variant rounded-lg font-mono-data text-body-md focus:ring-2 focus:ring-warning/20 focus:border-warning outline-none"
+            autoComplete="off"
+          />
+        </div>
+
+        <div className="p-lg bg-surface-container-low flex flex-col-reverse sm:flex-row gap-md sm:justify-end border-t border-outline-variant">
+          <button
+            type="button"
+            className="px-xl h-11 flex items-center justify-center rounded-lg border border-outline text-on-surface font-title-md hover:bg-surface-container-high transition-colors font-semibold"
+            onClick={() => setIsAccountResetOpen(false)}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={isSubmitting || accountResetConfirm.trim().toUpperCase() !== 'RESET'}
+            className="px-xl h-11 flex items-center justify-center rounded-lg bg-warning text-on-warning font-title-md shadow-md hover:opacity-90 transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={handleConfirmAccountReset}
+          >
+            {isSubmitting ? 'Resetting…' : 'Reset account data'}
           </button>
         </div>
       </Modal>
