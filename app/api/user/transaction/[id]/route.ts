@@ -24,20 +24,27 @@ export async function PATCH(req: NextRequest, segmentData: { params: Promise<{ i
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
 
-    const body: Record<string, any> = {};
+    const body: Record<string, unknown> = {};
     for (const [key, value] of formData.entries()) {
-      if (key !== 'file') {
-        body[key] = value;
-      }
+      if (key === 'file') continue;
+      if (typeof value === 'string' && value.trim() === '') continue;
+      body[key] = value;
     }
 
-    if (body.amount) body.amount = parseFloat(body.amount);
-    if (body.documentSize) body.documentSize = parseInt(body.documentSize);
+    if (body.amount != null && body.amount !== '') {
+      body.amount = parseFloat(String(body.amount));
+    }
+    if (body.documentSize != null && body.documentSize !== '') {
+      body.documentSize = parseInt(String(body.documentSize), 10);
+    }
     if (body.isRecurring !== undefined) {
       body.isRecurring = ['true', '1', 'yes'].includes(String(body.isRecurring).toLowerCase());
     }
     if (body.recurringDay !== undefined) {
-      body.recurringDay = body.recurringDay === '' ? null : parseInt(body.recurringDay, 10);
+      body.recurringDay =
+        body.recurringDay === '' || body.recurringDay == null
+          ? null
+          : parseInt(String(body.recurringDay), 10);
     }
 
     if (file) {

@@ -107,6 +107,24 @@ describe('Transaction list totals (integration)', () => {
     expect(mockedFindLedgerRows).toHaveBeenCalledWith({ userId: 'user-1', groupId: null });
   });
 
+  it('TransactionController.getAll uses admin ledger scope for user dossier', async () => {
+    mockedFindAll.mockResolvedValue({ items: [], total: 0 } as never);
+    mockedFindLedgerRows.mockResolvedValue([] as never);
+
+    const url =
+      'http://localhost/api/admin/user/u1/transactions?includeTotals=true&page=1&pageSize=10';
+    const req = new NextRequest(url);
+    await TransactionController.getAll(req, 'u1', {
+      personalOnly: false,
+      adminUserId: 'u1',
+    });
+
+    const listParams = mockedFindAll.mock.calls[0][0];
+    expect(listParams.adminUserId).toBe('u1');
+    expect(listParams.userId).toBeUndefined();
+    expect(listParams).not.toHaveProperty('groupId');
+  });
+
   it('TransactionController.getAll returns totalDebit and totalCredit when requested', async () => {
     mockedFindAll.mockResolvedValue({
       items: [{ id: 'a', amount: 10, type: 'DEBIT' }],
@@ -119,7 +137,7 @@ describe('Transaction list totals (integration)', () => {
     ] as never);
 
     const url =
-      'http://localhost/api/user/transactions?includeTotals=true&page=1&pageSize=1&startDate=2026-10-01T00:00:00.000Z&endExclusive=2026-11-01T00:00:00.000Z';
+      'http://localhost/api/user/transactions?includeTotals=true&page=1&pageSize=1&startDay=2026-10-01&endDay=2026-10-31';
     const req = new NextRequest(url);
     const res = await TransactionController.getAll(req, 'user-1');
     expect(res.status).toBe(200);

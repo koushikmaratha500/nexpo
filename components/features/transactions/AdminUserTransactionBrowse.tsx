@@ -18,33 +18,30 @@ export interface AdminUserTransactionBrowseProps {
 export function AdminUserTransactionBrowse({ userId, onViewTransaction }: AdminUserTransactionBrowseProps) {
   const browse = useTransactionBrowse({
     apiBasePath: `/api/admin/user/${userId}/transactions`,
+    initialPeriod: 'month',
   });
   const [activeFilter, setActiveFilter] = useState<'ALL' | TransactionType>('ALL');
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    browse.setFilters({
-      type: activeFilter === 'ALL' ? undefined : activeFilter,
-      search,
-    });
-    browse.setPage(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeFilter]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
+    const timer = window.setTimeout(() => {
       browse.setFilters({
         type: activeFilter === 'ALL' ? undefined : activeFilter,
-        search,
+        search: search.trim() || undefined,
       });
       browse.setPage(1);
-    }, 300);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+    }, search ? 300 : 0);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- browse setters are stable; userId scopes admin API path
+  }, [activeFilter, search, userId]);
 
   return (
     <div className="flex flex-col gap-4">
+      {browse.error && (
+        <p className="text-sm text-error font-medium px-1" role="alert">
+          {browse.error}
+        </p>
+      )}
       <TransactionBrowseToolbar
         periodMode={browse.periodMode}
         onPeriodChange={browse.setPeriodMode}

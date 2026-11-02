@@ -166,7 +166,10 @@ export class AdminController extends BaseController {
   }
 
   static async getUserTransactions(req: NextRequest, userId: string) {
-    return TransactionController.getAll(req, userId);
+    return TransactionController.getAll(req, userId, {
+      personalOnly: false,
+      adminUserId: userId,
+    });
   }
 
   static async getUserExpenses(req: NextRequest, userId: string) {

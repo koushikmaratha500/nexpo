@@ -6,6 +6,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/components/auth/AuthContext';
 import { OneSignalProvider } from '@/components/features/notifications';
 import { PlanBanner, PlanProvider, UpgradeWall, usePlan } from '@/components/features/billing';
+import { CustomerPresenceHeartbeat } from '@/components/features/presence';
 
 const CUSTOMER_NAV_LINKS = [
   { name: 'Dashboard', path: '/customer', icon: 'dashboard' },
@@ -52,6 +53,7 @@ function CustomerShell({ children }: { children: React.ReactNode }) {
         onFabClick={handleFabClick}
         onLogout={logout}
       >
+        <CustomerPresenceHeartbeat />
         <PlanBanner />
         {children}
         <UpgradeWall />

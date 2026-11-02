@@ -2,11 +2,13 @@ import { View } from 'react-native';
 import { Stack } from 'expo-router';
 import { PlanProvider } from '../../src/context/PlanContext';
 import { MobileUpgradeSheet } from '../../src/components/billing/MobileUpgradeSheet';
+import { MobilePresenceHeartbeat } from '../../src/components/presence/MobilePresenceHeartbeat';
 
 export default function AppLayout() {
   return (
     <PlanProvider>
     <View className="flex-1 bg-background">
+      <MobilePresenceHeartbeat />
       <MobileUpgradeSheet />
       <Stack
         screenOptions={{
