@@ -36,21 +36,30 @@ export class TransactionController extends BaseController {
     );
   }
 
-  static async getAll(req: NextRequest, userId?: string) {
+  static async getAll(
+    req: NextRequest,
+    userId?: string,
+    options?: { personalOnly?: boolean; adminUserId?: string },
+  ) {
     return this.safeExecuteJson(async () => {
       const { searchParams } = new URL(req.url);
       const query = parseTransactionListQuery(searchParams);
       const includeTotals = searchParams.get('includeTotals') === 'true';
+      const personalOnly = options?.personalOnly !== false;
+      const adminUserId = options?.adminUserId;
 
       const result = await TransactionService.getTransactions({
-        userId,
-        groupId: null,
+        ...(adminUserId ? { adminUserId } : { userId }),
+        ...(!adminUserId && personalOnly ? { groupId: null as null } : {}),
         type: query.type,
         categoryId: query.categoryId,
         category: query.category,
         startDate: query.startDate,
         endDate: query.endDate,
         endExclusive: query.endExclusive,
+        startDay: query.startDay,
+        endDay: query.endDay,
+        endDayExclusive: query.endDayExclusive,
         search: query.search,
         page: query.page,
         pageSize: query.pageSize,

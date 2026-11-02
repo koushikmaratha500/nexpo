@@ -61,14 +61,20 @@ export function useTransactionBrowse(options: UseTransactionBrowseOptions = {}) 
       params.set('includeTotals', 'true');
       params.set('page', String(pageNum));
       params.set('pageSize', String(pageSize));
-      params.set('startDate', queryRange.startDate);
-      params.set('endExclusive', queryRange.endExclusive);
+      params.set('startDay', queryRange.startDay);
+      params.set('endDay', queryRange.endDay);
       if (filters.type) params.set('type', filters.type);
       if (filters.category) params.set('category', filters.category);
       if (filters.search?.trim()) params.set('search', filters.search.trim());
       return params;
     },
-    [filters.category, filters.search, filters.type, queryRange.endExclusive, queryRange.startDate],
+    [
+      filters.category,
+      filters.search,
+      filters.type,
+      queryRange.endDay,
+      queryRange.startDay,
+    ],
   );
 
   const loadTablePage = useCallback(async () => {
@@ -89,8 +95,8 @@ export function useTransactionBrowse(options: UseTransactionBrowseOptions = {}) 
       );
       setItems(mapped);
       setTotal(res.data.total ?? mapped.length);
-      setTotalDebit(res.data.totalDebit ?? 0);
-      setTotalCredit(res.data.totalCredit ?? 0);
+      setTotalDebit(Number(res.data.totalDebit ?? 0) || 0);
+      setTotalCredit(Number(res.data.totalCredit ?? 0) || 0);
     } catch (err: unknown) {
       if (reqId !== listRequestRef.current) return;
       const message =
@@ -139,8 +145,8 @@ export function useTransactionBrowse(options: UseTransactionBrowseOptions = {}) 
         mapped = all;
       }
       setCalendarItems(mapped);
-      setTotalDebit(res.data.totalDebit ?? 0);
-      setTotalCredit(res.data.totalCredit ?? 0);
+      setTotalDebit(Number(res.data.totalDebit ?? 0) || 0);
+      setTotalCredit(Number(res.data.totalCredit ?? 0) || 0);
       setTotal(reportedTotal);
     } catch (err: unknown) {
       if (reqId !== calendarRequestRef.current) return;
@@ -163,9 +169,9 @@ export function useTransactionBrowse(options: UseTransactionBrowseOptions = {}) 
       } else {
         void loadCalendarRange();
       }
-    }, 0);
+    }, 50);
     return () => window.clearTimeout(timer);
-  }, [displayMode, loadCalendarRange, loadTablePage]);
+  }, [displayMode, loadCalendarRange, loadTablePage, apiBasePath]);
 
   const setPeriodModeAndReset = useCallback((mode: TransactionPeriodMode) => {
     setPeriodMode(mode);

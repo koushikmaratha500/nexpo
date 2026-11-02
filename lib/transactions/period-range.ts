@@ -95,13 +95,18 @@ export function shiftPeriodAnchor(
   return anchor;
 }
 
-/** ISO strings for API query params (start inclusive, endExclusive). */
+/**
+ * Calendar query params for list APIs on `transactionDate`:
+ * inclusive [startDay, endDay] in {@link APP_TIMEZONE}.
+ */
 export function periodRangeToQueryParams(range: ResolvedPeriodRange): {
-  startDate: string;
-  endExclusive: string;
+  startDay: string;
+  endDay: string;
 } {
-  return {
-    startDate: range.start.toISOString(),
-    endExclusive: range.endExclusive.toISOString(),
-  };
+  const startDay = dayjs(range.start).tz(APP_TIMEZONE).format('YYYY-MM-DD');
+  const endDay = dayjs(range.endExclusive)
+    .tz(APP_TIMEZONE)
+    .subtract(1, 'millisecond')
+    .format('YYYY-MM-DD');
+  return { startDay, endDay };
 }

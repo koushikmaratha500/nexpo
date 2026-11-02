@@ -1,10 +1,37 @@
 import { z } from 'zod';
-import { parseLocalDateInput } from '@/lib/date';
+import { normalizeTransactionDateForStorage } from '@/lib/transactions/transaction-date';
+
+/** FormData and JSON often send ""; treat as omitted for optional text fields. */
+function emptyToUndefined(val: unknown): unknown {
+  if (val === '' || val === null) return undefined;
+  if (typeof val === 'string' && val.trim() === '') return undefined;
+  return val;
+}
+
+const optionalTitleField = z.preprocess(
+  emptyToUndefined,
+  z
+    .string()
+    .min(1, 'Title is required')
+    .max(100, 'Title must be at most 100 characters')
+    .optional()
+    .nullable(),
+);
+
+const optionalMerchantField = z.preprocess(
+  emptyToUndefined,
+  z
+    .string()
+    .min(1, 'Merchant must not be empty when provided')
+    .max(100, 'Merchant must be at most 100 characters')
+    .optional()
+    .nullable(),
+);
 
 const transactionBaseObject = z.object({
   type: z.enum(['DEBIT', 'CREDIT']),
-  title: z.string().min(1, 'Title is required').max(100, 'Title must be at most 100 characters').optional().nullable(),
-  merchant: z.string().min(1, 'Merchant is required').max(100, 'Merchant must be at most 100 characters').optional().nullable(),
+  title: optionalTitleField,
+  merchant: optionalMerchantField,
   description: z.string().optional().nullable(),
   categoryId: z.string().optional().nullable(),
   category: z.string().optional().nullable(),
@@ -19,7 +46,7 @@ const transactionBaseObject = z.object({
   amount: z.number().positive('Amount must be a positive number'),
   transactionDate: z
     .union([z.string(), z.date()])
-    .transform((val) => (typeof val === 'string' ? parseLocalDateInput(val) : val)),
+    .transform((val) => normalizeTransactionDateForStorage(val)),
   notes: z.string().max(1000, 'Notes must be at most 1000 characters').optional().nullable(),
   documentUrl: z.string().optional().nullable(),
   documentFileName: z.string().optional().nullable(),
@@ -37,13 +64,27 @@ export const createTransactionSchema = transactionBaseObject.refine((data) => da
   path: ['recurringDay'],
 });
 
-export const updateTransactionSchema = transactionBaseObject.partial().refine(
-  (data) => !data.isRecurring || (data.isRecurring && data.recurringDay != null) || Object.keys(data).length === 0,
-  {
-    message: 'Recurring day of the month (1-31) is required when Recurring is enabled',
-    path: ['recurringDay'],
-  }
-);
+export const updateTransactionSchema = transactionBaseObject
+  .partial()
+  .refine(
+    (data) => {
+      const hasTitle = data.title != null && String(data.title).trim().length > 0;
+      const hasMerchant = data.merchant != null && String(data.merchant).trim().length > 0;
+      if (data.title === undefined && data.merchant === undefined) return true;
+      return hasTitle || hasMerchant;
+    },
+    {
+      message: 'Either title or merchant is required',
+      path: ['title'],
+    },
+  )
+  .refine(
+    (data) => !data.isRecurring || (data.isRecurring && data.recurringDay != null),
+    {
+      message: 'Recurring day of the month (1-31) is required when Recurring is enabled',
+      path: ['recurringDay'],
+    },
+  );
 
 export const approveRecurringSchema = z.object({
   items: z

@@ -417,6 +417,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
   const displayStatus = mapStatus(user.status);
   const totalSpent = Number(stats?.totalExpenses || 0);
   const expenseCount = stats?.expenseCount || 0;
+  const ledgerCount = expenseCount + (stats?.budgetCount || 0);
   const pendingCount = expenses.filter(e => e.status === 'P').length;
   const countryName = user.country?.name || 'N/A';
   const currencySymbol = user.currency?.symbol || '₹';
@@ -607,7 +608,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
                 : 'text-on-surface-variant hover:text-primary'
             }`}
           >
-            Expenses Log ({expenseCount})
+            Transactions ({ledgerCount})
           </button>
           <button
             onClick={() => setActiveTab('logs')}
@@ -743,6 +744,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
           {/* Expenses Log Tab Content */}
           {activeTab === 'expenses' && (
             <AdminUserTransactionBrowse
+              key={id}
               userId={id}
               onViewTransaction={(txn: Transaction) => {
                 handleViewExpense({

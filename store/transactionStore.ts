@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import axios from 'axios';
+import { getClientApiErrorMessage } from '@/lib/api/utils/clientApiError';
 import { mapDbTransactionToClient } from '@/lib/transactions/map-client-transaction';
 import type { PaginatedResponse } from '@/types/api';
 
@@ -93,8 +94,12 @@ const getLocalStorageTransactions = (): Transaction[] => {
 
 function appendTransactionFormFields(formData: FormData, txnData: Partial<Transaction> & { type: TransactionType }) {
   formData.append('type', txnData.type);
-  if (txnData.title !== undefined) formData.append('title', txnData.title);
-  if (txnData.merchant !== undefined) formData.append('merchant', txnData.merchant);
+  if (txnData.title !== undefined && txnData.title.trim() !== '') {
+    formData.append('title', txnData.title.trim());
+  }
+  if (txnData.merchant !== undefined && txnData.merchant.trim() !== '') {
+    formData.append('merchant', txnData.merchant.trim());
+  }
   if (txnData.category) formData.append('category', txnData.category);
   if (txnData.amount !== undefined) formData.append('amount', String(txnData.amount));
   if (txnData.date) formData.append('transactionDate', txnData.date);
@@ -184,9 +189,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       await get().fetchTransactions();
       await get().fetchRecurring();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to add transaction';
+      const message = getClientApiErrorMessage(err, 'Failed to add transaction');
       set({ isLoading: false, error: message });
-      throw err;
+      throw new Error(message);
     }
   },
 
@@ -213,9 +218,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       await get().fetchTransactions();
       await get().fetchRecurring();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to update transaction';
+      const message = getClientApiErrorMessage(err, 'Failed to update transaction');
       set({ isLoading: false, error: message });
-      throw err;
+      throw new Error(message);
     }
   },
 

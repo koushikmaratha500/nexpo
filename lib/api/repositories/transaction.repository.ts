@@ -1,9 +1,15 @@
 import { prisma } from '@/lib/prisma';
 import { Transaction, Prisma } from '@prisma/client';
 import { AuditAction } from '@prisma/client';
+import {
+  buildTransactionDateDayFilter,
+  resolveTransactionListDayBounds,
+} from '@/lib/transactions/list-period-filter';
 
 export interface TransactionQueryParams {
   userId?: string;
+  /** Admin dossier: ledger rows owned by, created by, or split-involving this user */
+  adminUserId?: string;
   groupId?: string | null;
   type?: 'DEBIT' | 'CREDIT';
   types?: ('DEBIT' | 'CREDIT')[];
@@ -13,6 +19,10 @@ export interface TransactionQueryParams {
   endDate?: Date;
   /** Half-open upper bound: transactionDate < endExclusive */
   endExclusive?: Date;
+  /** Calendar half-open bounds in app timezone (preferred for list APIs). */
+  startDay?: string;
+  endDay?: string;
+  endDayExclusive?: string;
   search?: string;
   page?: number;
   pageSize?: number;
@@ -31,48 +41,102 @@ export class TransactionRepository {
     });
   }
 
-  static buildListWhere(params: TransactionQueryParams): Prisma.TransactionWhereInput {
-    const { userId, groupId, type, types, categoryId, category, startDate, endDate, endExclusive, search } =
-      params;
-
-    const where: Prisma.TransactionWhereInput = {
-      status: { not: 'D' },
-      ...(userId && { userId }),
-      ...(groupId !== undefined ? { groupId } : {}),
-      ...(types?.length ? { type: { in: types } } : type ? { type } : {}),
-      ...(categoryId && { categoryId }),
+  /** Personal + group rows an admin should see on the user dossier. */
+  static adminUserLedgerScope(userId: string): Prisma.TransactionWhereInput {
+    return {
+      OR: [
+        { userId },
+        { createdByUserId: userId },
+        { splits: { some: { userId } } },
+      ],
     };
+  }
 
-    if (category) {
-      where.budgetDepositType = {
-        name: { equals: category, mode: 'insensitive' },
-      };
+  static buildListWhere(params: TransactionQueryParams): Prisma.TransactionWhereInput {
+    const {
+      userId,
+      adminUserId,
+      groupId,
+      type,
+      types,
+      categoryId,
+      category,
+      startDate,
+      endDate,
+      endExclusive,
+      startDay,
+      endDay,
+      endDayExclusive,
+      search,
+    } = params;
+
+    const andParts: Prisma.TransactionWhereInput[] = [{ status: { not: 'D' } }];
+
+    if (adminUserId) {
+      andParts.push(this.adminUserLedgerScope(adminUserId));
+    } else {
+      if (userId) andParts.push({ userId });
+      if (groupId !== undefined) andParts.push({ groupId });
     }
 
-    if (startDate || endDate || endExclusive) {
-      where.transactionDate = {};
+    if (types?.length) {
+      andParts.push({ type: { in: types } });
+    } else if (type) {
+      andParts.push({ type });
+    }
+
+    if (categoryId) {
+      andParts.push({ categoryId });
+    }
+
+    if (category) {
+      andParts.push({
+        budgetDepositType: {
+          name: { equals: category, mode: 'insensitive' },
+        },
+      });
+    }
+
+    const { startDay: fromDay, endDay: thruDay } = resolveTransactionListDayBounds({
+      startDay,
+      endDay,
+      endDayExclusive,
+      startDate,
+      endExclusive,
+    });
+    const dayFilter = buildTransactionDateDayFilter(fromDay, thruDay);
+    if (dayFilter) {
+      andParts.push(dayFilter);
+    } else if (startDate || endDate || endExclusive) {
+      const transactionDate: Prisma.DateTimeFilter = {};
       if (startDate) {
-        where.transactionDate.gte = startDate;
+        transactionDate.gte = startDate;
       }
       if (endExclusive) {
-        where.transactionDate.lt = endExclusive;
+        transactionDate.lt = endExclusive;
       } else if (endDate) {
-        where.transactionDate.lte = endDate;
+        transactionDate.lte = endDate;
       }
+      andParts.push({ transactionDate });
     }
 
     const q = search?.trim();
     if (q) {
-      where.OR = [
-        { title: { contains: q, mode: 'insensitive' } },
-        { merchant: { contains: q, mode: 'insensitive' } },
-        { description: { contains: q, mode: 'insensitive' } },
-        { category: { name: { contains: q, mode: 'insensitive' } } },
-        { budgetDepositType: { name: { contains: q, mode: 'insensitive' } } },
-      ];
+      andParts.push({
+        OR: [
+          { title: { contains: q, mode: 'insensitive' } },
+          { merchant: { contains: q, mode: 'insensitive' } },
+          { description: { contains: q, mode: 'insensitive' } },
+          { category: { name: { contains: q, mode: 'insensitive' } } },
+          { budgetDepositType: { name: { contains: q, mode: 'insensitive' } } },
+        ],
+      });
     }
 
-    return where;
+    if (andParts.length === 1) {
+      return andParts[0];
+    }
+    return { AND: andParts };
   }
 
   static async findAll(params: TransactionQueryParams) {
@@ -237,6 +301,18 @@ export class TransactionRepository {
       take,
       include: { user: true, category: true, currency: true },
     });
+  }
+
+  /** Latest personal/global ledger rows across debit and credit (by transaction date). */
+  static async findRecentGlobalLedger(limit = 5) {
+    const poolSize = Math.max(limit, 5);
+    const [debits, credits] = await Promise.all([
+      this.findRecentByType('DEBIT', poolSize),
+      this.findRecentByType('CREDIT', poolSize),
+    ]);
+    return [...debits, ...credits]
+      .sort((a, b) => b.transactionDate.getTime() - a.transactionDate.getTime())
+      .slice(0, limit);
   }
 
   static async create(data: Prisma.TransactionUncheckedCreateInput): Promise<Transaction> {

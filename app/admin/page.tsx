@@ -12,12 +12,14 @@ interface AdminDashboardMetrics {
   totalBudgets?: number;
   openTicketsCount?: number;
   recentExpenses?: RecentLedgerItem[];
+  recentLedger?: RecentLedgerItem[];
   monthlyLedgerFlow?: { month: string; value: number }[];
   spendDistribution?: { region: string; amount: number; percentage: number }[];
 }
 
 interface RecentLedgerItem {
   id: string;
+  type?: 'DEBIT' | 'CREDIT';
   title?: string | null;
   merchant?: string | null;
   amount: string | number;
@@ -30,23 +32,34 @@ export default function AdminDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const hasFetchedRef = useRef(false);
 
-  // Fetch admin dashboard stats & expenses
   useEffect(() => {
-    if (hasFetchedRef.current) return;
-    hasFetchedRef.current = true;
+    let cancelled = false;
 
     async function loadData() {
       setIsLoading(true);
       try {
         const dashboardRes = await axios.get('/api/admin/dashboard');
-        setMetrics(dashboardRes.data);
+        if (!cancelled) setMetrics(dashboardRes.data);
       } catch (err) {
         console.error('Failed to load admin dashboard data:', err);
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     }
-    loadData();
+
+    if (!hasFetchedRef.current) {
+      hasFetchedRef.current = true;
+      void loadData();
+    }
+
+    const refresh = () => {
+      void loadData();
+    };
+    window.addEventListener('focus', refresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', refresh);
+    };
   }, []);
 
   // Group aggregate monthly spending dynamically for last 6 months
@@ -58,7 +71,9 @@ export default function AdminDashboard() {
   const globalExpensesVolume = metrics?.totalExpenses || 0;
   const globalBudgetsVolume = metrics?.totalBudgets || 0;
   const pendingApprovalsCount = metrics?.openTicketsCount || 0;
-  const recentLedgerItems = metrics?.recentExpenses || [];
+  const recentLedgerItems = metrics?.recentLedger?.length
+    ? metrics.recentLedger
+    : metrics?.recentExpenses || [];
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-5 duration-300">
@@ -204,7 +219,12 @@ export default function AdminDashboard() {
         <div className="col-span-12">
           <Card className="bg-surface-container-lowest p-0 overflow-hidden" glass={false}>
             <div className="px-6 py-4 border-b border-outline-variant flex justify-between items-center bg-white/40">
-              <h4 className="font-title-md text-title-md text-primary font-bold">Recent Corporate Ledger Entries</h4>
+              <div>
+                <h4 className="font-title-md text-title-md text-primary font-bold">Recent platform transactions</h4>
+                <p className="text-xs text-on-surface-variant mt-0.5">
+                  Latest five debits or credits across all users (no date filter). Open a user&apos;s dossier for their full ledger.
+                </p>
+              </div>
             </div>
             
             <div className="w-full overflow-x-auto scrollbar-hide">
@@ -213,6 +233,7 @@ export default function AdminDashboard() {
                   <TableRow>
                     <TableHead>User</TableHead>
                     <TableHead>Title</TableHead>
+                    <TableHead>Type</TableHead>
                     <TableHead>Category</TableHead>
                     <TableHead align="right">Amount</TableHead>
                   </TableRow>
@@ -226,7 +247,18 @@ export default function AdminDashboard() {
                           <span className="font-body-md text-body-md font-bold text-primary">{fullName}</span>
                         </TableCell>
                         <TableCell className="text-on-surface-variant font-medium">
-                          {item.title || item.merchant || 'Expense'}
+                          {item.title || item.merchant || 'Transaction'}
+                        </TableCell>
+                        <TableCell>
+                          <span
+                            className={`px-2 py-0.5 rounded-full font-label-md text-label-md font-bold ${
+                              item.type === 'CREDIT'
+                                ? 'bg-secondary-container/20 text-on-secondary-container'
+                                : 'bg-error-container/20 text-error'
+                            }`}
+                          >
+                            {item.type === 'CREDIT' ? 'Credit' : 'Debit'}
+                          </span>
                         </TableCell>
                         <TableCell>
                           <span className="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface font-label-md text-label-md font-bold">
@@ -241,7 +273,7 @@ export default function AdminDashboard() {
                   })}
                   {recentLedgerItems.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center py-8 text-on-surface-variant italic">
+                      <TableCell colSpan={5} className="text-center py-8 text-on-surface-variant italic">
                         No transactions recorded.
                       </TableCell>
                     </TableRow>
