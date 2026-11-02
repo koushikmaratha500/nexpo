@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/useToast';
 import { PasswordInput } from '@/components/forms/PasswordInput';
 import { formatSignupSource } from '@/lib/auth/signupSource';
 import { AdminUserTransactionBrowse } from '@/components/features/transactions';
+import { AdminUserPresenceBadge } from '@/components/features/presence';
 import type { Transaction } from '@/store/transactionStore';
 
 interface UserDetail {
@@ -478,6 +479,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
                 }`}>
                   {formatSignupSource(user.provider)}
                 </span>
+                <AdminUserPresenceBadge userId={user.id} />
                 <span className="px-2 py-0.5 rounded-md font-label-md text-[10px] font-bold bg-primary-container/20 text-on-primary-container">
                   {user.plan === 'PRO' ? 'Pro' : user.plan === 'STARTER' ? 'Starter' : 'Freemium'}
                 </span>

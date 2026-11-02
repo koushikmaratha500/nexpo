@@ -14,6 +14,8 @@ export const API_ROUTES = {
     revoke: (id: string) => `/api/user/shares/${id}`,
   },
   metadata: '/api/user/metadata',
+  dashboard: '/api/user/dashboard',
+  presence: '/api/user/presence',
   upload: '/api/upload',
   transactions: {
     list: '/api/user/transactions',
