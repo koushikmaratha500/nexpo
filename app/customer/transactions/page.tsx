@@ -8,7 +8,15 @@ import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table';
 import { TablePagination } from '@/components/ui/TablePagination';
-import { useForm, useWatch, type UseFormRegister, type UseFormWatch, type FieldError, type UseFormRegisterReturn } from 'react-hook-form';
+import {
+  useForm,
+  useWatch,
+  type UseFormRegister,
+  type UseFormWatch,
+  type FieldError,
+  type UseFormRegisterReturn,
+  type FieldErrors,
+} from 'react-hook-form';
 import { useToast } from '@/hooks/useToast';
 import { dateToInputFormat } from '@/lib/date';
 import axios from 'axios';
@@ -26,6 +34,7 @@ import type { ReceiptExtraction } from '@/lib/ai/types';
 import { fileForOcrUpload, isOcrSupportedImageFile } from '@/lib/files/receiptImage';
 import { useAuth } from '@/components/auth/AuthContext';
 import { DEFAULT_CURRENCY_CODE, resolvePreferredCurrencyCode } from '@/lib/currency/preferredCurrency';
+import { getClientApiErrorMessage } from '@/lib/api/utils/clientApiError';
 
 interface CategoryOption {
   id: string;
@@ -224,7 +233,12 @@ function DepositTypeSelector({
                   : 'border-outline-variant bg-surface-container-low hover:border-outline hover:bg-surface-container text-on-surface-variant'
               }`}
             >
-              <input type="radio" value={opt.name} {...register('depositType')} className="sr-only" />
+              <input
+                type="radio"
+                value={opt.name}
+                {...register('depositType', { required: 'Deposit method is required' })}
+                className="sr-only"
+              />
               <span className="material-symbols-outlined text-[18px]">
                 {opt.name.toLowerCase() === 'cash' ? 'payments' : 'account_balance'}
               </span>
@@ -452,23 +466,58 @@ export default function TransactionsPage() {
     reset: resetEdit,
     watch: watchEdit,
     control: controlEdit,
+    setValue: setValueEdit,
+    getValues: getValuesEdit,
     formState: { errors: errorsEdit },
   } = useForm<TransactionFormInput>();
 
   const selectedAddType = useWatch({ control: controlAdd, name: 'type' });
   const selectedEditType = useWatch({ control: controlEdit, name: 'type' });
 
-  // Filter categories based on selected transaction type
-  const filterCategoriesForType = (type?: TransactionType) => {
-    if (!type) return categories;
-    return categories.filter((c) => {
-      if (!c.type) return true;
-      return c.type === type;
-    });
-  };
+  const filterCategoriesForType = useCallback(
+    (type?: TransactionType) => {
+      if (!type) return categories;
+      return categories.filter((c) => {
+        if (!c.type) return true;
+        return c.type === type;
+      });
+    },
+    [categories],
+  );
 
   const filteredAddCategories = filterCategoriesForType(selectedAddType);
   const filteredEditCategories = filterCategoriesForType(selectedEditType);
+
+  useEffect(() => {
+    if (!isEditOpen || !selectedEditType) return;
+    const currentCategory = getValuesEdit('category');
+    if (!currentCategory) return;
+    const allowed = filterCategoriesForType(selectedEditType);
+    const stillValid = allowed.some((c) => c.name === currentCategory);
+    if (!stillValid) {
+      setValueEdit('category', '');
+    }
+    if (selectedEditType === 'CREDIT') {
+      const deposit = getValuesEdit('depositType');
+      if (!deposit && depositTypes.length > 0) {
+        setValueEdit('depositType', depositTypes[0]?.name || 'Account');
+      }
+    }
+    if (selectedEditType === 'DEBIT') {
+      const pay = getValuesEdit('paymentType');
+      if (!pay && paymentTypes.length > 0) {
+        setValueEdit('paymentType', paymentTypes[0]?.name || '');
+      }
+    }
+  }, [
+    selectedEditType,
+    isEditOpen,
+    depositTypes,
+    paymentTypes,
+    filterCategoriesForType,
+    getValuesEdit,
+    setValueEdit,
+  ]);
 
   const metadataFetchedRef = useRef(false);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -668,8 +717,8 @@ export default function TransactionsPage() {
       browse.refresh();
       setIsAddOpen(false);
       setAddFile(null);
-    } catch {
-      addToast('Failed to add transaction.', 'error');
+    } catch (err: unknown) {
+      addToast(getClientApiErrorMessage(err, 'Failed to add transaction.'), 'error');
     } finally {
       setSubmitting(false);
     }
@@ -703,11 +752,19 @@ export default function TransactionsPage() {
       setIsEditOpen(false);
       setEditFile(null);
       setRemoveExistingDoc(false);
-    } catch {
-      addToast('Failed to update transaction.', 'error');
+    } catch (err: unknown) {
+      addToast(getClientApiErrorMessage(err, 'Failed to update transaction.'), 'error');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const onEditValidationError = (fieldErrors: FieldErrors<TransactionFormInput>) => {
+    const firstError = Object.values(fieldErrors).find((e) => e?.message);
+    addToast(
+      firstError?.message || 'Please fix the highlighted fields before saving.',
+      'error',
+    );
   };
 
   const getTypeBadge = (type: string) => {
@@ -1040,7 +1097,7 @@ export default function TransactionsPage() {
 
       {/* ---------------- EDIT TRANSACTION MODAL ---------------- */}
       <Modal isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} title={editingTransaction ? "Edit Transaction" : "Add Transaction"} subtitle="Update transaction details" maxWidth="max-w-[45rem]">
-        <form onSubmit={handleSubmitEdit(onSaveEdit)} className="space-y-5">
+        <form onSubmit={handleSubmitEdit(onSaveEdit, onEditValidationError)} className="space-y-5">
           <TypeSelector register={registerEdit} watch={watchEdit} error={errorsEdit.type} />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1124,6 +1181,9 @@ export default function TransactionsPage() {
           {selectedEditType === 'CREDIT' && (
             <div className="animate-in fade-in zoom-in-95 duration-200">
               <DepositTypeSelector register={registerEdit} watch={watchEdit} options={depositTypes} />
+              {errorsEdit.depositType?.message && (
+                <p className="text-xs text-error mt-2">{errorsEdit.depositType.message}</p>
+              )}
             </div>
           )}
 

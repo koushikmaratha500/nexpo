@@ -99,6 +99,7 @@ export class TransactionService {
 
   static async getTransactions(params: {
     userId?: string;
+    adminUserId?: string;
     groupId?: string | null;
     type?: 'DEBIT' | 'CREDIT';
     categoryId?: string;
@@ -106,6 +107,9 @@ export class TransactionService {
     startDate?: Date;
     endDate?: Date;
     endExclusive?: Date;
+    startDay?: string;
+    endDay?: string;
+    endDayExclusive?: string;
     search?: string;
     page?: number;
     pageSize?: number;
@@ -156,10 +160,11 @@ export class TransactionService {
     const categoryRecord = resolved.categoryId
       ? await MetaRepository.findCategoryById(resolved.categoryId)
       : null;
-    const resolvedType = resolveLedgerType(
-      (data.type ?? original.type) as 'DEBIT' | 'CREDIT',
-      categoryRecord,
-    );
+    const requestedType = (data.type ?? original.type) as 'DEBIT' | 'CREDIT';
+    const resolvedType =
+      data.type !== undefined
+        ? requestedType
+        : resolveLedgerType(requestedType, categoryRecord);
 
     const updatePayload: Prisma.TransactionUncheckedUpdateInput = {};
 

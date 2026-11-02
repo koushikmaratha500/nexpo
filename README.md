@@ -48,6 +48,16 @@ DEV_OTP_CODE=123456
 EXPOSE_DEV_RESET_TOKEN=false # dev-only password reset token exposure
 ```
 
+### Experimental — Admin user presence (optional)
+
+```env
+ENABLE_PRESENCE=false              # true → Redis TTL heartbeats; admin user dossier shows Online/Offline
+PRESENCE_TTL_SECONDS=90
+PRESENCE_HEARTBEAT_INTERVAL_SECONDS=60
+```
+
+Requires Redis via **`KV_REST_API_URL` + `KV_REST_API_TOKEN`** (Vercel KV) or **`UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`** — see `lib/api/utils/redisClient.ts`. Web and Expo mobile send heartbeats only when the server exposes `presenceEnabled: true` on `GET /api/public/config`.
+
 ### Release 4.1 — Push & reminders
 
 ```env

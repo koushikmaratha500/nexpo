@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/useToast';
 import { PasswordInput } from '@/components/forms/PasswordInput';
 import { formatSignupSource } from '@/lib/auth/signupSource';
 import { AdminUserTransactionBrowse } from '@/components/features/transactions';
+import { AdminUserPresenceBadge } from '@/components/features/presence';
 import type { Transaction } from '@/store/transactionStore';
 
 interface UserDetail {
@@ -417,6 +418,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
   const displayStatus = mapStatus(user.status);
   const totalSpent = Number(stats?.totalExpenses || 0);
   const expenseCount = stats?.expenseCount || 0;
+  const ledgerCount = expenseCount + (stats?.budgetCount || 0);
   const pendingCount = expenses.filter(e => e.status === 'P').length;
   const countryName = user.country?.name || 'N/A';
   const currencySymbol = user.currency?.symbol || '₹';
@@ -477,6 +479,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
                 }`}>
                   {formatSignupSource(user.provider)}
                 </span>
+                <AdminUserPresenceBadge userId={user.id} />
                 <span className="px-2 py-0.5 rounded-md font-label-md text-[10px] font-bold bg-primary-container/20 text-on-primary-container">
                   {user.plan === 'PRO' ? 'Pro' : user.plan === 'STARTER' ? 'Starter' : 'Freemium'}
                 </span>
@@ -607,7 +610,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
                 : 'text-on-surface-variant hover:text-primary'
             }`}
           >
-            Expenses Log ({expenseCount})
+            Transactions ({ledgerCount})
           </button>
           <button
             onClick={() => setActiveTab('logs')}
@@ -743,6 +746,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
           {/* Expenses Log Tab Content */}
           {activeTab === 'expenses' && (
             <AdminUserTransactionBrowse
+              key={id}
               userId={id}
               onViewTransaction={(txn: Transaction) => {
                 handleViewExpense({

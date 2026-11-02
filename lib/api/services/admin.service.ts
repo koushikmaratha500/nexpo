@@ -30,6 +30,8 @@ export interface DashboardMetrics {
   openTicketsCount: number;
   recentExpenses: unknown[];
   recentBudgets: unknown[];
+  /** Last N ledger entries (debit + credit), newest first. */
+  recentLedger: unknown[];
   monthlyLedgerFlow: AdminDashboardChartPayload['monthlyLedgerFlow'];
   spendDistribution: AdminDashboardChartPayload['spendDistribution'];
 }
@@ -65,6 +67,7 @@ export class AdminService {
       ticketCount,
       recentExpenses,
       recentBudgets,
+      recentLedger,
       charts,
     ] = await Promise.all([
       UserRepository.countActive(),
@@ -73,6 +76,7 @@ export class AdminService {
       SupportRepository.countActive(),
       TransactionRepository.findRecentByType('DEBIT', 5),
       TransactionRepository.findRecentByType('CREDIT', 5),
+      TransactionRepository.findRecentGlobalLedger(5),
       AdminService.resolveDashboardCharts(),
     ]);
 
@@ -83,6 +87,7 @@ export class AdminService {
       openTicketsCount: ticketCount,
       recentExpenses,
       recentBudgets,
+      recentLedger,
       monthlyLedgerFlow: charts.monthlyLedgerFlow,
       spendDistribution: charts.spendDistribution,
     };
@@ -191,10 +196,22 @@ export class AdminService {
       budgetCount,
       sessionCount,
     ] = await Promise.all([
-      TransactionRepository.aggregateByType('DEBIT', { userId: id }),
-      TransactionRepository.aggregateByType('CREDIT', { userId: id }),
-      TransactionRepository.countByType('DEBIT', { userId: id }),
-      TransactionRepository.countByType('CREDIT', { userId: id }),
+      TransactionRepository.aggregateByType(
+        'DEBIT',
+        TransactionRepository.buildListWhere({ adminUserId: id }),
+      ),
+      TransactionRepository.aggregateByType(
+        'CREDIT',
+        TransactionRepository.buildListWhere({ adminUserId: id }),
+      ),
+      TransactionRepository.countByType(
+        'DEBIT',
+        TransactionRepository.buildListWhere({ adminUserId: id }),
+      ),
+      TransactionRepository.countByType(
+        'CREDIT',
+        TransactionRepository.buildListWhere({ adminUserId: id }),
+      ),
       SessionRepository.countByUserId(id),
     ]);
 
@@ -239,10 +256,22 @@ export class AdminService {
       expenseCount,
       budgetCount,
     ] = await Promise.all([
-      TransactionRepository.aggregateByType('DEBIT', { userId }),
-      TransactionRepository.aggregateByType('CREDIT', { userId }),
-      TransactionRepository.countByType('DEBIT', { userId }),
-      TransactionRepository.countByType('CREDIT', { userId }),
+      TransactionRepository.aggregateByType(
+        'DEBIT',
+        TransactionRepository.buildListWhere({ adminUserId: userId }),
+      ),
+      TransactionRepository.aggregateByType(
+        'CREDIT',
+        TransactionRepository.buildListWhere({ adminUserId: userId }),
+      ),
+      TransactionRepository.countByType(
+        'DEBIT',
+        TransactionRepository.buildListWhere({ adminUserId: userId }),
+      ),
+      TransactionRepository.countByType(
+        'CREDIT',
+        TransactionRepository.buildListWhere({ adminUserId: userId }),
+      ),
     ]);
 
     return {
