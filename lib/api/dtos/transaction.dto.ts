@@ -8,6 +8,19 @@ function emptyToUndefined(val: unknown): unknown {
   return val;
 }
 
+/** True for "" (clears the document) or a public URL in our Supabase storage. */
+export function isStoredDocumentUrl(value: string): boolean {
+  if (value === '') return true;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim().replace(/\/$/, '');
+  if (!supabaseUrl) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && value.startsWith(`${supabaseUrl}/storage/v1/object/`);
+  } catch {
+    return false;
+  }
+}
+
 const optionalTitleField = z.preprocess(
   emptyToUndefined,
   z
@@ -48,7 +61,12 @@ const transactionBaseObject = z.object({
     .union([z.string(), z.date()])
     .transform((val) => normalizeTransactionDateForStorage(val)),
   notes: z.string().max(1000, 'Notes must be at most 1000 characters').optional().nullable(),
-  documentUrl: z.string().optional().nullable(),
+  // Only URLs from our own storage: any other value (e.g. javascript:) is opened by the admin UI.
+  documentUrl: z
+    .string()
+    .refine(isStoredDocumentUrl, 'Document URL must come from an upload')
+    .optional()
+    .nullable(),
   documentFileName: z.string().optional().nullable(),
   documentMimeType: z.string().optional().nullable(),
   documentSize: z.number().optional().nullable(),

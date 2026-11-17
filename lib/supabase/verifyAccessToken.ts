@@ -24,6 +24,14 @@ export async function verifySupabaseAccessToken(accessToken: string): Promise<Ve
     throw new HttpError(401, 'Invalid or expired Google session');
   }
 
+  // Only Google-verified identities may log in to an existing account by email.
+  const providers: unknown[] = Array.isArray(data.user.app_metadata?.providers)
+    ? data.user.app_metadata.providers
+    : [data.user.app_metadata?.provider];
+  if (!providers.includes('google') || !data.user.email_confirmed_at) {
+    throw new HttpError(401, 'Invalid or expired Google session');
+  }
+
   const email = data.user.email?.trim().toLowerCase();
   if (!email) {
     throw new HttpError(400, 'Google account has no email address');

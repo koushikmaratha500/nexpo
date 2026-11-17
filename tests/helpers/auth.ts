@@ -10,7 +10,7 @@ export async function mintTestToken(
   payload: TestAuthPayload,
   expiry = '1h',
 ): Promise<string> {
-  return signJwt(payload, expiry);
+  return signJwt({ ...payload }, expiry);
 }
 
 export function bearerHeader(token: string): Record<string, string> {

@@ -219,6 +219,19 @@ export class BillingService {
       return { alreadyCompleted: true };
     }
 
+    // Bind the signed Razorpay order/subscription to this session, or a cheap payment could fulfil a pricier SKU.
+    const expectedProviderId = params.razorpaySubscriptionId
+      ? session.providerSubscriptionId
+      : session.providerSessionId;
+    const providedProviderId = params.razorpaySubscriptionId ?? params.razorpayOrderId;
+    if (
+      session.provider !== PaymentProvider.RAZORPAY ||
+      !expectedProviderId ||
+      providedProviderId !== expectedProviderId
+    ) {
+      throw new HttpError(400, 'Payment does not match this checkout session');
+    }
+
     const payload = params.razorpaySubscriptionId
       ? `${params.razorpayPaymentId}|${params.razorpaySubscriptionId}`
       : `${params.razorpayOrderId}|${params.razorpayPaymentId}`;
@@ -303,20 +316,23 @@ export class BillingService {
     amountPaise: number;
     sku: CheckoutSku;
   }) {
-    const result = await BillingRepository.markSessionCompleted(input.checkoutSessionId, {
-      provider: input.provider,
-      providerPaymentId: input.providerPaymentId,
-      amountPaise: input.amountPaise,
-      sku: input.sku,
-      providerSubscriptionId: input.providerSubscriptionId,
-    });
+    const alreadyPaid = await BillingRepository.findPaymentByProvider(
+      input.provider,
+      input.providerPaymentId,
+    );
+    if (alreadyPaid) {
+      // Retry path: plan was applied atomically with the payment; only the invoice may be missing.
+      await InvoiceService.issueForPayment(alreadyPaid.id);
+      return alreadyPaid;
+    }
 
-    if (!result.created) {
-      return result.payment;
+    const session = await BillingRepository.findCheckoutSessionById(input.checkoutSessionId);
+    if (!session) {
+      throw new Error('Checkout session not found');
     }
 
     const skuDef = getSkuDefinition(input.sku);
-    const userId = result.payment.userId;
+    const userId = session.userId;
     const existingUser = await UserRepository.findById(userId);
 
     if (skuDef.plan === BillingPlan.PRO) {
@@ -351,7 +367,22 @@ export class BillingService {
       userPatch.currentPeriodEndsAt = null;
     }
 
-    await UserRepository.update(userId, userPatch);
+    const result = await BillingRepository.markSessionCompleted(
+      input.checkoutSessionId,
+      {
+        provider: input.provider,
+        providerPaymentId: input.providerPaymentId,
+        amountPaise: input.amountPaise,
+        sku: input.sku,
+        providerSubscriptionId: input.providerSubscriptionId,
+      },
+      userPatch,
+    );
+
+    if (!result.created) {
+      return result.payment;
+    }
+
     await InvoiceService.issueForPayment(result.payment.id);
 
     if (existingUser?.email) {
