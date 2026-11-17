@@ -3,7 +3,11 @@ export const MOBILE_OAUTH_REDIRECT_COOKIE = 'mobile_oauth_redirect';
 export function isAllowedMobileAppRedirect(value: string): boolean {
   try {
     const parsed = new URL(value);
-    return parsed.protocol === 'paysasuchan:' || parsed.protocol === 'exp:';
+    // exp:// can point at any host (Expo Go), so it would hand the login token to an attacker's project.
+    return (
+      parsed.protocol === 'paysasuchan:' ||
+      (parsed.protocol === 'exp:' && process.env.NODE_ENV !== 'production')
+    );
   } catch {
     return false;
   }

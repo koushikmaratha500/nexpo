@@ -90,7 +90,7 @@ describe('AuthService.loginWithGoogle', () => {
 
     expect(mockedUpdateUser).toHaveBeenCalledWith(
       'user-2',
-      expect.objectContaining({ status: 'A', emailVerified: true }),
+      expect.objectContaining({ status: 'A', emailVerified: true, passwordHash: null }),
     );
     expect(mockedUpdateUser).not.toHaveBeenCalledWith(
       'user-2',
