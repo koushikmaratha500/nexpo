@@ -49,12 +49,12 @@ export function comparePassword(password: string, storedHash: string): boolean {
     const [salt, hash] = storedHash.split(':');
     const checkHash = crypto.scryptSync(password, salt, 64).toString('hex');
     return hash === checkHash;
-  } catch (e) {
+  } catch {
     return false;
   }
 }
 
-export async function signJwt(payload: any, expiry = '30d'): Promise<string> {
+export async function signJwt(payload: jose.JWTPayload, expiry = '30d'): Promise<string> {
   return new jose.SignJWT(payload)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
@@ -62,17 +62,27 @@ export async function signJwt(payload: any, expiry = '30d'): Promise<string> {
     .sign(jwtSecret());
 }
 
-export async function verifyJwt(token: string): Promise<any | null> {
+export async function verifyJwt(token: string): Promise<jose.JWTPayload | null> {
   try {
     const { payload } = await jose.jwtVerify(token, jwtSecret());
     return payload;
-  } catch (e) {
+  } catch {
     return null;
   }
 }
 
 export class AuthService {
-  static async registerUser(data: any, meta = { ip: '', ua: '' }) {
+  static async registerUser(
+    data: {
+      username: string;
+      firstName: string;
+      lastName?: string;
+      email: string;
+      password: string;
+      country?: string;
+    },
+    meta = { ip: '', ua: '' },
+  ) {
     const existing = await UserRepository.findByEmail(data.email);
     if (existing) {
       throw new Error('Email is already registered');
@@ -368,6 +378,8 @@ export class AuthService {
 
       if (user.status === 'P') {
         updates.status = 'A';
+        // Password was set by whoever registered the email unverified; don't trust it.
+        updates.passwordHash = null;
       }
 
       if (googleUser.avatarUrl && !user.profileImageUrl) {
@@ -420,7 +432,7 @@ export class AuthService {
     return { user: updated, token: jwt };
   }
 
-  static async loginAdmin(email: string, password: string, meta = { ip: '', ua: '' }) {
+  static async loginAdmin(email: string, password: string) {
     const admin = await AdminRepository.findByEmail(email);
     if (!admin) {
       throw new Error('Invalid credentials');

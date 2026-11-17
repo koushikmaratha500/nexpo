@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { HttpError } from '@/lib/api/middleware/errorHandler';
 
@@ -25,12 +26,14 @@ export class StorageService {
       throw new HttpError(503, message);
     }
 
-    const filePath = `${Date.now()}_${fileName.replace(/\s+/g, '_')}`;
+    // Random path: public bucket URLs must not be guessable from upload time + original name.
+    const ext = (fileName.match(/\.[a-z0-9]{1,8}$/i)?.[0] ?? '').toLowerCase();
+    const filePath = `${randomUUID()}${ext}`;
     const { data, error } = await supabase.storage
       .from(uploadBucket)
       .upload(filePath, fileBuffer, {
         contentType: mimeType,
-        upsert: true,
+        upsert: false,
       });
 
     if (error) {

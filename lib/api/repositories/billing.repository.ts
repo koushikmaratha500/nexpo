@@ -94,6 +94,8 @@ export class BillingRepository {
       sku: CheckoutSku;
       providerSubscriptionId?: string;
     },
+    /** Plan change applied in the same transaction, so a recorded payment always means an upgraded user. */
+    userPatch?: Prisma.UserUncheckedUpdateInput,
   ) {
     const existing = await this.findPaymentByProvider(payment.provider, payment.providerPaymentId);
     if (existing) {
@@ -126,6 +128,10 @@ export class BillingRepository {
           sku: payment.sku,
         },
       });
+
+      if (userPatch) {
+        await tx.user.update({ where: { id: session.userId }, data: userPatch });
+      }
 
       return { payment: createdPayment, created: true, session };
     });

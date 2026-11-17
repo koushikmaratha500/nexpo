@@ -1,11 +1,22 @@
 import { prisma } from '@/lib/prisma';
 import { Session } from '@prisma/client';
+import { createHash } from 'crypto';
+
+/** Sessions store sha256(jwt) so a DB leak does not hand out live tokens. */
+function hashJwt(jwt: string): string {
+  return createHash('sha256').update(jwt, 'utf8').digest('hex');
+}
+
+// shortcut: also matches raw-JWT rows written by the previous deploy; drop `raw` once those (30d max) expire.
+function jwtMatch(jwt: string) {
+  return { in: [hashJwt(jwt), jwt] };
+}
 
 export class SessionRepository {
   static async findActiveByJwt(jwt: string): Promise<Session | null> {
     return prisma.session.findFirst({
       where: {
-        jwt,
+        jwt: jwtMatch(jwt),
         status: 'A',
         logoutTime: null,
         expiryTime: { gte: new Date() },
@@ -36,6 +47,7 @@ export class SessionRepository {
     return prisma.session.create({
       data: {
         ...data,
+        jwt: hashJwt(data.jwt),
         status: 'A',
       },
     });
@@ -47,7 +59,7 @@ export class SessionRepository {
 
   static async invalidate(jwt: string) {
     return prisma.session.updateMany({
-      where: { jwt, status: 'A' },
+      where: { jwt: jwtMatch(jwt), status: 'A' },
       data: {
         logoutTime: new Date(),
         status: 'I',

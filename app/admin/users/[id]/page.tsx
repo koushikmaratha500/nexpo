@@ -1152,7 +1152,11 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
                 {selectedExpense.documentUrl && selectedExpense.documentFileName ? (
                   <>
                     <div 
-                      onClick={() => window.open(selectedExpense.documentUrl || '', '_blank')}
+                      onClick={() => {
+                        // Stored URLs predate validation; never open non-https (e.g. javascript:) links.
+                        const url = selectedExpense.documentUrl || '';
+                        if (url.startsWith('https://')) window.open(url, '_blank', 'noopener,noreferrer');
+                      }}
                       className="group relative aspect-[3/4] w-full bg-surface-container rounded-lg border border-outline-variant overflow-hidden cursor-pointer hover:shadow-md transition-shadow flex items-center justify-center"
                     >
                       {isPreviewLoading && (
