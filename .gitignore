@@ -52,3 +52,6 @@ mobile/dist/
 mobile/web-build/
 mobile/node_modules/
 packages/*/node_modules/
+
+# claude
+/graphify-out
