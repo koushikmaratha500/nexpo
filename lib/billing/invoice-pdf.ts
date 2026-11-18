@@ -19,6 +19,15 @@ export interface InvoicePdfInput {
   totalPaise: number;
 }
 
+/**
+ * Standard PDF fonts only encode WinAnsi (Latin-1); "₹" or a Devanagari name throws and
+ * fails invoicing for a paid checkout. shortcut: non-Latin text shows as "?", embed a
+ * Unicode font (fontkit) when invoices must print native-script names.
+ */
+export function toWinAnsi(text: string): string {
+  return text.replace(/₹/g, 'Rs. ').replace(/[^\x20-\x7E\xA0-\xFF]/g, '?');
+}
+
 export async function buildInvoicePdf(input: InvoicePdfInput): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const page = doc.addPage([595, 842]);
@@ -28,7 +37,7 @@ export async function buildInvoicePdf(input: InvoicePdfInput): Promise<Uint8Arra
   let y = height - 48;
 
   const draw = (text: string, x: number, size = 11, bold = false) => {
-    page.drawText(text, {
+    page.drawText(toWinAnsi(text), {
       x,
       y,
       size,
