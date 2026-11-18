@@ -1,4 +1,4 @@
-import type { PaymentProvider } from '@prisma/client';
+import { PlanStatus, type PaymentProvider } from '@prisma/client';
 
 export type CheckoutProviderSetting = 'razorpay' | 'stripe';
 
@@ -80,4 +80,15 @@ export function paiseToInr(paise: number): number {
 
 export function formatPaiseAsInr(paise: number): string {
   return `₹${paiseToInr(paise).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/** Days an auto-renewing Starter stays usable past period end while the renewal webhook lands. */
+export const RENEWAL_GRACE_DAYS = 3;
+
+/** Last moment a Starter subscription in `status` is still paid for. */
+export function starterAccessEndsAt(status: PlanStatus, currentPeriodEndsAt: Date): Date {
+  if (status === PlanStatus.ACTIVE || status === PlanStatus.PAST_DUE) {
+    return new Date(currentPeriodEndsAt.getTime() + RENEWAL_GRACE_DAYS * 24 * 60 * 60 * 1000);
+  }
+  return currentPeriodEndsAt;
 }

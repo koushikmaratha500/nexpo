@@ -35,8 +35,17 @@ export interface PaymentFailedEvent {
   providerSubscriptionId?: string;
 }
 
+/** Every retry of a renewal charge failed; the provider stopped debiting. */
+export interface SubscriptionHaltedEvent {
+  type: 'subscription_halted';
+  provider: PaymentProvider;
+  userId?: string;
+  providerSubscriptionId: string;
+}
+
 export type BillingWebhookEvent =
   | CheckoutFulfillmentEvent
   | RenewalPaidEvent
   | SubscriptionCanceledEvent
-  | PaymentFailedEvent;
+  | PaymentFailedEvent
+  | SubscriptionHaltedEvent;

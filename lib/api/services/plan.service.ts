@@ -6,6 +6,7 @@ import { GroupRepository } from '../repositories/group.repository';
 import { ReminderRepository } from '../repositories/reminder.repository';
 import { AiUsageRepository } from '../repositories/aiUsage.repository';
 import { FREEMIUM_LIMITS, PAID_GROUP_MEMBER_CAP, PLAN_PRICES_INR, TRIAL_DAYS } from '@/lib/billing/catalog';
+import { starterAccessEndsAt } from '@/lib/billing/config';
 import { PLAN_ERROR_CODES, type PlanEntitlement, type PlanUsage } from '@/lib/billing/types';
 import { BillingService } from './billing.service';
 import { SettingsService } from './settings.service';
@@ -79,7 +80,7 @@ export class PlanService {
     if (
       user.plan === BillingPlan.STARTER &&
       user.currentPeriodEndsAt &&
-      user.currentPeriodEndsAt.getTime() <= now.getTime() &&
+      starterAccessEndsAt(status, user.currentPeriodEndsAt).getTime() <= now.getTime() &&
       status !== PlanStatus.EXPIRED
     ) {
       status = PlanStatus.EXPIRED;
@@ -94,7 +95,7 @@ export class PlanService {
     const isStarterActive =
       user.plan === BillingPlan.STARTER &&
       user.currentPeriodEndsAt !== null &&
-      user.currentPeriodEndsAt.getTime() > now.getTime() &&
+      starterAccessEndsAt(status, user.currentPeriodEndsAt).getTime() > now.getTime() &&
       (status === PlanStatus.ACTIVE ||
         status === PlanStatus.PAST_DUE ||
         status === PlanStatus.CANCELED);

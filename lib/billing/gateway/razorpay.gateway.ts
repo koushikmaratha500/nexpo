@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import Razorpay from 'razorpay';
 import { BillingInterval, CheckoutSku, PaymentProvider } from '@prisma/client';
-import { getSkuDefinition } from '../skus';
+import { getSkuDefinition, SKU_CATALOG } from '../skus';
 import type { BillingWebhookEvent } from '../webhook-events';
 import type { CreateCheckoutInput, PaymentGateway } from './types';
 
@@ -22,6 +22,13 @@ function getPlanId(sku: CheckoutSku): string | undefined {
     return process.env.RAZORPAY_PLAN_STARTER_YEARLY?.trim();
   }
   return undefined;
+}
+
+/** Constant-time check of a Razorpay HMAC-SHA256 hex signature over `payload`. */
+export function verifyRazorpaySignature(payload: string, signature: string, secret: string): boolean {
+  const expected = Buffer.from(crypto.createHmac('sha256', secret).update(payload).digest('hex'));
+  const provided = Buffer.from(signature ?? '');
+  return expected.length === provided.length && crypto.timingSafeEqual(expected, provided);
 }
 
 function skuFromBillingInterval(interval: BillingInterval): CheckoutSku {
@@ -55,9 +62,20 @@ export class RazorpayGateway implements PaymentGateway {
         );
       }
 
+      // Razorpay debits the plan's amount, not ours: refuse checkout if they disagree.
+      const plan = await razorpay.plans.fetch(planId);
+      const planAmount = Number(plan.item.amount);
+      if (planAmount !== input.totalPaise || plan.item.currency !== input.currency) {
+        console.error(
+          `[billing] Razorpay plan ${planId} charges ${planAmount} ${plan.item.currency} but ${input.sku} costs ${input.totalPaise} ${input.currency} (incl. GST). Update the plan or the price.`,
+        );
+        throw new Error('Checkout is temporarily unavailable. Please try again later.');
+      }
+
       const subscription = await razorpay.subscriptions.create({
         plan_id: planId,
-        total_count: input.sku === CheckoutSku.STARTER_YEARLY ? 1 : 120,
+        // Number of billing cycles Razorpay will auto-debit: 10 years either way.
+        total_count: input.sku === CheckoutSku.STARTER_YEARLY ? 10 : 120,
         customer_notify: 1,
         notes,
       });
@@ -111,135 +129,127 @@ export class RazorpayGateway implements PaymentGateway {
   verifyWebhookSignature(rawBody: string, signature: string): boolean {
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET?.trim();
     if (!secret) return false;
-    const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
-    return expected === signature;
+    return verifyRazorpaySignature(rawBody, signature, secret);
   }
 
-  async parseWebhookEvent(rawBody: string, _signature: string): Promise<BillingWebhookEvent | null> {
-    const event = JSON.parse(rawBody) as {
-      event?: string;
-      payload?: {
-        payment?: {
-          entity?: {
-            id?: string;
-            amount?: number;
-            notes?: Record<string, string>;
-            status?: string;
-            subscription_id?: string;
-          };
-        };
-        subscription?: {
-          entity?: {
-            id?: string;
-            notes?: Record<string, string>;
-            status?: string;
-          };
-        };
+  async parseWebhookEvent(rawBody: string): Promise<BillingWebhookEvent | null> {
+    return parseRazorpayWebhookEvent(rawBody);
+  }
+}
+
+interface RazorpayWebhookBody {
+  event?: string;
+  payload?: {
+    payment?: {
+      entity?: {
+        id?: string;
+        amount?: number;
+        notes?: Record<string, string> | unknown[];
       };
     };
-
-    const eventName = event.event ?? '';
-
-    if (eventName === 'payment.captured') {
-      const payment = event.payload?.payment?.entity;
-      const notes = payment?.notes ?? {};
-      const checkoutSessionId = notes.checkoutSessionId;
-      const sku = notes.sku as CheckoutSku | undefined;
-      const userId = notes.userId;
-      if (!payment?.id) return null;
-
-      if (checkoutSessionId && sku) {
-        return {
-          type: 'checkout_completed',
-          provider: PaymentProvider.RAZORPAY,
-          checkoutSessionId,
-          providerPaymentId: payment.id,
-          amountPaise: payment.amount ?? 0,
-          sku,
-        };
-      }
-
-      if (userId && payment.subscription_id) {
-        return {
-          type: 'renewal_paid',
-          provider: PaymentProvider.RAZORPAY,
-          userId,
-          providerPaymentId: payment.id,
-          providerSubscriptionId: payment.subscription_id,
-          amountPaise: payment.amount ?? 0,
-          sku: sku ?? CheckoutSku.STARTER_MONTHLY,
-        };
-      }
-
-      return null;
-    }
-
-    if (eventName === 'subscription.activated' || eventName === 'subscription.charged') {
-      const subscription = event.payload?.subscription?.entity;
-      const payment = event.payload?.payment?.entity;
-      const notes = subscription?.notes ?? payment?.notes ?? {};
-      const checkoutSessionId = notes.checkoutSessionId;
-      const sku = notes.sku as CheckoutSku | undefined;
-      const userId = notes.userId;
-      const providerPaymentId = payment?.id ?? subscription?.id ?? '';
-      if (!providerPaymentId) return null;
-
-      if (checkoutSessionId && sku) {
-        return {
-          type: 'checkout_completed',
-          provider: PaymentProvider.RAZORPAY,
-          checkoutSessionId,
-          providerPaymentId,
-          providerSubscriptionId: subscription?.id,
-          amountPaise: payment?.amount ?? 0,
-          sku,
-        };
-      }
-
-      if (userId && subscription?.id) {
-        return {
-          type: 'renewal_paid',
-          provider: PaymentProvider.RAZORPAY,
-          userId,
-          providerPaymentId,
-          providerSubscriptionId: subscription.id,
-          amountPaise: payment?.amount ?? 0,
-          sku: sku ?? CheckoutSku.STARTER_MONTHLY,
-        };
-      }
-
-      return null;
-    }
-
-    if (eventName === 'subscription.cancelled' || eventName === 'subscription.completed') {
-      const subscription = event.payload?.subscription?.entity;
-      const notes = subscription?.notes ?? {};
-      const userId = notes.userId;
-      if (!userId || !subscription?.id) return null;
-      return {
-        type: 'subscription_canceled',
-        provider: PaymentProvider.RAZORPAY,
-        userId,
-        providerSubscriptionId: subscription.id,
-        immediate: eventName === 'subscription.cancelled',
+    subscription?: {
+      entity?: {
+        id?: string;
+        notes?: Record<string, string> | unknown[];
+        paid_count?: number;
       };
-    }
+    };
+  };
+}
 
-    if (eventName === 'payment.failed') {
-      const payment = event.payload?.payment?.entity;
-      const notes = payment?.notes ?? {};
-      const userId = notes.userId;
-      if (!userId) return null;
-      return {
-        type: 'payment_failed',
-        provider: PaymentProvider.RAZORPAY,
-        userId,
-        providerSubscriptionId: payment?.subscription_id,
-      };
-    }
+/** Razorpay sends `notes: []` when empty. */
+function notesOf(value: Record<string, string> | unknown[] | undefined): Record<string, string> {
+  return value && !Array.isArray(value) ? value : {};
+}
 
-    return null;
+/**
+ * Maps a verified Razorpay webhook to a billing event.
+ * Subscriptions: only `subscription.charged` moves money (paid_count 1 = first checkout,
+ * later = renewal). `payment.captured` handles one-time orders only, and
+ * `subscription.activated` / `payment.failed` are ignored so one payment is never
+ * fulfilled twice and a failed upgrade attempt never marks a Starter user past due.
+ */
+export function parseRazorpayWebhookEvent(rawBody: string): BillingWebhookEvent | null {
+  const event = JSON.parse(rawBody) as RazorpayWebhookBody;
+  const eventName = event.event ?? '';
+  const payment = event.payload?.payment?.entity;
+  const subscription = event.payload?.subscription?.entity;
+
+  if (eventName === 'payment.captured') {
+    const notes = notesOf(payment?.notes);
+    const sku = notes.sku as CheckoutSku | undefined;
+    if (!payment?.id || !notes.checkoutSessionId || !sku || !(sku in SKU_CATALOG)) return null;
+    if (getSkuDefinition(sku).recurring) return null; // handled by subscription.charged
+    return {
+      type: 'checkout_completed',
+      provider: PaymentProvider.RAZORPAY,
+      checkoutSessionId: notes.checkoutSessionId,
+      providerPaymentId: payment.id,
+      amountPaise: payment.amount ?? 0,
+      sku,
+    };
   }
+
+  if (eventName === 'subscription.charged') {
+    if (!subscription?.id || !payment?.id) return null;
+    const notes = notesOf(subscription.notes);
+    const sku = notes.sku && notes.sku in SKU_CATALOG ? (notes.sku as CheckoutSku) : undefined;
+
+    if ((subscription.paid_count ?? 1) <= 1 && notes.checkoutSessionId && sku) {
+      return {
+        type: 'checkout_completed',
+        provider: PaymentProvider.RAZORPAY,
+        checkoutSessionId: notes.checkoutSessionId,
+        providerPaymentId: payment.id,
+        providerSubscriptionId: subscription.id,
+        amountPaise: payment.amount ?? 0,
+        sku,
+      };
+    }
+
+    return {
+      type: 'renewal_paid',
+      provider: PaymentProvider.RAZORPAY,
+      userId: notes.userId,
+      providerPaymentId: payment.id,
+      providerSubscriptionId: subscription.id,
+      amountPaise: payment.amount ?? 0,
+      sku,
+    };
+  }
+
+  if (!subscription?.id) return null;
+  const userId = notesOf(subscription.notes).userId;
+
+  if (eventName === 'subscription.pending') {
+    return {
+      type: 'payment_failed',
+      provider: PaymentProvider.RAZORPAY,
+      userId,
+      providerSubscriptionId: subscription.id,
+    };
+  }
+
+  if (eventName === 'subscription.halted') {
+    return {
+      type: 'subscription_halted',
+      provider: PaymentProvider.RAZORPAY,
+      userId,
+      providerSubscriptionId: subscription.id,
+    };
+  }
+
+  if (eventName === 'subscription.cancelled' || eventName === 'subscription.completed') {
+    return {
+      type: 'subscription_canceled',
+      provider: PaymentProvider.RAZORPAY,
+      userId,
+      providerSubscriptionId: subscription.id,
+      immediate: eventName === 'subscription.cancelled',
+    };
+  }
+
+  return null;
 }
 
 export { skuFromBillingInterval };

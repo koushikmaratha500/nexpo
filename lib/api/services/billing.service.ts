@@ -6,7 +6,6 @@ import {
   PaymentProvider,
   PlanStatus,
 } from '@prisma/client';
-import crypto from 'crypto';
 import { HttpError } from '../middleware/errorHandler';
 import { BillingRepository } from '../repositories/billing.repository';
 import { UserRepository } from '../repositories/user.repository';
@@ -18,6 +17,10 @@ import { validateCheckoutSku } from '@/lib/billing/checkout-rules';
 import { getSkuDefinition, parseCheckoutSku } from '@/lib/billing/skus';
 import type { BillingWebhookEvent } from '@/lib/billing/webhook-events';
 import { EmailService } from './email.service';
+import { verifyRazorpaySignature } from '@/lib/billing/gateway/razorpay.gateway';
+import { kvGetJson, kvSetJson } from '../utils/redisClient';
+
+const WEBHOOK_EVENT_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 function addDays(date: Date, days: number): Date {
   const next = new Date(date);
@@ -236,8 +239,7 @@ export class BillingService {
       ? `${params.razorpayPaymentId}|${params.razorpaySubscriptionId}`
       : `${params.razorpayOrderId}|${params.razorpayPaymentId}`;
 
-    const expected = crypto.createHmac('sha256', secret).update(payload).digest('hex');
-    if (expected !== params.razorpaySignature) {
+    if (!verifyRazorpaySignature(payload, params.razorpaySignature, secret)) {
       throw new HttpError(400, 'Invalid payment signature');
     }
 
@@ -253,19 +255,31 @@ export class BillingService {
     return { success: true };
   }
 
-  static async handleWebhook(provider: PaymentProvider, rawBody: string, signature: string) {
+  static async handleWebhook(
+    provider: PaymentProvider,
+    rawBody: string,
+    signature: string,
+    eventId?: string | null,
+  ) {
     const gateway = getGateway(provider);
     if (!gateway.verifyWebhookSignature(rawBody, signature)) {
       throw new HttpError(400, 'Invalid webhook signature');
     }
 
-    const event = await gateway.parseWebhookEvent(rawBody, signature);
-    if (!event) {
-      return { handled: false };
+    // Providers redeliver events; skip ones already processed (marked only after success).
+    const seenKey = eventId ? `billing_webhook:${provider}:${eventId}` : null;
+    if (seenKey && (await kvGetJson<boolean>(seenKey))) {
+      return { handled: true, duplicate: true };
     }
 
-    await this.processWebhookEvent(event);
-    return { handled: true, type: event.type };
+    const event = await gateway.parseWebhookEvent(rawBody, signature);
+    if (event) {
+      await this.processWebhookEvent(event);
+    }
+    if (seenKey) {
+      await kvSetJson(seenKey, true, WEBHOOK_EVENT_TTL_SECONDS);
+    }
+    return event ? { handled: true, type: event.type } : { handled: false };
   }
 
   static async processWebhookEvent(event: BillingWebhookEvent) {
@@ -288,6 +302,9 @@ export class BillingService {
         break;
       case 'payment_failed':
         await this.processPaymentFailed(event);
+        break;
+      case 'subscription_halted':
+        await this.processSubscriptionHalted(event);
         break;
       default:
         break;
@@ -329,6 +346,20 @@ export class BillingService {
     const session = await BillingRepository.findCheckoutSessionById(input.checkoutSessionId);
     if (!session) {
       throw new Error('Checkout session not found');
+    }
+    if (session.payment && input.providerSubscriptionId) {
+      // Session already paid: a later charge on the same subscription is a renewal.
+      // Fulfilling it again would hit BillingPayment.checkoutSessionId @unique and 500 the webhook.
+      await this.processRenewal({
+        type: 'renewal_paid',
+        provider: input.provider,
+        userId: session.userId,
+        providerPaymentId: input.providerPaymentId,
+        providerSubscriptionId: input.providerSubscriptionId,
+        amountPaise: input.amountPaise,
+        sku: input.sku,
+      });
+      return session.payment;
     }
 
     const skuDef = getSkuDefinition(input.sku);
@@ -434,29 +465,33 @@ export class BillingService {
     const skuDef = getSkuDefinition(sku);
     const breakdown = computeGstBreakdown(skuDef.subtotalPaise);
 
-    const result = await BillingRepository.recordRenewalPayment({
-      userId,
-      provider: event.provider,
-      providerPaymentId: event.providerPaymentId,
-      amountPaise: event.amountPaise || breakdown.totalPaise,
-      sku,
-      subtotalPaise: breakdown.subtotalPaise,
-      gstPaise: breakdown.gstPaise,
-    });
-
-    if (!result.created) return;
-
     const base = user.currentPeriodEndsAt && user.currentPeriodEndsAt > new Date()
       ? user.currentPeriodEndsAt
       : new Date();
 
-    await UserRepository.update(userId, {
-      plan: BillingPlan.STARTER,
-      planStatus: PlanStatus.ACTIVE,
-      billingInterval: skuDef.billingInterval,
-      currentPeriodEndsAt: addDays(base, periodDays(skuDef.billingInterval)),
-      paymentProvider: event.provider,
-    });
+    // Period extension commits with the payment row, so a crash can't leave a paid renewal unapplied.
+    const result = await BillingRepository.recordRenewalPayment(
+      {
+        userId,
+        provider: event.provider,
+        providerPaymentId: event.providerPaymentId,
+        amountPaise: event.amountPaise || breakdown.totalPaise,
+        sku,
+        subtotalPaise: breakdown.subtotalPaise,
+        gstPaise: breakdown.gstPaise,
+      },
+      {
+        plan: BillingPlan.STARTER,
+        planStatus: PlanStatus.ACTIVE,
+        billingInterval: skuDef.billingInterval,
+        currentPeriodEndsAt: addDays(base, periodDays(skuDef.billingInterval)),
+        paymentProvider: event.provider,
+        // Restore the id in case a lapse (grace expiry, halt) cleared it before this charge landed.
+        ...(event.provider === PaymentProvider.RAZORPAY
+          ? { razorpaySubscriptionId: event.providerSubscriptionId }
+          : { stripeSubscriptionId: event.providerSubscriptionId }),
+      },
+    );
 
     await InvoiceService.issueForPayment(result.payment.id);
   }
@@ -483,7 +518,27 @@ export class BillingService {
     await UserRepository.update(userId, { planStatus: PlanStatus.CANCELED });
   }
 
-  private static async processPaymentFailed(
+  private static async processSubscriptionHalted(
+    event: Extract<BillingWebhookEvent, { type: 'subscription_halted' }>,
+  ) {
+    const userId = await this.resolveUserId(
+      event.provider,
+      event.userId,
+      event.providerSubscriptionId,
+    );
+    if (!userId) return;
+
+    const user = await UserRepository.findById(userId);
+    if (!user || user.plan !== BillingPlan.STARTER) return;
+
+    // Razorpay stopped retrying; lock writes until the customer subscribes again.
+    await UserRepository.update(userId, {
+      planStatus: PlanStatus.EXPIRED,
+      razorpaySubscriptionId: null,
+    });
+  }
+
+    private static async processPaymentFailed(
     event: Extract<BillingWebhookEvent, { type: 'payment_failed' }>,
   ) {
     const userId = await this.resolveUserId(
