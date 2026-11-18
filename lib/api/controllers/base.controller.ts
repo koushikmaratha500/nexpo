@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { HttpError } from '@/lib/api/middleware/errorHandler';
+import { HttpError, isInternalLibraryError } from '@/lib/api/middleware/errorHandler';
 
 export type ApiResponse<T = unknown> =
   | { success: true; data: T; message?: string }
@@ -14,6 +14,7 @@ interface ErrorWithMessage {
 
 export function getErrorMessage(error: unknown, fallback = 'An unexpected error occurred'): string {
   if (error instanceof HttpError) return error.message;
+  if (isInternalLibraryError(error)) return fallback;
   if (error instanceof Error) return error.message || fallback;
   const e = error as ErrorWithMessage;
   return e.message || fallback;

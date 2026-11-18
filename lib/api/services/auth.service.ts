@@ -12,6 +12,7 @@ import { assertValidUsername, isValidUsername } from '../utils/username';
 import { verifySupabaseAccessToken } from '@/lib/supabase/verifyAccessToken';
 import { SettingsService } from './settings.service';
 import { AccountLifecycleService } from './account-lifecycle.service';
+import { HttpError } from '../middleware/errorHandler';
 
 function getJwtSecretBytes(): Uint8Array {
   const secret = process.env.JWT_SECRET?.trim();
@@ -85,13 +86,13 @@ export class AuthService {
   ) {
     const existing = await UserRepository.findByEmail(data.email);
     if (existing) {
-      throw new Error('Email is already registered');
+      throw new HttpError(409, 'Email is already registered');
     }
 
     const username = assertValidUsername(data.username);
     const existingUsername = await UserRepository.findByUsername(username);
     if (existingUsername) {
-      throw new Error('Username is already taken');
+      throw new HttpError(409, 'Username is already taken');
     }
 
     const hashedPassword = hashPassword(data.password);
@@ -146,7 +147,7 @@ export class AuthService {
   static async verifyUserOtp(email: string, otp: string, meta = { ip: '', ua: '' }) {
     const verified = await OtpService.verifyOtp(email, otp);
     if (!verified) {
-      throw new Error('Invalid or expired verification OTP code');
+      throw new HttpError(400, 'Invalid or expired verification OTP code');
     }
 
     const user = await UserRepository.findByEmail(email);
@@ -196,19 +197,19 @@ export class AuthService {
   static async loginUser(email: string, password: string, meta = { ip: '', ua: '' }) {
     const user = await UserRepository.findByEmail(email);
     if (!user) {
-      throw new Error('Invalid credentials');
+      throw new HttpError(401, 'Invalid credentials');
     }
 
     if (user.status === 'P') {
-      throw new Error('Account pending verification. Verify via OTP first.');
+      throw new HttpError(403, 'Account pending verification. Verify via OTP first.');
     }
 
     if (user.status === 'B') {
-      throw new Error('Account has been blocked');
+      throw new HttpError(403, 'Account has been blocked');
     }
 
     if (!user.passwordHash || !comparePassword(password, user.passwordHash)) {
-      throw new Error('Invalid credentials');
+      throw new HttpError(401, 'Invalid credentials');
     }
 
     // If an admin flagged a forced password reset, issue a short-lived session
@@ -369,7 +370,7 @@ export class AuthService {
       });
     } else {
       if (user.status === 'B') {
-        throw new Error('Account has been blocked');
+        throw new HttpError(403, 'Account has been blocked');
       }
 
       const updates: Parameters<typeof UserRepository.update>[1] = {
@@ -399,7 +400,7 @@ export class AuthService {
     }
 
     if (!user.forcedResetPassword) {
-      throw new Error('Forced password reset is not required for this account');
+      throw new HttpError(400, 'Forced password reset is not required for this account');
     }
 
     const hashedPassword = hashPassword(newPassword);
@@ -435,15 +436,15 @@ export class AuthService {
   static async loginAdmin(email: string, password: string) {
     const admin = await AdminRepository.findByEmail(email);
     if (!admin) {
-      throw new Error('Invalid credentials');
+      throw new HttpError(401, 'Invalid credentials');
     }
 
     if (admin.status === 'B') {
-      throw new Error('Admin account has been blocked');
+      throw new HttpError(403, 'Admin account has been blocked');
     }
 
     if (!comparePassword(password, admin.passwordHash)) {
-      throw new Error('Invalid credentials');
+      throw new HttpError(401, 'Invalid credentials');
     }
 
     // Sign JWT
@@ -511,16 +512,16 @@ export class AuthService {
     const resetRecord = await PasswordResetTokenRepository.findByToken(token);
 
     if (!resetRecord || !resetRecord.userId) {
-      throw new Error('Invalid or expired reset token');
+      throw new HttpError(400, 'Invalid or expired reset token');
     }
 
     if (resetRecord.status !== 'A' || resetRecord.usedAt) {
-      throw new Error('Reset token has already been used');
+      throw new HttpError(400, 'Reset token has already been used');
     }
 
     if (resetRecord.expiresAt < new Date()) {
       await PasswordResetTokenRepository.markInactive(resetRecord.id);
-      throw new Error('Reset token has expired. Please request a new one.');
+      throw new HttpError(400, 'Reset token has expired. Please request a new one.');
     }
 
     const hashedPassword = hashPassword(newPassword);
@@ -587,17 +588,17 @@ export class AuthService {
     const resetRecord = await PasswordResetTokenRepository.findByToken(token);
 
     if (!resetRecord || !resetRecord.adminId) {
-      throw new Error('Invalid or expired reset token');
+      throw new HttpError(400, 'Invalid or expired reset token');
     }
 
     if (resetRecord.status !== 'A' || resetRecord.usedAt) {
-      throw new Error('Reset token has already been used');
+      throw new HttpError(400, 'Reset token has already been used');
     }
 
     if (resetRecord.expiresAt < new Date()) {
       // Mark token as expired
       await PasswordResetTokenRepository.markInactive(resetRecord.id);
-      throw new Error('Reset token has expired. Please request a new one.');
+      throw new HttpError(400, 'Reset token has expired. Please request a new one.');
     }
 
     // Update admin password
