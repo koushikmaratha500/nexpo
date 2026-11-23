@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/Table';
 import { SupportStatusBadge } from './SupportStatusBadge';
+import { formatDateTime as toDateTime } from '@/lib/date';
 
 export interface SupportTicketListItem {
   id: string;
@@ -22,13 +23,7 @@ interface SupportTicketListProps {
 }
 
 function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return toDateTime(iso) || '—';
 }
 
 export function SupportTicketList({ tickets, isLoading = false }: SupportTicketListProps) {

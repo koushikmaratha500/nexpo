@@ -2,6 +2,7 @@ import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
 import { APP_TIMEZONE } from '@/lib/api/utils/app-timezone';
+import { DATE_FORMAT } from '@/lib/date';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -48,7 +49,7 @@ export function resolveTransactionPeriodRange(
       mode,
       start: clamped.toDate(),
       endExclusive: clamped.add(1, 'day').toDate(),
-      label: clamped.format('D MMMM YYYY'),
+      label: clamped.format(DATE_FORMAT),
       anchorDay: formatYmd(clamped),
     };
   }

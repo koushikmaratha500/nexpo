@@ -5,6 +5,7 @@ import axios from 'axios';
 import { Card } from '@/components/ui/Card';
 import { useToast } from '@/hooks/useToast';
 import { usePlan } from './PlanProvider';
+import { formatDate } from '@/lib/date';
 
 interface InvoiceRow {
   id: string;
@@ -82,7 +83,7 @@ export function BillingInvoices({
             <div>
               <p className={`font-medium text-on-surface ${compact || embedded ? 'text-sm' : ''}`}>{inv.invoiceNumber}</p>
               <p className="text-xs text-on-surface-variant">
-                {inv.planLabel} · {inv.totalInr} · {new Date(inv.issuedAt).toLocaleDateString('en-IN')}
+                {inv.planLabel} · {inv.totalInr} · {formatDate(inv.issuedAt)}
               </p>
             </div>
             <button

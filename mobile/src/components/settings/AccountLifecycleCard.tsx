@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Linking, Modal, Pressable, Text, View } from 'react-native';
-import { API_ROUTES, apiGet, apiPost, apiUrl } from '@nexpo/shared';
+import { API_ROUTES, apiGet, apiPost, apiUrl, formatDateTime } from '@nexpo/shared';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { Input } from '../ui/Input';
@@ -152,7 +152,7 @@ export function AccountLifecycleCard() {
                 ? 'Reset in progress — personal transactions are hidden.'
                 : 'Account scheduled for deletion.'}
               {lifecycle.purge_at
-                ? ` Recovery until ${new Date(lifecycle.purge_at).toLocaleString()}.`
+                ? ` Recovery until ${formatDateTime(lifecycle.purge_at)}.`
                 : ''}
             </Text>
           </View>

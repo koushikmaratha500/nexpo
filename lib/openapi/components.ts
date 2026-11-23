@@ -108,7 +108,7 @@ export const openApiComponents = {
         type: { type: 'string', enum: ['DEBIT', 'CREDIT'] },
         title: { type: 'string' },
         category: { type: 'string' },
-        date: { type: 'string', description: 'DD-MM-YYYY display format' },
+        date: { type: 'string', description: 'YYYY-MM-DD display format' },
         amount: { type: 'number' },
         currency: { type: 'string' },
         status: { type: 'string', enum: ['VERIFIED', 'PENDING', 'DECLINED'] },

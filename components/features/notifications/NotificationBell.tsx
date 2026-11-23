@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import axios from 'axios';
 import { useToast } from '@/hooks/useToast';
+import { formatDateTime } from '@/lib/date';
 
 interface NotificationItem {
   id: string;
@@ -38,7 +39,9 @@ export function NotificationBell() {
   }, []);
 
   useEffect(() => {
-    loadNotifications();
+    void (async () => {
+      await loadNotifications();
+    })();
     const interval = window.setInterval(loadNotifications, 60_000);
     return () => window.clearInterval(interval);
   }, [loadNotifications]);
@@ -129,7 +132,7 @@ export function NotificationBell() {
                   <p className="font-label-md font-bold text-primary">{item.title}</p>
                   <p className="font-body-md text-on-surface-variant mt-1">{item.body}</p>
                   <p className="font-label-md text-on-surface-variant/70 mt-1">
-                    {new Date(item.createdAt).toLocaleString()}
+                    {formatDateTime(item.createdAt)}
                   </p>
                 </button>
               ))

@@ -11,6 +11,7 @@ import {
   buildPasswordResetEmailHtml,
   buildVerificationEmailHtml,
 } from '../utils/emailTemplates';
+import { formatDate } from '@/lib/date';
 
 function getResendClient(): Resend | null {
   if (!isResendEnabled()) {
@@ -155,7 +156,7 @@ export class EmailService {
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 12px;">
             <h2 style="color: #111827; margin-bottom: 16px;">Payment reminder</h2>
-            <p style="color: #374151; font-size: 14px; line-height: 1.6;"><strong>${params.title}</strong> is due on ${params.dueDate.toLocaleDateString()}.</p>
+            <p style="color: #374151; font-size: 14px; line-height: 1.6;"><strong>${params.title}</strong> is due on ${formatDate(params.dueDate)}.</p>
             ${amountLine}
             ${notesLine}
           </div>
@@ -320,7 +321,7 @@ export class EmailService {
     }
 
     const periodNote = params.currentPeriodEndsAt
-      ? `Update billing before ${new Date(params.currentPeriodEndsAt).toLocaleDateString('en-IN')} to keep editing.`
+      ? `Update billing before ${formatDate(params.currentPeriodEndsAt)} to keep editing.`
       : 'Update billing in Settings to restore full access.';
 
     try {

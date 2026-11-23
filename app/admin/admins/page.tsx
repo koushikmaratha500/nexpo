@@ -9,6 +9,7 @@ import { TablePagination } from '@/components/ui/TablePagination';
 import axios from 'axios';
 import { useToast } from '@/hooks/useToast';
 import { PasswordInput } from '@/components/forms/PasswordInput';
+import { formatDateTime as toDateTime } from '@/lib/date';
 
 interface APIAdmin {
   id: string;
@@ -50,8 +51,7 @@ function mapStatusToPrisma(status: string): string {
 }
 
 function formatDateTime(iso: string): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return toDateTime(iso) || '—';
 }
 
 export default function AdminManagementPage() {
@@ -92,7 +92,7 @@ export default function AdminManagementPage() {
   const [activeSessions, setActiveSessions] = useState(0);
 
   // Fetch admins from API
-  const fetchAdmins = useCallback(async (page = 1) => {
+  const fetchAdmins = useCallback(async () => {
     setIsLoading(true);
     try {
       const response = await axios.get(`/api/admin/administrators?page=1&pageSize=1000`);
@@ -108,8 +108,10 @@ export default function AdminManagementPage() {
   }, [addToast]);
 
   useEffect(() => {
-    fetchAdmins(currentPage);
-  }, [currentPage, fetchAdmins]);
+    void (async () => {
+      await fetchAdmins();
+    })();
+  }, [fetchAdmins]);
 
   // Fetch admin overview (sessions)
   const fetchAdminOverview = useCallback(async (adminId: string) => {
@@ -152,9 +154,10 @@ export default function AdminManagementPage() {
 
       addToast('Administrator updated successfully', 'success');
       setIsEditOpen(false);
-      fetchAdmins(currentPage);
-    } catch (err: any) {
-      const errMsg = err.response?.data?.error || 'Failed to update administrator';
+      fetchAdmins();
+    } catch (err: unknown) {
+      const apiErr = axios.isAxiosError<{ error?: string }>(err) ? err : undefined;
+      const errMsg = apiErr?.response?.data?.error || 'Failed to update administrator';
       addToast(errMsg, 'error');
     } finally {
       setIsSubmitting(false);
@@ -172,9 +175,10 @@ export default function AdminManagementPage() {
       });
 
       addToast(`Administrator ${displayStatus === 'BLOCKED' ? 'blocked' : 'unblocked'}`, 'success');
-      fetchAdmins(currentPage);
-    } catch (err: any) {
-      const errMsg = err.response?.data?.error || 'Failed to update administrator status';
+      fetchAdmins();
+    } catch (err: unknown) {
+      const apiErr = axios.isAxiosError<{ error?: string }>(err) ? err : undefined;
+      const errMsg = apiErr?.response?.data?.error || 'Failed to update administrator status';
       addToast(errMsg, 'error');
     }
   };
@@ -196,10 +200,11 @@ export default function AdminManagementPage() {
         addToast('Administrator deleted successfully', 'success');
         setSelectedAdmin(null);
         setIsDeleteOpen(false);
-        fetchAdmins(currentPage);
+        fetchAdmins();
       }
-    } catch (err: any) {
-      const errMsg = err.response?.data?.error || 'Failed to delete administrator';
+    } catch (err: unknown) {
+      const apiErr = axios.isAxiosError<{ error?: string }>(err) ? err : undefined;
+      const errMsg = apiErr?.response?.data?.error || 'Failed to delete administrator';
       addToast(errMsg, 'error');
     } finally {
       setIsSubmitting(false);
@@ -225,10 +230,11 @@ export default function AdminManagementPage() {
         setCreateLastName('');
         setCreateEmail('');
         setCreatePassword('');
-        fetchAdmins(currentPage);
+        fetchAdmins();
       }
-    } catch (err: any) {
-      const errMsg = err.response?.data?.error || 'Failed to create administrator';
+    } catch (err: unknown) {
+      const apiErr = axios.isAxiosError<{ error?: string }>(err) ? err : undefined;
+      const errMsg = apiErr?.response?.data?.error || 'Failed to create administrator';
       addToast(errMsg, 'error');
     } finally {
       setIsCreating(false);
@@ -456,7 +462,7 @@ export default function AdminManagementPage() {
               <div className="relative">
                 <select
                   value={editStatus}
-                  onChange={(e) => setEditStatus(e.target.value as any)}
+                  onChange={(e) => setEditStatus(e.target.value as 'ACTIVE' | 'BLOCKED' | 'PENDING')}
                   className="w-full h-12 px-md bg-white border border-outline-variant rounded-lg font-body-md text-body-md focus:ring-2 focus:ring-secondary/20 focus:border-secondary outline-none transition-all appearance-none"
                 >
                   <option value="ACTIVE">ACTIVE</option>

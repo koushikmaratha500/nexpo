@@ -21,6 +21,8 @@ export interface AppLayoutProps {
   fabLabel?: string;
   fabIcon?: string;
   bottomNavCount?: number;
+  /** Phone-only bottom tabs (< md). Tablets keep the regular bottom nav; omit to use it everywhere. */
+  phoneNavLinks?: NavLink[];
   fabHref?: string;
   onFabClick?: () => void;
   onLogout: () => void;
@@ -39,6 +41,7 @@ export function AppLayout({
   fabLabel,
   fabIcon = 'add',
   bottomNavCount,
+  phoneNavLinks,
   onFabClick,
   onLogout,
 }: AppLayoutProps) {
@@ -54,6 +57,40 @@ export function AppLayout({
   }, [onLogout]);
 
   const bottomNavLinks = bottomNavCount ? navLinks.slice(0, bottomNavCount) : navLinks;
+
+  const renderBottomNav = (links: NavLink[], visibility: string, fullLabels: boolean) => (
+    <nav
+      className={`${visibility} fixed bottom-0 left-0 w-full z-40 flex justify-around items-center px-4 py-2 pb-safe bg-surface-container-lowest border-t border-outline-variant shadow-2xl`}
+    >
+      {links.map((link) => {
+        // Active state comes from the full nav, so e.g. /customer/groups doesn't light up Home.
+        const isActive = activeNavPath === link.path;
+        return (
+          <Link
+            key={link.path}
+            href={link.path}
+            onClick={() =>
+              analytics?.trackNavEvent({
+                navItem: link.name,
+                navPath: link.path,
+                navSurface: 'bottom_nav',
+              })
+            }
+            className={`flex flex-col items-center justify-center rounded-xl px-4 py-1 transition-transform active:scale-95 ${
+              isActive
+                ? 'bg-primary-container text-on-primary-container font-bold shadow-sm'
+                : 'text-on-surface-variant'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[20px]">{link.icon}</span>
+            <span className="text-[10px] font-label-md mt-1 whitespace-nowrap">
+              {fullLabels ? link.name : link.name.split(' ')[0]}
+            </span>
+          </Link>
+        );
+      })}
+    </nav>
+  );
 
   return (
     <div className="min-h-screen bg-background text-on-background flex overflow-hidden">
@@ -85,33 +122,15 @@ export function AppLayout({
         </main>
       </div>
 
-      {/* Mobile Bottom Navbar */}
-      <nav className="lg:hidden fixed bottom-0 left-0 w-full z-40 flex justify-around items-center px-4 py-2 pb-safe bg-surface-container-lowest border-t border-outline-variant shadow-2xl">
-        {bottomNavLinks.map((link) => {
-          const isActive = activeNavPath === link.path;
-          return (
-            <Link
-              key={link.path}
-              href={link.path}
-              onClick={() =>
-                analytics?.trackNavEvent({
-                  navItem: link.name,
-                  navPath: link.path,
-                  navSurface: 'bottom_nav',
-                })
-              }
-              className={`flex flex-col items-center justify-center rounded-xl px-4 py-1 transition-transform active:scale-95 ${
-                isActive
-                  ? 'bg-primary-container text-on-primary-container font-bold shadow-sm'
-                  : 'text-on-surface-variant'
-              }`}
-            >
-              <span className="material-symbols-outlined text-[20px]">{link.icon}</span>
-              <span className="text-[10px] font-label-md mt-1">{link.name.split(' ')[0]}</span>
-            </Link>
-          );
-        })}
-      </nav>
+      {/* Mobile Bottom Navbar: phone tabs (< md) when given, otherwise the regular links below lg */}
+      {phoneNavLinks ? (
+        <>
+          {renderBottomNav(phoneNavLinks, 'md:hidden', true)}
+          {renderBottomNav(bottomNavLinks, 'hidden md:flex lg:hidden', false)}
+        </>
+      ) : (
+        renderBottomNav(bottomNavLinks, 'lg:hidden', false)
+      )}
 
       {/* Optional Floating Action Button */}
       {showFab && (

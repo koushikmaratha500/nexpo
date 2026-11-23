@@ -5,6 +5,7 @@ import axios from 'axios';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/hooks/useToast';
+import { formatDate } from '@/lib/date';
 
 export interface GroupReminderItem {
   id: string;
@@ -51,7 +52,9 @@ export function GroupRemindersPanel({ groupId, myRole }: GroupRemindersPanelProp
   }, [addToast, groupId]);
 
   useEffect(() => {
-    loadReminders();
+    void (async () => {
+      await loadReminders();
+    })();
   }, [loadReminders]);
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -167,7 +170,7 @@ export function GroupRemindersPanel({ groupId, myRole }: GroupRemindersPanelProp
                 <div>
                   <h4 className="font-title-md font-bold text-primary">{reminder.title}</h4>
                   <p className="font-body-md text-on-surface-variant">
-                    Due {new Date(reminder.dueDate).toLocaleDateString()}
+                    Due {formatDate(reminder.dueDate)}
                     {reminder.amount != null ? ` · ₹${Number(reminder.amount).toFixed(2)}` : ''}
                   </p>
                 </div>

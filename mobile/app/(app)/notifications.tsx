@@ -1,13 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { FlatList, RefreshControl, Text, View } from 'react-native';
-import {
-  API_ROUTES,
-  apiGet,
-  apiPatch,
-  apiPost,
-  type NotificationItem,
-  type NotificationListResponse,
-} from '@nexpo/shared';
+import { API_ROUTES, apiGet, apiPatch, apiPost, type NotificationItem, type NotificationListResponse, formatDateTime } from '@nexpo/shared';
 import { useToast } from '../../src/hooks/useToast';
 import { Button } from '../../src/components/ui/Button';
 import { Card } from '../../src/components/ui/Card';
@@ -79,7 +72,7 @@ export default function NotificationsScreen() {
             <Text className="font-title-md font-bold text-primary">{item.title}</Text>
             <Text className="mt-1 font-body-md leading-5 text-on-surface-variant">{item.body}</Text>
             <Text className="mt-2 text-xs text-on-surface-variant">
-              {new Date(item.createdAt).toLocaleString()}
+              {formatDateTime(item.createdAt)}
             </Text>
             {!item.readAt && (
               <Button title="Mark read" variant="secondary" onPress={() => markRead(item.id)} className="mt-sm" />

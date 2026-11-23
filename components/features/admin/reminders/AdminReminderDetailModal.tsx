@@ -4,6 +4,7 @@ import React from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { UserProfileLink } from '@/components/features/users';
 import type { AdminReminderListItem } from './AdminReminderList';
+import { formatDateTime } from '@/lib/date';
 
 export interface AdminReminderDetail extends AdminReminderListItem {
   notes?: string | null;
@@ -74,7 +75,7 @@ export function AdminReminderDetailModal({
             label="Amount"
             value={reminder.amount != null ? `₹${Number(reminder.amount).toFixed(2)}` : '—'}
           />
-          <DetailField label="Due date" value={new Date(reminder.dueDate).toLocaleString()} />
+          <DetailField label="Due date" value={formatDateTime(reminder.dueDate)} />
           <DetailField label="Recurrence" value={reminder.recurrence || 'NONE'} />
           <DetailField label="Channels" value={(reminder.channels || []).join(', ') || '—'} className="sm:col-span-2" />
           <UserDetailField label="Created by" user={reminder.createdBy} className="sm:col-span-2" />
@@ -85,15 +86,15 @@ export function AdminReminderDetailModal({
           )}
           <DetailField
             label="Snoozed until"
-            value={reminder.snoozedUntil ? new Date(reminder.snoozedUntil).toLocaleString() : '—'}
+            value={reminder.snoozedUntil ? formatDateTime(reminder.snoozedUntil) : '—'}
           />
           <DetailField
             label="Created at"
-            value={reminder.createdAt ? new Date(reminder.createdAt).toLocaleString() : '—'}
+            value={reminder.createdAt ? formatDateTime(reminder.createdAt) : '—'}
           />
           <DetailField
             label="Updated at"
-            value={reminder.updatedAt ? new Date(reminder.updatedAt).toLocaleString() : '—'}
+            value={reminder.updatedAt ? formatDateTime(reminder.updatedAt) : '—'}
           />
           <DetailField label="Notes" value={reminder.notes || '—'} className="sm:col-span-2" />
         </div>

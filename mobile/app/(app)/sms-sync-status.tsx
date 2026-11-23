@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
-import { API_ROUTES, apiGet } from '@nexpo/shared';
+import { API_ROUTES, apiGet, formatDateTime } from '@nexpo/shared';
 import { PageShell } from '../../src/components/layout/PageShell';
 import { ScreenHeader } from '../../src/components/ui/ScreenHeader';
 import { Card } from '../../src/components/ui/Card';
@@ -32,7 +32,7 @@ export default function SmsSyncStatusScreen() {
 
       <Card className="gap-sm">
         <Text className="font-body-md text-on-surface">
-          Last sync: {status?.last_sync_at ? new Date(status.last_sync_at).toLocaleString() : 'Never'}
+          Last sync: {status?.last_sync_at ? formatDateTime(status.last_sync_at) : 'Never'}
         </Text>
         <Text className="font-body-md text-on-surface">
           Batch ID: {status?.last_batch_id ?? '—'}

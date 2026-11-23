@@ -6,6 +6,7 @@ import axios from 'axios';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/hooks/useToast';
+import { formatDate } from '@/lib/date';
 
 interface PersonalReminder {
   id: string;
@@ -45,7 +46,9 @@ export function PersonalRemindersPanel() {
   }, [addToast]);
 
   useEffect(() => {
-    loadReminders();
+    void (async () => {
+      await loadReminders();
+    })();
   }, [loadReminders]);
 
   const toggleChannel = (channel: ReminderChannel) => {
@@ -206,7 +209,7 @@ export function PersonalRemindersPanel() {
             <div>
               <p className="font-body-md font-bold text-on-surface">{reminder.title}</p>
               <p className="font-label-md text-on-surface-variant">
-                Due {new Date(reminder.dueDate).toLocaleDateString()}
+                Due {formatDate(reminder.dueDate)}
                 {reminder.amount != null ? ` · ₹${Number(reminder.amount).toFixed(2)}` : ''}
                 {reminder.status === 'SNOOZED' ? ' · Snoozed' : ''}
               </p>

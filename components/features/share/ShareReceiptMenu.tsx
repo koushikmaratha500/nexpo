@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/hooks/useToast';
+import { formatDate } from '@/lib/date';
 
 interface ShareLink {
   id: string;
@@ -34,10 +35,10 @@ export function ShareReceiptMenu({
   const [loading, setLoading] = useState(false);
   const [links, setLinks] = useState<ShareLink[]>([]);
 
-  const loadLinks = async () => {
+  const loadLinks = useCallback(async () => {
     const res = await axios.get<ShareLink[]>(`/api/user/transaction/${transactionId}/shares`);
     setLinks(res.data);
-  };
+  }, [transactionId]);
 
   const openModal = () => {
     setOpen(true);
@@ -45,11 +46,17 @@ export function ShareReceiptMenu({
 
   useEffect(() => {
     if (!open) return;
-    setLoading(true);
-    void loadLinks()
-      .catch(() => setLinks([]))
-      .finally(() => setLoading(false));
-  }, [open, transactionId]);
+    void (async () => {
+      setLoading(true);
+      try {
+        await loadLinks();
+      } catch {
+        setLinks([]);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [open, loadLinks]);
 
   const createLink = async () => {
     setLoading(true);
@@ -114,7 +121,7 @@ export function ShareReceiptMenu({
               <div key={link.id} className="rounded-xl border border-outline-variant/40 p-md space-y-sm">
                 <p className="font-mono-data text-mono-data break-all text-primary">{link.url}</p>
                 <p className="font-label-md text-label-md text-on-surface-variant">
-                  Expires {new Date(link.expiresAt).toLocaleDateString()}
+                  Expires {formatDate(link.expiresAt)}
                 </p>
                 <div className="flex flex-wrap gap-sm">
                   <Button

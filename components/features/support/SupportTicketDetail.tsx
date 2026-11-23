@@ -4,6 +4,7 @@ import React from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { SupportStatusBadge } from './SupportStatusBadge';
+import { formatDateTime as toDateTime } from '@/lib/date';
 
 export interface SupportTicketDetailData {
   id: string;
@@ -32,13 +33,7 @@ interface SupportTicketDetailProps {
 }
 
 function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return toDateTime(iso) || '—';
 }
 
 export function SupportTicketDetail({

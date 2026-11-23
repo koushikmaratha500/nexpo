@@ -1,11 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
-import {
-  API_ROUTES,
-  apiGet,
-  formatCurrency,
-  type PersonalReminder,
-} from '@nexpo/shared';
+import { API_ROUTES, apiGet, formatCurrency, type PersonalReminder, formatDate } from '@nexpo/shared';
 import { useAuth } from '../../../src/context/AuthContext';
 import { Card } from '../../../src/components/ui/Card';
 import { ScreenHeader } from '../../../src/components/ui/ScreenHeader';
@@ -82,7 +77,7 @@ export default function DashboardScreen() {
             <View key={item.id} className="border-t border-outline-variant/40 py-sm">
               <Text className="font-semibold text-on-surface">{item.title}</Text>
               <Text className="mt-0.5 text-sm text-on-surface-variant">
-                Due {new Date(item.dueDate).toLocaleDateString()}
+                Due {formatDate(item.dueDate)}
                 {item.amount != null ? ` · ${formatCurrency(Number(item.amount))}` : ''}
               </Text>
             </View>

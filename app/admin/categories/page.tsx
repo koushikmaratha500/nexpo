@@ -8,6 +8,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { TablePagination } from '@/components/ui/TablePagination';
 import axios from 'axios';
 import { useToast } from '@/hooks/useToast';
+import { formatDateTime as toDateTime } from '@/lib/date';
 
 interface Category {
   id: string;
@@ -62,8 +63,7 @@ function getTypeColor(type: string): string {
 }
 
 function formatDateTime(iso: string): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return toDateTime(iso) || '—';
 }
 
 function autoGenerateCode(name: string): string {
@@ -104,7 +104,7 @@ export default function CategoryManagementPage() {
   const [showColorPicker, setShowColorPicker] = useState(false);
 
   // Fetch categories from API
-  const fetchCategories = useCallback(async (page = 1) => {
+  const fetchCategories = useCallback(async () => {
     setIsLoading(true);
     try {
       const response = await axios.get(`/api/admin/categories?page=1&pageSize=1000`);
@@ -120,8 +120,10 @@ export default function CategoryManagementPage() {
   }, [addToast]);
 
   useEffect(() => {
-    fetchCategories(currentPage);
-  }, [currentPage, fetchCategories]);
+    void (async () => {
+      await fetchCategories();
+    })();
+  }, [fetchCategories]);
 
   // Auto-generate code when name changes (only in create mode)
   const handleNameChange = (value: string) => {
@@ -196,9 +198,10 @@ export default function CategoryManagementPage() {
       }
 
       setIsAddEditOpen(false);
-      fetchCategories(currentPage);
-    } catch (err: any) {
-      const errMsg = err.response?.data?.error || 'Failed to save category';
+      fetchCategories();
+    } catch (err: unknown) {
+      const apiErr = axios.isAxiosError<{ error?: string }>(err) ? err : undefined;
+      const errMsg = apiErr?.response?.data?.error || 'Failed to save category';
       addToast(errMsg, 'error');
     } finally {
       setIsSubmitting(false);
@@ -220,13 +223,14 @@ export default function CategoryManagementPage() {
       await axios.delete(`/api/admin/categories/${selectedCat.id}`);
       addToast('Category deleted successfully', 'success');
       setIsDeleteOpen(false);
-      fetchCategories(currentPage);
-    } catch (err: any) {
-      if (err.response?.status === 409) {
-        const errMsg = err.response?.data?.error || 'Category is linked to transactions and cannot be deleted';
+      fetchCategories();
+    } catch (err: unknown) {
+      const apiErr = axios.isAxiosError<{ error?: string }>(err) ? err : undefined;
+      if (apiErr?.response?.status === 409) {
+        const errMsg = apiErr?.response?.data?.error || 'Category is linked to transactions and cannot be deleted';
         addToast(errMsg, 'error');
       } else {
-        const errMsg = err.response?.data?.error || 'Failed to delete category';
+        const errMsg = apiErr?.response?.data?.error || 'Failed to delete category';
         addToast(errMsg, 'error');
       }
       setIsDeleteOpen(false);
@@ -243,9 +247,10 @@ export default function CategoryManagementPage() {
     try {
       await axios.patch(`/api/admin/categories/${cat.id}`, { status: nextStatus });
       addToast(`Category ${display === 'BLOCKED' ? 'blocked' : 'unblocked'}`, 'success');
-      fetchCategories(currentPage);
-    } catch (err: any) {
-      const errMsg = err.response?.data?.error || 'Failed to update category status';
+      fetchCategories();
+    } catch (err: unknown) {
+      const apiErr = axios.isAxiosError<{ error?: string }>(err) ? err : undefined;
+      const errMsg = apiErr?.response?.data?.error || 'Failed to update category status';
       addToast(errMsg, 'error');
     }
   };

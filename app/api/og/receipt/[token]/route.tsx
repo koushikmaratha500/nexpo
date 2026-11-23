@@ -2,6 +2,7 @@ import { ImageResponse } from 'next/og';
 import { NextRequest } from 'next/server';
 import { TransactionShareService } from '@/lib/api/services/transaction-share.service';
 import { BRAND_NAME } from '@/lib/brand/constants';
+import { formatDate } from '@/lib/date';
 
 export const runtime = 'nodejs';
 
@@ -49,11 +50,7 @@ export async function GET(_req: NextRequest, segmentData: { params: Promise<{ to
           </div>
           <div style={{ fontSize: 56, fontWeight: 900 }}>{receipt.amountFormatted}</div>
           <div style={{ marginTop: 16, fontSize: 22, opacity: 0.85 }}>
-            {new Date(receipt.transactionDate).toLocaleDateString('en-IN', {
-              day: 'numeric',
-              month: 'short',
-              year: 'numeric',
-            })}
+            {formatDate(receipt.transactionDate)}
           </div>
           {receipt.category ? (
             <div style={{ marginTop: 24, fontSize: 20, opacity: 0.75 }}>{receipt.category}</div>

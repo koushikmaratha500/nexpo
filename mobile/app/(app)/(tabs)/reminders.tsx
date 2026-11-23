@@ -1,17 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, ScrollView, Switch, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import {
-  API_ROUTES,
-  apiDelete,
-  apiGet,
-  apiPatch,
-  apiPost,
-  formatCurrency,
-  type NotificationPreferences,
-  type PersonalReminder,
-  type ReminderChannel,
-} from '@nexpo/shared';
+import { API_ROUTES, apiDelete, apiGet, apiPatch, apiPost, formatCurrency, type NotificationPreferences, type PersonalReminder, type ReminderChannel, formatDate } from '@nexpo/shared';
 import { useToast } from '../../../src/hooks/useToast';
 import { Button } from '../../../src/components/ui/Button';
 import { Card } from '../../../src/components/ui/Card';
@@ -201,7 +191,7 @@ export default function RemindersScreen() {
             <View key={reminder.id} className="gap-sm border-t border-outline-variant/40 pt-md">
               <Text className="font-bold text-on-surface">{reminder.title}</Text>
               <Text className="text-on-surface-variant">
-                Due {new Date(reminder.dueDate).toLocaleDateString()}
+                Due {formatDate(reminder.dueDate)}
                 {reminder.amount != null ? ` · ${formatCurrency(Number(reminder.amount))}` : ''}
               </Text>
               <View className="flex-row flex-wrap gap-sm">

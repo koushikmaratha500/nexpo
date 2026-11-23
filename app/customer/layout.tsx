@@ -17,6 +17,14 @@ const CUSTOMER_NAV_LINKS = [
   { name: 'Settings', path: '/customer/settings', icon: 'settings' },
 ];
 
+/** Phone bottom tabs, matching the native app; Groups and Reminders stay in the menu. */
+const CUSTOMER_PHONE_TABS = [
+  { name: 'Home', path: '/customer', icon: 'home' },
+  { name: 'Expenses', path: '/customer/transactions', icon: 'receipt_long' },
+  { name: 'AI Assistant', path: '/customer/assistant', icon: 'smart_toy' },
+  { name: 'Profile', path: '/customer/settings', icon: 'person' },
+];
+
 export default function CustomerLayout({ children }: { children: React.ReactNode }) {
   return (
     <OneSignalProvider>
@@ -41,6 +49,7 @@ function CustomerShell({ children }: { children: React.ReactNode }) {
   return (
       <AppLayout
         navLinks={CUSTOMER_NAV_LINKS}
+        phoneNavLinks={CUSTOMER_PHONE_TABS}
         appTitle="PaysaSuchan"
         appSubtitle="Personal & Group Ledger"
         roleLabel="Customer Hub"

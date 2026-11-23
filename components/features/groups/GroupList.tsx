@@ -3,6 +3,7 @@
 import React, { useMemo } from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
+import { formatDate } from '@/lib/date';
 
 export interface GroupListItem {
   id: string;
@@ -35,7 +36,7 @@ function formatRelativeDate(value: string) {
   if (diffDays <= 0) return 'Created today';
   if (diffDays === 1) return 'Created yesterday';
   if (diffDays < 30) return `Created ${diffDays} days ago`;
-  return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  return formatDate(date);
 }
 
 export function GroupList({ groups, isLoading = false, searchQuery = '' }: GroupListProps) {
