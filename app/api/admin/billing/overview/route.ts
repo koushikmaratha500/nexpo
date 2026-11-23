@@ -6,7 +6,7 @@ import { handleApiError } from '@/lib/api/middleware/errorHandler';
 export async function GET(req: NextRequest) {
   try {
     await authGuard(req, 'ADMIN');
-    return await BillingController.getAdminOverview(req);
+    return await BillingController.getAdminOverview();
   } catch (error) {
     return handleApiError(error);
   }

@@ -73,7 +73,7 @@ export class BillingController extends BaseController {
     });
   }
 
-  static async getAdminOverview(_req: NextRequest) {
+  static async getAdminOverview() {
     return this.safeExecuteJson(async () => BillingAdminService.getOverview(), {
       fallbackMessage: 'Failed to load billing overview',
     });
@@ -86,7 +86,10 @@ export class BillingController extends BaseController {
         ? req.headers.get('x-razorpay-signature') ?? ''
         : req.headers.get('stripe-signature') ?? '';
 
-    return this.safeExecuteJson(async () => BillingService.handleWebhook(provider, rawBody, signature), {
+    const eventId =
+      provider === PaymentProvider.RAZORPAY ? req.headers.get('x-razorpay-event-id') : null;
+
+    return this.safeExecuteJson(async () => BillingService.handleWebhook(provider, rawBody, signature, eventId), {
       fallbackMessage: 'Webhook processing failed',
     });
   }

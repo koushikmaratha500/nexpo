@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { RENEWAL_GRACE_DAYS } from '@/lib/billing/config';
 import {
   BillingInterval,
   BillingPlan,
@@ -157,7 +158,7 @@ export class BillingRepository {
     sku: CheckoutSku;
     subtotalPaise: number;
     gstPaise: number;
-  }) {
+  }, userPatch?: Prisma.UserUncheckedUpdateInput) {
     const existing = await this.findPaymentByProvider(params.provider, params.providerPaymentId);
     if (existing) {
       return { payment: existing, created: false };
@@ -190,6 +191,10 @@ export class BillingRepository {
         },
       });
 
+      if (userPatch) {
+        await tx.user.update({ where: { id: params.userId }, data: userPatch });
+      }
+
       return { payment, created: true, session };
     });
   }
@@ -217,13 +222,21 @@ export class BillingRepository {
     });
   }
 
-  static async findStarterSubscriptionsToExpire(now = new Date()) {
+  static async findStarterSubscriptionsToExpire(now = new Date(), renewalGraceDays = RENEWAL_GRACE_DAYS) {
+    // Auto-debit renewals land via webhook around the period end; give them a few days
+    // before locking an active subscriber. Canceled ones end exactly at period end.
+    const graceCutoff = new Date(now.getTime() - renewalGraceDays * 24 * 60 * 60 * 1000);
     return prisma.user.findMany({
       where: {
         plan: BillingPlan.STARTER,
-        planStatus: { in: [PlanStatus.ACTIVE, PlanStatus.PAST_DUE, PlanStatus.CANCELED] },
-        currentPeriodEndsAt: { lte: now },
         status: { not: 'D' },
+        OR: [
+          { planStatus: PlanStatus.CANCELED, currentPeriodEndsAt: { lte: now } },
+          {
+            planStatus: { in: [PlanStatus.ACTIVE, PlanStatus.PAST_DUE] },
+            currentPeriodEndsAt: { lte: graceCutoff },
+          },
+        ],
       },
     });
   }
