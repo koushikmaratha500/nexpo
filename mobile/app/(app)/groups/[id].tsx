@@ -8,21 +8,7 @@ import {
   View,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
-import {
-  API_ROUTES,
-  SplitService,
-  apiDelete,
-  apiGet,
-  apiPost,
-  formatGroupAmount,
-  type GroupBalanceMember,
-  type GroupBalancesResponse,
-  type GroupDetail,
-  type GroupMemberItem,
-  type GroupReminderItem,
-  type GroupTransactionItem,
-  type SplitMode,
-} from '@nexpo/shared';
+import { API_ROUTES, SplitService, apiDelete, apiGet, apiPost, formatGroupAmount, type GroupBalanceMember, type GroupBalancesResponse, type GroupDetail, type GroupMemberItem, type GroupReminderItem, type GroupTransactionItem, type SplitMode, formatDate } from '@nexpo/shared';
 import { useAuth } from '../../../src/context/AuthContext';
 import { useToast } from '../../../src/hooks/useToast';
 import { Button } from '../../../src/components/ui/Button';
@@ -351,7 +337,7 @@ export default function GroupDetailScreen() {
                   <View className="flex-1">
                     <Text className="font-bold text-on-surface">{txn.title}</Text>
                     <Text className="text-sm text-on-surface-variant">
-                      {new Date(txn.transactionDate).toLocaleDateString()}
+                      {formatDate(txn.transactionDate)}
                     </Text>
                   </View>
                   <Text className="font-black text-primary">
@@ -529,7 +515,7 @@ export default function GroupDetailScreen() {
             <Card key={reminder.id} className="gap-1">
               <Text className="font-bold text-on-surface">{reminder.title}</Text>
               <Text className="text-sm text-on-surface-variant">
-                Due {new Date(reminder.dueDate).toLocaleDateString()}
+                Due {formatDate(reminder.dueDate)}
               </Text>
               {group.myRole === 'ADMIN' && (
                 <Button title="Delete" variant="danger" onPress={() => handleDeleteReminder(reminder.id)} className="mt-sm" />

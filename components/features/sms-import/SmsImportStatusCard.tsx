@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Card } from '@/components/ui/Card';
+import { formatDateTime } from '@/lib/date';
 
 type SmsSettings = {
   enabled: boolean;
@@ -58,7 +59,7 @@ export function SmsImportStatusCard() {
         </p>
         {settings.last_sync_at ? (
           <p className="text-on-surface-variant">
-            Last sync: {new Date(settings.last_sync_at).toLocaleString()}
+            Last sync: {formatDateTime(settings.last_sync_at)}
             {summary
               ? ` · ${summary.accepted ?? 0} uploaded, ${summary.duplicates ?? 0} duplicates`
               : ''}

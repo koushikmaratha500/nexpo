@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { useToast } from '@/hooks/useToast';
 import { shouldShowUpgradeCta } from '@/lib/billing/planUi';
 import { usePlan } from './PlanProvider';
+import { formatDate } from '@/lib/date';
 
 interface SubscriptionSummary {
   plan: string;
@@ -70,7 +71,7 @@ export function BillingSubscription({
       const res = await axios.post<{ effectiveUntil: string | null }>('/api/user/billing/cancel');
       addToast(
         res.data.effectiveUntil
-          ? `Subscription canceled. Access continues until ${new Date(res.data.effectiveUntil).toLocaleDateString('en-IN')}.`
+          ? `Subscription canceled. Access continues until ${formatDate(res.data.effectiveUntil)}.`
           : 'Subscription canceled.',
         'success',
       );
@@ -103,7 +104,7 @@ export function BillingSubscription({
   if (!summary) return null;
 
   const periodEnd = summary.currentPeriodEndsAt
-    ? new Date(summary.currentPeriodEndsAt).toLocaleDateString('en-IN')
+    ? formatDate(summary.currentPeriodEndsAt)
     : null;
 
   const content = (

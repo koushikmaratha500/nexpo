@@ -8,6 +8,7 @@ import { ConvertTransactionModal } from '@/components/features/transactions/Conv
 import { formatGroupAmount, type GroupTransactionItem } from './GroupTransactionsPanel';
 import { MemberProfileLink } from './memberLinks';
 import type { GroupMemberItem } from './GroupMembersPanel';
+import { formatDate } from '@/lib/date';
 
 interface GroupTransactionDetailModalProps {
   transaction: GroupTransactionItem | null;
@@ -56,7 +57,7 @@ export function GroupTransactionDetailModal({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <DetailField label="Amount" value={formatGroupAmount(Number(transaction.amount), symbol)} />
         <DetailField label="Type" value={transaction.type} />
-        <DetailField label="Date" value={new Date(transaction.transactionDate).toLocaleDateString()} />
+        <DetailField label="Date" value={formatDate(transaction.transactionDate)} />
         <DetailField
           label="Paid by"
           value={<MemberProfileLink members={members} userId={transaction.userId} />}

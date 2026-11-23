@@ -5,6 +5,7 @@ import axios from 'axios';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/hooks/useToast';
+import { formatDateTime } from '@/lib/date';
 
 interface NotificationItem {
   id: string;
@@ -36,7 +37,9 @@ export default function CustomerNotificationsPage() {
   }, [addToast]);
 
   useEffect(() => {
-    loadNotifications();
+    void (async () => {
+      await loadNotifications();
+    })();
   }, [loadNotifications]);
 
   const markRead = async (id: string) => {
@@ -86,7 +89,7 @@ export default function CustomerNotificationsPage() {
                   <h3 className="font-title-md font-bold text-primary">{item.title}</h3>
                   <p className="font-body-md text-on-surface-variant mt-1">{item.body}</p>
                   <p className="font-label-md text-on-surface-variant/70 mt-2">
-                    {new Date(item.createdAt).toLocaleString()}
+                    {formatDateTime(item.createdAt)}
                   </p>
                 </div>
                 {!item.readAt && (

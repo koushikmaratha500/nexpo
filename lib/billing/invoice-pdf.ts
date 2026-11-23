@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { formatPaiseAsInr } from './config';
+import { formatDate } from '../date';
 
 export interface InvoicePdfInput {
   invoiceNumber: string;
@@ -49,7 +50,7 @@ export async function buildInvoicePdf(input: InvoicePdfInput): Promise<Uint8Arra
 
   draw('TAX INVOICE', 48, 18, true);
   draw(`Invoice No: ${input.invoiceNumber}`, 48, 11, true);
-  draw(`Date: ${input.issuedAt.toLocaleDateString('en-IN')}`, 48);
+  draw(`Date: ${formatDate(input.issuedAt)}`, 48);
   y -= 8;
   draw('Seller', 48, 12, true);
   draw(input.legalName, 48);

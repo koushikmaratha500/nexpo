@@ -11,6 +11,7 @@ import { SettingsService } from './settings.service';
 import { PushService } from './push.service';
 import { EmailService } from './email.service';
 import type { UpdateNotificationPreferencesDto } from '../dtos/notification.dto';
+import { formatDate } from '@/lib/date';
 
 type DeliveryChannel = 'IN_APP' | 'EMAIL' | 'PUSH';
 
@@ -147,8 +148,8 @@ export class NotificationService {
   }) {
     const prefs = await this.getEffectivePreferences(params.userId);
     const body = params.amount
-      ? `${params.title} due ${params.dueDate.toLocaleDateString()} · ₹${params.amount.toFixed(2)}`
-      : `${params.title} due ${params.dueDate.toLocaleDateString()}`;
+      ? `${params.title} due ${formatDate(params.dueDate)} · ₹${params.amount.toFixed(2)}`
+      : `${params.title} due ${formatDate(params.dueDate)}`;
 
     if (params.channels.includes('IN_APP') && prefs.inApp) {
       await NotificationRepository.createInApp({
@@ -198,8 +199,8 @@ export class NotificationService {
     );
 
     const body = params.amount
-      ? `${params.title} due ${params.dueDate.toLocaleDateString()} · ₹${params.amount}`
-      : `${params.title} due ${params.dueDate.toLocaleDateString()}`;
+      ? `${params.title} due ${formatDate(params.dueDate)} · ₹${params.amount}`
+      : `${params.title} due ${formatDate(params.dueDate)}`;
 
     const inAppRows = prefsByUser
       .filter(({ prefs }) => prefs.inApp && prefs.groupActivity && params.channels.includes('IN_APP'))

@@ -12,6 +12,7 @@ import { formatSignupSource } from '@/lib/auth/signupSource';
 import { AdminUserTransactionBrowse } from '@/components/features/transactions';
 import { AdminUserPresenceBadge } from '@/components/features/presence';
 import type { Transaction } from '@/store/transactionStore';
+import { formatDateTime as toDateTime, formatDate as toDate } from '@/lib/date';
 
 interface UserDetail {
   id: string;
@@ -86,13 +87,11 @@ function formatMoney(amount: string | number, symbol = '₹'): string {
 }
 
 function formatDate(iso: string): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
+  return toDate(iso) || '—';
 }
 
 function formatDateTime(iso: string): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return toDateTime(iso) || '—';
 }
 
 function mapStatus(status: string): 'ACTIVE' | 'BLOCKED' | 'PENDING' {

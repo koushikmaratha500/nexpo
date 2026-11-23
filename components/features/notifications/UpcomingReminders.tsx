@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import axios from 'axios';
 import { Card } from '@/components/ui/Card';
+import { formatDate } from '@/lib/date';
 
 interface UpcomingReminder {
   id: string;
@@ -57,7 +58,7 @@ export function UpcomingReminders() {
               <div>
                 <p className="font-body-md font-bold text-on-surface">{item.title}</p>
                 <p className="font-label-md text-on-surface-variant">
-                  Due {new Date(item.dueDate).toLocaleDateString()}
+                  Due {formatDate(item.dueDate)}
                 </p>
               </div>
               {item.amount != null && (

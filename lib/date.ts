@@ -3,28 +3,22 @@ import customParseFormat from 'dayjs/plugin/customParseFormat';
 
 dayjs.extend(customParseFormat);
 
-/**
- * Formats a date string, number, or Date object to 'DD-MM-YYYY'.
- * 
- * @param date The date to format.
- * @returns The formatted date string, or an empty string if invalid.
- */
+/** App-wide display formats. Keep in sync with lib/date.ts and packages/shared/src/utils/date.ts. */
+export const DATE_FORMAT = 'YYYY-MM-DD';
+export const DATE_TIME_FORMAT = 'YYYY-MM-DD hh-mm-ss A';
+
+/** Date only, e.g. `2026-11-23`. Empty string for missing or invalid input. */
 export function formatDate(date: string | number | Date | null | undefined): string {
   if (!date) return '';
   const d = dayjs(date);
-  return d.isValid() ? d.format('DD-MM-YYYY') : '';
+  return d.isValid() ? d.format(DATE_FORMAT) : '';
 }
 
-/**
- * Formats a date string, number, or Date object to 24-hour timestamp 'DD-MM-YYYY HH:mm:ss'.
- * 
- * @param date The date to format.
- * @returns The formatted timestamp string, or an empty string if invalid.
- */
+/** Timestamp, e.g. `2026-11-23 04-05-09 PM`. Empty string for missing or invalid input. */
 export function formatDateTime(date: string | number | Date | null | undefined): string {
   if (!date) return '';
   const d = dayjs(date);
-  return d.isValid() ? d.format('DD-MM-YYYY HH:mm:ss') : '';
+  return d.isValid() ? d.format(DATE_TIME_FORMAT) : '';
 }
 
 /**

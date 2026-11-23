@@ -12,6 +12,7 @@ import {
   GroupTransactionActionsMenu,
   GroupTransactionDetailModal,
 } from './GroupTransactionActionsMenu';
+import { formatDate } from '@/lib/date';
 
 export function formatGroupAmount(amount: number, symbol = '₹'): string {
   return `${symbol}${amount.toFixed(2)}`;
@@ -227,7 +228,7 @@ export function GroupTransactionList({
                 <div>
                   <h4 className="font-title-md text-title-md font-bold text-primary">{txn.title}</h4>
                   <p className="font-body-md text-on-surface-variant mt-1">
-                    {new Date(txn.transactionDate).toLocaleDateString()} · Paid by{' '}
+                    {formatDate(txn.transactionDate)} · Paid by{' '}
                     {memberName(members, txn.userId)}
                   </p>
                 </div>
@@ -307,7 +308,7 @@ export function GroupTransactionForm({
   const [amount, setAmount] = useState('');
   const [transactionDate, setTransactionDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [category, setCategory] = useState('Food');
-  const [paymentType, setPaymentType] = useState('UPI');
+  const [paymentType] = useState('UPI');
   const [notes, setNotes] = useState('');
   const [mode, setMode] = useState<SplitMode>('EQUAL_INCLUDED');
   const [participants, setParticipants] = useState<SplitParticipantState[]>(() =>
@@ -321,7 +322,9 @@ export function GroupTransactionForm({
   const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  React.useEffect(() => {
+  const [syncedMembers, setSyncedMembers] = useState(members);
+  if (syncedMembers !== members) {
+    setSyncedMembers(members);
     setParticipants((prev) => {
       const prevByUser = new Map(prev.map((row) => [row.userId, row]));
       return members.map((member) => {
@@ -336,7 +339,7 @@ export function GroupTransactionForm({
         );
       });
     });
-  }, [members]);
+  }
 
   const preview = useMemo(() => {
     const parsedAmount = parseFloat(amount);

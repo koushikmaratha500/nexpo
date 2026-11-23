@@ -15,6 +15,7 @@ import {
 import { useTrackTab } from '@/components/analytics/AnalyticsProvider';
 import { UserProfileLink } from '@/components/features/users';
 import { useToast } from '@/hooks/useToast';
+import { formatDate } from '@/lib/date';
 
 interface AdminGroupDetail {
   id: string;
@@ -86,12 +87,16 @@ export default function AdminGroupDetailPage() {
   }, [addToast, groupId]);
 
   useEffect(() => {
-    loadGroup();
+    void (async () => {
+      await loadGroup();
+    })();
   }, [loadGroup]);
 
   useEffect(() => {
     if (activeTab === 'balances') {
-      loadBalances();
+      void (async () => {
+        await loadBalances();
+      })();
     }
   }, [activeTab, loadBalances]);
 
@@ -152,7 +157,7 @@ export default function AdminGroupDetailPage() {
         )}
         <p className="font-label-md text-on-surface-variant">
           {group.members.length} member{group.members.length === 1 ? '' : 's'} · Created{' '}
-          {new Date(group.createdAt).toLocaleDateString()}
+          {formatDate(group.createdAt)}
         </p>
       </Card>
 

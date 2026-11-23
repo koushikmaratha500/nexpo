@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Platform, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { API_ROUTES, apiGet, apiPatch } from '@nexpo/shared';
+import { API_ROUTES, apiGet, apiPatch, formatDateTime } from '@nexpo/shared';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { requestSmsImportPermissions } from '../../lib/sms/permissions';
@@ -182,7 +182,7 @@ export function SmsImportCard() {
 
       {settings.last_sync_at ? (
         <Text className="font-label-sm text-label-sm text-on-surface-variant">
-          Last sync: {new Date(settings.last_sync_at).toLocaleString()}
+          Last sync: {formatDateTime(settings.last_sync_at)}
           {settings.last_batch_summary
             ? ` · ${settings.last_batch_summary.accepted ?? 0} uploaded, ${settings.last_batch_summary.duplicates ?? 0} duplicates`
             : ''}

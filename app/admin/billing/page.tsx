@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import axios from 'axios';
+import { formatDate } from '@/lib/date';
 
 interface BillingOverview {
   totalRevenueInr: string;
@@ -137,7 +138,7 @@ export default function AdminBillingPage() {
             ) : (
               data.recentPayments.map((payment) => (
                 <TableRow key={payment.id}>
-                  <TableCell>{new Date(payment.createdAt).toLocaleDateString('en-IN')}</TableCell>
+                  <TableCell>{formatDate(payment.createdAt)}</TableCell>
                   <TableCell>
                     {[payment.user.firstName, payment.user.lastName].filter(Boolean).join(' ')}
                     <br />

@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import { UserProfileLink } from '@/components/features/users';
+import { formatDate } from '@/lib/date';
 
 const REMINDER_STATUS_CLASSES: Record<string, string> = {
   ACTIVE: 'bg-primary/10 text-primary',
@@ -107,7 +108,7 @@ export function AdminReminderList({ reminders, isLoading = false, onView }: Admi
                   : userLabel(reminder.owner)}
               </TableCell>
               <TableCell className="text-on-surface-variant">
-                {new Date(reminder.dueDate).toLocaleDateString()}
+                {formatDate(reminder.dueDate)}
               </TableCell>
               <TableCell>
                 <span

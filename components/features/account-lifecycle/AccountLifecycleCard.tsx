@@ -8,6 +8,7 @@ import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/hooks/useToast';
 import { useAuth } from '@/components/auth/AuthContext';
 import { AccountLifecycleTermsAcceptance } from '@/components/features/account-lifecycle/AccountLifecycleTermsAcceptance';
+import { formatDateTime } from '@/lib/date';
 
 type LifecycleStatus = {
   mode: 'ACTIVE' | 'RESET_PENDING' | 'DELETE_PENDING';
@@ -51,7 +52,9 @@ export function AccountLifecycleCard() {
   }, []);
 
   useEffect(() => {
-    void load();
+    void (async () => {
+      await load();
+    })();
   }, [load]);
 
   const openOtpFlow = async (action: ModalAction) => {
@@ -163,7 +166,7 @@ export function AccountLifecycleCard() {
               : 'Account scheduled for deletion.'}
             {lifecycle.purge_at ? (
               <p className="mt-1">
-                Recovery available until {new Date(lifecycle.purge_at).toLocaleString()}
+                Recovery available until {formatDateTime(lifecycle.purge_at)}
                 {lifecycle.days_remaining !== null ? ` (${lifecycle.days_remaining} day(s) left)` : ''}.
               </p>
             ) : null}
