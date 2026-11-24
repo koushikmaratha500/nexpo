@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
-import { streamText, convertToModelMessages, isStepCount, type UIMessage } from 'ai';
+import { randomUUID } from 'crypto';
+import { streamText, convertToModelMessages, isStepCount } from 'ai';
 import { authGuard } from '@/lib/api/middleware/authGuard';
 import { handleApiError, HttpError } from '@/lib/api/middleware/errorHandler';
 import { checkRateLimit } from '@/lib/api/middleware/rateLimiter';
@@ -10,6 +11,8 @@ import { createFinanceTools } from '@/lib/ai/tools/finance.tools';
 import { COPILOT_SYSTEM } from '@/lib/ai/agents/copilot.system';
 import { toProviderHttpError, unwrapProviderError } from '@/lib/ai/errors';
 import { PlanService } from '@/lib/api/services/plan.service';
+import { AiChatService } from '@/lib/api/services/ai-chat.service';
+import { chatRequestSchema } from '@/lib/api/dtos/ai-chat.dto';
 
 const CHAT_DAILY_LIMIT = 20;
 const CHAT_WINDOW_SECONDS = 24 * 60 * 60;
@@ -29,11 +32,17 @@ export async function POST(req: NextRequest) {
       windowSeconds: CHAT_WINDOW_SECONDS,
     });
 
-    const body = (await req.json().catch(() => {
-      throw new HttpError(400, 'Invalid JSON body');
-    })) as { messages?: UIMessage[] };
-    const history = (Array.isArray(body.messages) ? body.messages : []).slice(-MAX_HISTORY_MESSAGES);
-    const modelMessages = await convertToModelMessages(history);
+    const body = chatRequestSchema.parse(
+      await req.json().catch(() => {
+        throw new HttpError(400, 'Invalid JSON body');
+      }),
+    );
+    // The thread's history comes from the database; the client only sends its new message.
+    const threadId = body.id;
+    const { history } = await AiChatService.appendUserMessage(user.id, threadId, body.message.parts);
+    const modelMessages = await convertToModelMessages(
+      AiChatService.modelContext(history, MAX_HISTORY_MESSAGES),
+    );
 
     const today = new Date();
     const system = `${COPILOT_SYSTEM} Today's date is ${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}. Always interpret relative references like "last month" or "this month" against this date.`;
@@ -76,7 +85,18 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return result.toUIMessageStreamResponse();
+    return result.toUIMessageStreamResponse({
+      originalMessages: history,
+      generateMessageId: () => randomUUID(),
+      onEnd: async ({ responseMessage }) => {
+        try {
+          // Saved even when the user pressed Stop, so the thread shows what they saw.
+          await AiChatService.saveAssistantMessage(threadId, responseMessage);
+        } catch (error) {
+          console.error('[ai-chat] Failed to save assistant message', error);
+        }
+      },
+    });
   } catch (error) {
     if (userId && !(error instanceof HttpError && error.status === 429)) {
       await AiUsageRepository.create({
