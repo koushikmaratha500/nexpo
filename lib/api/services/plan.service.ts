@@ -109,16 +109,10 @@ export class PlanService {
     }
 
     const inTrial = !isPaid && trialEndsAt.getTime() > now.getTime();
-    const writesLocked = !isPaid && !inTrial;
-    const usage = writesLocked || inTrial || isPaid
-      ? await this.collectUsage(userId)
-      : {
-          personalTransactions: 0,
-          ocr: 0,
-          groups: 0,
-          activeReminders: 0,
-          aiMessages: 0,
-        };
+    // When the trial ends or a paid plan lapses (cancelled, not renewed, refunded) the account
+    // drops to the Free plan: same usage limits as the trial, no CSV export. It is never read-only.
+    const writesLocked = false;
+    const usage = await this.collectUsage(userId);
 
     return {
       plan: isPaid ? user.plan : BillingPlan.FREEMIUM,
@@ -132,11 +126,11 @@ export class PlanService {
       pricingEnabled: true,
       features: {
         csvExport: isPaid,
-        ai: isPaid || inTrial,
-        ocr: isPaid || inTrial,
-        groups: isPaid || inTrial,
-        reminders: isPaid || inTrial,
-        receiptShare: isPaid || inTrial,
+        ai: true,
+        ocr: true,
+        groups: true,
+        reminders: true,
+        receiptShare: true,
       },
       limits: isPaid ? null : FREEMIUM_LIMITS,
       usage,
@@ -190,7 +184,7 @@ export class PlanService {
     if (entitlement.usage.personalTransactions + additional > entitlement.limits.personalTransactions) {
       throw new HttpError(
         402,
-        `Freemium allows ${entitlement.limits.personalTransactions} personal transactions during the trial.`,
+        `The Free plan allows ${entitlement.limits.personalTransactions} personal transactions. Upgrade to Starter or Pro for unlimited.`,
         { code: PLAN_ERROR_CODES.LIMIT, limit: 'personalTransactions' },
       );
     }
@@ -206,7 +200,7 @@ export class PlanService {
     }
     if (entitlement.isPaid || !entitlement.limits) return;
     if (entitlement.usage.ocr >= entitlement.limits.ocr) {
-      throw new HttpError(402, `Freemium allows ${entitlement.limits.ocr} receipt scans during the trial.`, {
+      throw new HttpError(402, `The Free plan allows ${entitlement.limits.ocr} receipt scans. Upgrade to Starter or Pro for unlimited.`, {
         code: PLAN_ERROR_CODES.LIMIT,
         limit: 'ocr',
       });
@@ -225,7 +219,7 @@ export class PlanService {
     if (entitlement.usage.aiMessages >= entitlement.limits.aiMessages) {
       throw new HttpError(
         402,
-        `Freemium allows ${entitlement.limits.aiMessages} Finlit messages during the trial.`,
+        `The Free plan allows ${entitlement.limits.aiMessages} Finlit messages. Upgrade to Starter or Pro for unlimited.`,
         { code: PLAN_ERROR_CODES.LIMIT, limit: 'aiMessages' },
       );
     }
@@ -235,7 +229,7 @@ export class PlanService {
     const entitlement = await this.assertWritesAllowed(userId);
     if (entitlement.isPaid || !entitlement.limits) return;
     if (entitlement.usage.groups >= entitlement.limits.groups) {
-      throw new HttpError(402, `Freemium allows ${entitlement.limits.groups} groups during the trial.`, {
+      throw new HttpError(402, `The Free plan allows ${entitlement.limits.groups} groups. Upgrade to Starter or Pro for unlimited.`, {
         code: PLAN_ERROR_CODES.LIMIT,
         limit: 'groups',
       });
@@ -262,7 +256,7 @@ export class PlanService {
     if (entitlement.usage.activeReminders >= entitlement.limits.activeReminders) {
       throw new HttpError(
         402,
-        `Freemium allows ${entitlement.limits.activeReminders} active reminders during the trial.`,
+        `The Free plan allows ${entitlement.limits.activeReminders} active reminders. Upgrade to Starter or Pro for unlimited.`,
         { code: PLAN_ERROR_CODES.LIMIT, limit: 'activeReminders' },
       );
     }

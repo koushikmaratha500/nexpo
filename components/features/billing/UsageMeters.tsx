@@ -42,7 +42,7 @@ export function UsageMeters({ plan }: { plan: PlanEntitlement | null | undefined
   const trialLabel =
     plan.trialDaysLeft > 0
       ? `${plan.trialDaysLeft} day${plan.trialDaysLeft === 1 ? '' : 's'} left in your Freemium trial`
-      : 'Freemium trial limits';
+      : 'Free plan limits. Upgrade for unlimited.';
 
   return (
     <div className="border border-outline-variant/60 rounded-xl overflow-hidden bg-surface-container-lowest">
@@ -53,7 +53,7 @@ export function UsageMeters({ plan }: { plan: PlanEntitlement | null | undefined
         aria-expanded={open}
       >
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-on-surface">Trial usage</p>
+          <p className="text-sm font-semibold text-on-surface">{plan.trialDaysLeft > 0 ? 'Trial usage' : 'Free plan usage'}</p>
           <p className="text-xs text-on-surface-variant mt-0.5 truncate">{trialLabel}</p>
         </div>
         <span className="material-symbols-outlined text-on-surface-variant shrink-0 transition-transform duration-200">

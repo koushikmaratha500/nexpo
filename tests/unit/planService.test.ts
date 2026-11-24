@@ -7,7 +7,7 @@ import { TransactionRepository } from '@/lib/api/repositories/transaction.reposi
 import { GroupRepository } from '@/lib/api/repositories/group.repository';
 import { ReminderRepository } from '@/lib/api/repositories/reminder.repository';
 import { AiUsageRepository } from '@/lib/api/repositories/aiUsage.repository';
-import { PLAN_PRICES_INR } from '@/lib/billing/catalog';
+import { FREEMIUM_LIMITS, PLAN_PRICES_INR } from '@/lib/billing/catalog';
 import { SettingsService } from '@/lib/api/services/settings.service';
 
 vi.mock('@/lib/api/repositories/user.repository', () => ({
@@ -88,7 +88,7 @@ describe('PlanService', () => {
     expect(entitlement.trialDaysLeft).toBeGreaterThan(0);
   });
 
-  it('locks writes after the 7-day trial', async () => {
+  it('moves to the Free plan (not read-only) after the 7-day trial', async () => {
     mockedFindById.mockResolvedValue({
       id: 'u1',
       plan: BillingPlan.FREEMIUM,
@@ -100,13 +100,36 @@ describe('PlanService', () => {
     } as never);
 
     const entitlement = await PlanService.getEntitlement('u1', new Date('2026-09-10T12:00:00.000Z'));
-    expect(entitlement.writesLocked).toBe(true);
+    expect(entitlement.writesLocked).toBe(false);
+    expect(entitlement.plan).toBe(BillingPlan.FREEMIUM);
+    expect(entitlement.status).toBe(PlanStatus.EXPIRED);
+    expect(entitlement.limits).toEqual(FREEMIUM_LIMITS);
+    expect(entitlement.features.ai).toBe(true);
+    expect(entitlement.features.csvExport).toBe(false);
     expect(mockedUpdate).toHaveBeenCalledWith('u1', { planStatus: PlanStatus.EXPIRED });
 
-    await expect(PlanService.assertWritesAllowed('u1')).rejects.toBeInstanceOf(HttpError);
+    await expect(PlanService.assertWritesAllowed('u1')).resolves.toMatchObject({ writesLocked: false });
   });
 
-  it('locks writes when Starter period has ended', async () => {
+  it('enforces Free plan limits once the trial has ended', async () => {
+    mockedFindById.mockResolvedValue({
+      id: 'u1',
+      plan: BillingPlan.FREEMIUM,
+      planStatus: PlanStatus.EXPIRED,
+      billingInterval: BillingInterval.NONE,
+      trialEndsAt: new Date('2026-09-08T00:00:00.000Z'),
+      currentPeriodEndsAt: null,
+      createdAt: new Date('2026-09-01T00:00:00.000Z'),
+    } as never);
+    mockedTxnCount.mockResolvedValue(FREEMIUM_LIMITS.personalTransactions);
+
+    await expect(PlanService.assertCanCreatePersonalTransactions('u1')).rejects.toMatchObject({
+      status: 402,
+    });
+    await expect(PlanService.assertCanExportCsv('u1')).rejects.toBeInstanceOf(HttpError);
+  });
+
+  it('drops to the Free plan when the Starter period has ended', async () => {
     mockedFindById.mockResolvedValue({
       id: 'u1',
       plan: BillingPlan.STARTER,
@@ -118,7 +141,11 @@ describe('PlanService', () => {
     } as never);
 
     const entitlement = await PlanService.getEntitlement('u1', new Date('2026-09-10T12:00:00.000Z'));
-    expect(entitlement.writesLocked).toBe(true);
+    expect(entitlement.writesLocked).toBe(false);
+    expect(entitlement.isPaid).toBe(false);
+    expect(entitlement.plan).toBe(BillingPlan.FREEMIUM);
+    expect(entitlement.limits).toEqual(FREEMIUM_LIMITS);
+    expect(entitlement.features.csvExport).toBe(false);
     expect(mockedUpdate).toHaveBeenCalledWith('u1', {
       planStatus: PlanStatus.EXPIRED,
       razorpaySubscriptionId: null,

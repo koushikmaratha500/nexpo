@@ -55,6 +55,26 @@ export function PlanBanner() {
     );
   }
 
+  if (plan.plan === 'FREEMIUM' && plan.status === 'EXPIRED') {
+    return (
+      <div className="mb-6 rounded-xl border border-outline-variant bg-surface-container-low px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+        <p className="text-sm text-on-surface">
+          You&apos;re on the Free plan. Your data is safe and you can keep using PaysaSuchan within the Free plan limits.
+          Upgrade to Starter or Pro for unlimited access.
+        </p>
+        {shouldShowUpgradeCta(plan) && (
+          <button
+            type="button"
+            onClick={() => setUpgradeOpen(true)}
+            className="shrink-0 px-4 h-10 rounded-lg bg-primary text-on-primary text-sm font-semibold"
+          >
+            View plans
+          </button>
+        )}
+      </div>
+    );
+  }
+
   if (plan.plan === 'STARTER' && plan.status === 'CANCELED') {
     const left = daysUntil(plan.currentPeriodEndsAt);
     return (
