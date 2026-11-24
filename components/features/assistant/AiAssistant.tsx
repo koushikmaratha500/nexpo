@@ -11,7 +11,12 @@ import { useToast } from '@/hooks/useToast';
 import { useAuthStore } from '@/store/authStore';
 
 export interface AiAssistantProps {
+  /** Thread id; the server creates the thread on its first message. */
+  chatId: string;
+  /** Saved messages of an existing thread. */
   initialMessages?: UIMessage[];
+  /** Called after each assistant reply finishes (thread now saved). */
+  onReplyFinished?: () => void;
 }
 
 const SUGGESTED_PROMPTS = [
@@ -96,16 +101,22 @@ const WELCOME_MESSAGE: UIMessage = {
   ],
 };
 
-export function AiAssistant({ initialMessages }: AiAssistantProps) {
+export function AiAssistant({ chatId, initialMessages, onReplyFinished }: AiAssistantProps) {
   const [input, setInput] = useState('');
   const { addToast } = useToast();
 
   const { messages, sendMessage, status, stop, error } = useChat({
+    id: chatId,
     transport: new DefaultChatTransport({
       api: '/api/ai/chat',
-      headers: () => ({ Authorization: `Bearer ${useAuthStore.getState().token}` }),
+      // Only the new message goes up; the server rebuilds history from the saved thread.
+      prepareSendMessagesRequest: ({ id, messages: all }) => ({
+        body: { id, message: all[all.length - 1] },
+        headers: { Authorization: `Bearer ${useAuthStore.getState().token}` },
+      }),
     }),
     messages: [WELCOME_MESSAGE, ...(initialMessages ?? [])],
+    onFinish: () => onReplyFinished?.(),
   });
 
   React.useEffect(() => {
