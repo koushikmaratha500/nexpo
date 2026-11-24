@@ -236,8 +236,8 @@ export default function CustomerSettingsPage() {
               <p className="text-sm text-on-surface-variant mt-1">
                 {plan.plan === 'PRO' && 'Pro · lifetime'}
                 {plan.plan === 'STARTER' && `Starter · ${plan.billingInterval === 'YEAR' ? 'yearly' : 'monthly'}`}
-                {plan.plan === 'FREEMIUM' && plan.writesLocked && 'Freemium trial ended — writes locked'}
-                {plan.plan === 'FREEMIUM' && !plan.writesLocked && `Freemium trial · ${plan.trialDaysLeft} days left`}
+                {plan.plan === 'FREEMIUM' && plan.trialDaysLeft > 0 && `Freemium trial · ${plan.trialDaysLeft} days left`}
+                {plan.plan === 'FREEMIUM' && plan.trialDaysLeft === 0 && 'Free plan · usage limits apply'}
               </p>
             </div>
             {shouldShowUpgradeCta(plan) && (
