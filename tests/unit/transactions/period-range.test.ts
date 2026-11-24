@@ -1,8 +1,15 @@
 import { describe, it, expect } from 'vitest';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+import { APP_TIMEZONE } from '@/lib/api/utils/app-timezone';
 import {
   resolveTransactionPeriodRange,
   shiftPeriodAnchor,
 } from '@/lib/transactions/period-range';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 describe('resolveTransactionPeriodRange', () => {
   it('defaults month mode to full calendar month bounds', () => {
@@ -24,7 +31,8 @@ describe('resolveTransactionPeriodRange', () => {
     const anchor = new Date('2026-06-15T10:00:00');
     const range = resolveTransactionPeriodRange('ytd', anchor);
     expect(range.label).toContain('2026');
-    expect(range.start.getMonth()).toBe(0);
+    // Check in the app timezone: Jan 1 00:00 IST is still Dec 31 on a UTC host (CI).
+    expect(dayjs(range.start).tz(APP_TIMEZONE).format('MM-DD HH:mm')).toBe('01-01 00:00');
   });
 
   it('shiftPeriodAnchor moves day anchor without exceeding today', () => {

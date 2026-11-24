@@ -8,7 +8,7 @@ describe('transaction repository category filter', () => {
       path.resolve(__dirname, '../../../lib/api/repositories/transaction.repository.ts'),
       'utf8',
     );
-    expect(file).toContain('where.budgetDepositType = {');
-    expect(file).not.toContain('where.budgetDepositTypeId = {');
+    expect(file).toMatch(/budgetDepositType:\s*\{\s*name:/);
+    expect(file).not.toMatch(/budgetDepositTypeId:\s*\{/);
   });
 });
