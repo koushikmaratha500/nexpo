@@ -14,6 +14,7 @@ const CUSTOMER_NAV_LINKS = [
   { name: 'Groups', path: '/customer/groups', icon: 'groups' },
   { name: 'Reminders', path: '/customer/reminders', icon: 'notifications_active' },
   { name: 'AI Assistant', path: '/customer/assistant', icon: 'smart_toy' },
+  { name: 'Orders', path: '/customer/orders', icon: 'shopping_bag' },
   { name: 'Settings', path: '/customer/settings', icon: 'settings' },
 ];
 

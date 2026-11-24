@@ -11,6 +11,12 @@ import {
   buildPasswordResetEmailHtml,
   buildVerificationEmailHtml,
 } from '../utils/emailTemplates';
+import {
+  buildInvoiceEmailHtml,
+  buildPlanWelcomeEmailHtml,
+  buildRefundEmailHtml,
+  type PlanWelcomeEmailParams,
+} from '../utils/billingEmailTemplates';
 import { formatDate } from '@/lib/date';
 
 function getResendClient(): Resend | null {
@@ -235,14 +241,7 @@ export class EmailService {
         from: getResendFromEmail(),
         to,
         subject: `${BRAND_NAME} invoice ${params.invoiceNumber}`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
-            <h2 style="color: #111827;">Payment receipt</h2>
-            <p>Thank you for subscribing to <strong>${params.planLabel}</strong>.</p>
-            <p>Invoice <strong>${params.invoiceNumber}</strong> — ${params.total} (incl. GST).</p>
-            <p>Your GST invoice PDF is attached.</p>
-          </div>
-        `,
+        html: buildInvoiceEmailHtml(params),
         attachments: [
           {
             filename: `${params.invoiceNumber}.pdf`,
@@ -263,10 +262,7 @@ export class EmailService {
     }
   }
 
-  static async sendPlanWelcomeEmail(
-    to: string,
-    params: { firstName: string; planLabel: string; isLifetime: boolean },
-  ) {
+  static async sendPlanWelcomeEmail(to: string, params: PlanWelcomeEmailParams) {
     if (!isResendEnabled()) {
       console.log(`[Email Simulation] Plan welcome To: ${to}, Plan: ${params.planLabel}`);
       return { success: true, simulated: true as const };
@@ -277,29 +273,48 @@ export class EmailService {
       return { success: false, error: new Error('Resend client unavailable') };
     }
 
-    const renewalNote = params.isLifetime
-      ? 'You have lifetime Pro access — no renewals required.'
-      : 'Your Starter subscription is active. Manage billing anytime in Settings.';
-
     try {
       const result = await resend.emails.send({
         from: getResendFromEmail(),
         to,
         subject: `Welcome to ${params.planLabel} on ${BRAND_NAME}`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
-            <h2 style="color: #111827;">Hi ${params.firstName},</h2>
-            <p>Your <strong>${params.planLabel}</strong> plan is now active.</p>
-            <p>${renewalNote}</p>
-            <p>Your GST invoice is on its way in a separate email.</p>
-          </div>
-        `,
+        html: buildPlanWelcomeEmailHtml(params),
       });
 
       if (result.error) {
         return { success: false, error: new Error(formatSendError(result.error)) };
       }
 
+      return { success: true, id: result.data?.id };
+    } catch (error) {
+      return { success: false, error };
+    }
+  }
+
+  static async sendRefundEmail(
+    to: string,
+    params: { firstName: string; planLabel: string; amount: string; fullRefund: boolean; invoiceNumber?: string | null },
+  ) {
+    if (!isResendEnabled()) {
+      console.log(`[Email Simulation] Refund To: ${to}, Amount: ${params.amount}`);
+      return { success: true, simulated: true as const };
+    }
+
+    const resend = getResendClient();
+    if (!resend) {
+      return { success: false, error: new Error('Resend client unavailable') };
+    }
+
+    try {
+      const result = await resend.emails.send({
+        from: getResendFromEmail(),
+        to,
+        subject: `Refund of ${params.amount} processed`,
+        html: buildRefundEmailHtml(params),
+      });
+      if (result.error) {
+        return { success: false, error: new Error(formatSendError(result.error)) };
+      }
       return { success: true, id: result.data?.id };
     } catch (error) {
       return { success: false, error };

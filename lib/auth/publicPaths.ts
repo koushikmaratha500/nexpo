@@ -4,6 +4,7 @@ const PUBLIC_EXACT_PATHS = new Set([
   '/faq',
   '/pricing',
   '/privacy-policy',
+  '/refund-policy',
   '/terms-and-conditions',
   '/terms-of-use',
 ]);

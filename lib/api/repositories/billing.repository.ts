@@ -45,6 +45,44 @@ export class BillingRepository {
     });
   }
 
+  static async recordRefund(
+    paymentId: string,
+    data: { refundedPaise: number; status: PaymentStatus; refundedAt: Date },
+  ) {
+    return prisma.billingPayment.update({ where: { id: paymentId }, data });
+  }
+
+  /** Most recent payment that granted the user a plan (not refunded). */
+  static async findLatestActivePaymentForUser(userId: string) {
+    return prisma.billingPayment.findFirst({
+      where: { userId, status: { in: [PaymentStatus.SUCCEEDED, PaymentStatus.PARTIALLY_REFUNDED] } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  static async listOrdersByUser(userId: string) {
+    return prisma.billingPayment.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        checkoutSession: { select: { subtotalPaise: true, gstPaise: true, totalPaise: true, currency: true } },
+        invoice: {
+          select: {
+            id: true,
+            invoiceNumber: true,
+            planLabel: true,
+            subtotalPaise: true,
+            cgstPaise: true,
+            sgstPaise: true,
+            igstPaise: true,
+            totalPaise: true,
+            issuedAt: true,
+          },
+        },
+      },
+    });
+  }
+
   static async createInvoice(data: Prisma.BillingInvoiceUncheckedCreateInput) {
     return prisma.billingInvoice.create({ data });
   }
@@ -252,10 +290,10 @@ export class BillingRepository {
     const [revenueAgg, paymentCount, planGroups, statusGroups, recentPayments, activeStarters] =
       await Promise.all([
         prisma.billingPayment.aggregate({
-          where: { status: PaymentStatus.SUCCEEDED },
-          _sum: { amountPaise: true },
+          where: { status: { in: [PaymentStatus.SUCCEEDED, PaymentStatus.PARTIALLY_REFUNDED, PaymentStatus.REFUNDED] } },
+          _sum: { amountPaise: true, refundedPaise: true },
         }),
-        prisma.billingPayment.count({ where: { status: PaymentStatus.SUCCEEDED } }),
+        prisma.billingPayment.count({ where: { status: { in: [PaymentStatus.SUCCEEDED, PaymentStatus.PARTIALLY_REFUNDED] } } }),
         prisma.user.groupBy({
           by: ['plan'],
           where: { status: { not: 'D' } },
@@ -267,7 +305,7 @@ export class BillingRepository {
           _count: { _all: true },
         }),
         prisma.billingPayment.findMany({
-          where: { status: PaymentStatus.SUCCEEDED },
+          where: { status: { in: [PaymentStatus.SUCCEEDED, PaymentStatus.PARTIALLY_REFUNDED, PaymentStatus.REFUNDED] } },
           orderBy: { createdAt: 'desc' },
           take: 25,
           include: {
@@ -301,7 +339,8 @@ export class BillingRepository {
     }
 
     return {
-      totalRevenuePaise: revenueAgg._sum.amountPaise ?? 0,
+      // Net of refunds.
+      totalRevenuePaise: (revenueAgg._sum.amountPaise ?? 0) - (revenueAgg._sum.refundedPaise ?? 0),
       paymentCount,
       planCounts,
       planStatusCounts,
@@ -310,6 +349,8 @@ export class BillingRepository {
       recentPayments: recentPayments.map((payment) => ({
         id: payment.id,
         amountPaise: payment.amountPaise,
+        refundedPaise: payment.refundedPaise,
+        status: payment.status,
         sku: payment.sku,
         provider: payment.provider,
         createdAt: payment.createdAt.toISOString(),

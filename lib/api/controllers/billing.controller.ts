@@ -53,6 +53,12 @@ export class BillingController extends BaseController {
     });
   }
 
+  static async listOrders(_req: NextRequest, userId: string) {
+    return this.safeExecuteJson(async () => BillingService.listOrders(userId), {
+      fallbackMessage: 'Failed to load orders',
+    });
+  }
+
   static async downloadInvoice(_req: NextRequest, userId: string, invoiceId: string) {
     return this.safeExecuteJson(async () => {
       const pdf = await InvoiceService.getPdfForUser(userId, invoiceId);

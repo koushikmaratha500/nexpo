@@ -43,7 +43,8 @@ export function BillingSubscription({
       })
       .catch(() => setSummary(null))
       .finally(() => setLoading(false));
-  }, []);
+    // Refetch when the plan changes (e.g. right after a checkout completes).
+  }, [plan?.plan, plan?.status, plan?.billingInterval]);
 
   const saveGstin = async () => {
     setSaving(true);

@@ -60,6 +60,7 @@ enum PaymentStatus {
   SUCCEEDED
   FAILED
   REFUNDED
+  PARTIALLY_REFUNDED
 }
 
 enum CheckoutSessionStatus {
@@ -641,6 +642,9 @@ model BillingPayment {
   currency          String          @default("INR")
   status            PaymentStatus
   sku               CheckoutSku
+  /// Cumulative amount returned to the customer (provider-reported).
+  refundedPaise     Int             @default(0)
+  refundedAt        DateTime?
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
   invoice           BillingInvoice?

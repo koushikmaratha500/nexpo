@@ -17,6 +17,8 @@ interface BillingOverview {
   recentPayments: Array<{
     id: string;
     amountInr: string;
+    refundedInr?: string | null;
+    status?: string;
     sku: string;
     provider: string;
     createdAt: string;
@@ -145,7 +147,14 @@ export default function AdminBillingPage() {
                     <span className="text-xs text-on-surface-variant">{payment.user.email}</span>
                   </TableCell>
                   <TableCell>{payment.sku}</TableCell>
-                  <TableCell>{payment.amountInr}</TableCell>
+                  <TableCell>
+                    {payment.amountInr}
+                    {payment.refundedInr && (
+                      <span className="block text-xs text-amber-700">
+                        {payment.status === 'REFUNDED' ? 'Refunded' : 'Partly refunded'} {payment.refundedInr}
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell>{payment.provider}</TableCell>
                   <TableCell>{payment.invoiceNumber ?? '—'}</TableCell>
                 </TableRow>

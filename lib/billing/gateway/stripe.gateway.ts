@@ -229,6 +229,20 @@ export class StripeGateway implements PaymentGateway {
       };
     }
 
+    if (event.type === 'charge.refunded') {
+      const charge = event.data.object as Stripe.Charge;
+      // Payments are stored by payment_intent id (see checkout.session.completed / invoice.paid).
+      const paymentIntent = typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent?.id;
+      if (!paymentIntent) return null;
+      return {
+        type: 'payment_refunded',
+        provider: PaymentProvider.STRIPE,
+        providerPaymentId: paymentIntent,
+        refundedTotalPaise: charge.amount_refunded,
+        paymentAmountPaise: charge.amount,
+      };
+    }
+
     return null;
   }
 }

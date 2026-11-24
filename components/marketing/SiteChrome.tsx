@@ -48,7 +48,7 @@ export function Footer() {
           <p className="ps:mt-4 ps:max-w-xs ps:text-sm ps:leading-6 ps:text-white/60">Track your money, split it fairly and never miss a due date.</p>
         </div>
         <div className={col}><b className="ps:text-white">Product</b><Link href="/#story">How it works</Link><Link href="/#ai">AI assistant</Link><Link href="/#security">Security</Link></div>
-        <div className={col}><b className="ps:text-white">Legal</b><Link href="/terms-and-conditions">Terms &amp; Conditions</Link><Link href="/terms-of-use">Terms of Use</Link><Link href="/privacy-policy">Privacy Policy</Link></div>
+        <div className={col}><b className="ps:text-white">Legal</b><Link href="/terms-and-conditions">Terms &amp; Conditions</Link><Link href="/terms-of-use">Terms of Use</Link><Link href="/privacy-policy">Privacy Policy</Link><Link href="/refund-policy">Refund &amp; Cancellation</Link></div>
         <div className={col}><b className="ps:text-white">Help</b><Link href="/faq">FAQ</Link><Link href="/auth/login">Sign in</Link><Link href="/auth/register">Create account</Link></div>
       </div>
       <p className="ps:border-t ps:border-white/10 ps:py-6 ps:text-center ps:text-xs ps:text-white/45">© 2026 PaysaSuchan. All rights reserved.</p>
