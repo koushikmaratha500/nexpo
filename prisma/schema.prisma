@@ -79,6 +79,7 @@ enum AuditAction {
   BLOCK
   ACTIVATE
   PASSWORD_RESET
+  VIEW
 }
 
 enum TransactionType {
@@ -229,6 +230,7 @@ model User {
   smsIngestMessages SmsIngestMessage[]
   transactionImportFingerprints TransactionImportFingerprint[]
   monthlyDigestDeliveries MonthlyDigestDelivery[]
+  aiChatThreads AiChatThread[]
 
   @@index([accountLifecyclePurgeAt, accountLifecycleMode])
 }
@@ -562,6 +564,32 @@ model AiUsage {
 
   @@index([userId, createdAt])
   @@index([feature])
+}
+
+/// One AI Assistant conversation. The server is the source of truth for its history.
+model AiChatThread {
+  id            String          @id @default(uuid())
+  userId        String
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title         String
+  lastMessageAt DateTime        @default(now())
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  messages      AiChatMessage[]
+
+  @@index([userId, lastMessageAt])
+}
+
+/// A UI message (AI SDK `UIMessage`) in a thread; `parts` is its JSON parts array.
+model AiChatMessage {
+  id        String       @id
+  threadId  String
+  thread    AiChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  role      String
+  parts     Json
+  createdAt DateTime     @default(now())
+
+  @@index([threadId, createdAt])
 }
 
 model SupportTicket {

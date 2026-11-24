@@ -10,6 +10,8 @@ export interface NavLink {
   name: string;
   path: string;
   icon: string;
+  /** Expands under the link while it is active (e.g. saved AI chats). */
+  renderSubMenu?: (onNavigate: () => void) => React.ReactNode;
 }
 
 /** Longest matching nav path so nested routes (e.g. /groups/[id]) highlight the parent item. */
@@ -54,7 +56,6 @@ export interface SidebarNavProps {
 export function SidebarNav({
   navLinks,
   roleLabel,
-  appTitle,
   appSubtitle,
   showHelpCenter = true,
   isMobileMenuOpen,
@@ -89,7 +90,7 @@ export function SidebarNav({
               : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
           }`;
 
-      return (
+      const item = (
         <Link
           key={link.path}
           href={link.path}
@@ -104,6 +105,16 @@ export function SidebarNav({
           </div>
           <span className="font-body-md text-body-md">{link.name}</span>
         </Link>
+      );
+
+      if (!isActive || !link.renderSubMenu) return item;
+      return (
+        <div key={link.path}>
+          {item}
+          {link.renderSubMenu(() => {
+            if (mobile) onLinkClick?.();
+          })}
+        </div>
       );
     });
 

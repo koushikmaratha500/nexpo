@@ -7,13 +7,20 @@ import { useAuth } from '@/components/auth/AuthContext';
 import { OneSignalProvider } from '@/components/features/notifications';
 import { PlanBanner, PlanProvider, UpgradeWall, usePlan } from '@/components/features/billing';
 import { CustomerPresenceHeartbeat } from '@/components/features/presence';
+import { AiChatHistoryMenu } from '@/components/features/assistant';
+import type { NavLink } from '@/components/layout/SidebarNav';
 
-const CUSTOMER_NAV_LINKS = [
+const CUSTOMER_NAV_LINKS: NavLink[] = [
   { name: 'Dashboard', path: '/customer', icon: 'dashboard' },
   { name: 'Transactions', path: '/customer/transactions', icon: 'receipt_long' },
   { name: 'Groups', path: '/customer/groups', icon: 'groups' },
   { name: 'Reminders', path: '/customer/reminders', icon: 'notifications_active' },
-  { name: 'AI Assistant', path: '/customer/assistant', icon: 'smart_toy' },
+  {
+    name: 'AI Assistant',
+    path: '/customer/assistant',
+    icon: 'smart_toy',
+    renderSubMenu: (onNavigate) => <AiChatHistoryMenu onNavigate={onNavigate} />,
+  },
   { name: 'Orders', path: '/customer/orders', icon: 'shopping_bag' },
   { name: 'Settings', path: '/customer/settings', icon: 'settings' },
 ];
