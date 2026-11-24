@@ -1,8 +1,9 @@
 import { randomUUID } from 'crypto';
-import type { Prisma } from '@prisma/client';
+import { AuditAction, type Prisma } from '@prisma/client';
 import type { UIMessage } from 'ai';
 import { HttpError } from '../middleware/errorHandler';
 import { AiChatRepository } from '../repositories/ai-chat.repository';
+import { UserRepository } from '../repositories/user.repository';
 import { MAX_CHAT_MESSAGE_CHARS } from '../dtos/ai-chat.dto';
 
 const THREAD_TITLE_CHARS = 60;
@@ -88,6 +89,33 @@ export class AiChatService {
     await this.getOwnedThread(userId, threadId);
     await AiChatRepository.deleteThread(threadId);
     return { deleted: true };
+  }
+
+  /** Admin, read-only: a customer's saved chats. */
+  static async listThreadsForAdmin(userId: string): Promise<ChatThreadSummary[]> {
+    return this.listThreads(userId);
+  }
+
+  /**
+   * Admin, read-only: one chat of a customer. Each view is written to the customer's
+   * audit trail, since these are private conversations.
+   */
+  static async getThreadForAdmin(
+    adminId: string,
+    userId: string,
+    threadId: string,
+    meta: { ip?: string; ua?: string } = {},
+  ) {
+    const result = await this.getThread(userId, threadId);
+    await UserRepository.createAudit({
+      userId,
+      action: AuditAction.VIEW,
+      newValue: { note: 'Admin viewed AI chat', adminId, threadId, title: result.thread.title },
+      ipAddress: meta.ip || null,
+      userAgent: meta.ua || null,
+      status: 'A',
+    });
+    return result;
   }
 
   static async loadMessages(threadId: string): Promise<UIMessage[]> {

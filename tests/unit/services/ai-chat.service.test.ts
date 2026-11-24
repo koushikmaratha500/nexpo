@@ -6,6 +6,7 @@ import {
   threadTitle,
 } from '@/lib/api/services/ai-chat.service';
 import { AiChatRepository } from '@/lib/api/repositories/ai-chat.repository';
+import { UserRepository } from '@/lib/api/repositories/user.repository';
 
 vi.mock('@/lib/api/repositories/ai-chat.repository', () => ({
   AiChatRepository: {
@@ -18,7 +19,12 @@ vi.mock('@/lib/api/repositories/ai-chat.repository', () => ({
   },
 }));
 
+vi.mock('@/lib/api/repositories/user.repository', () => ({
+  UserRepository: { createAudit: vi.fn() },
+}));
+
 const repo = vi.mocked(AiChatRepository);
+const createAudit = vi.mocked(UserRepository.createAudit);
 const THREAD = '11111111-1111-4111-8111-111111111111';
 
 describe('AiChatService', () => {
@@ -107,5 +113,31 @@ describe('AiChatService', () => {
   it('shortens long titles', () => {
     expect(threadTitle('a'.repeat(80))).toHaveLength(60);
     expect(threadTitle('   ')).toBe('New chat');
+  });
+
+  it('admin view returns the thread read-only and records it in the customer audit trail', async () => {
+    const now = new Date('2026-11-24T10:00:00.000Z');
+    repo.findThreadById.mockResolvedValue({ id: THREAD, userId: 'user-1', title: 'Budget', lastMessageAt: now, createdAt: now } as never);
+    repo.listMessages.mockResolvedValue([{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'hi' }] }] as never);
+
+    const result = await AiChatService.getThreadForAdmin('admin-9', 'user-1', THREAD, { ip: '1.2.3.4' });
+
+    expect(result.messages).toHaveLength(1);
+    expect(createAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        action: 'VIEW',
+        newValue: expect.objectContaining({ adminId: 'admin-9', threadId: THREAD }),
+        ipAddress: '1.2.3.4',
+      }),
+    );
+    expect(repo.addMessage).not.toHaveBeenCalled();
+  });
+
+  it("admin cannot open a thread through a different customer's id", async () => {
+    repo.findThreadById.mockResolvedValue({ id: THREAD, userId: 'user-2' } as never);
+
+    await expect(AiChatService.getThreadForAdmin('admin-9', 'user-1', THREAD)).rejects.toMatchObject({ status: 404 });
+    expect(createAudit).not.toHaveBeenCalled();
   });
 });

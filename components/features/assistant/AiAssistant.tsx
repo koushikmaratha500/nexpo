@@ -52,7 +52,8 @@ function ToolChip({ part }: { part: { type: string; state?: string } }) {
   );
 }
 
-function MessageBubble({ message }: { message: UIMessage }) {
+/** One chat message (text + tool chips); also used read-only by the admin chat viewer. */
+export function MessageBubble({ message }: { message: UIMessage }) {
   const isUser = message.role === 'user';
   type TextPart = Extract<UIMessage['parts'][number], { type: 'text' }>;
   const textParts = message.parts.filter((p): p is TextPart => p.type === 'text' && Boolean(p.text));

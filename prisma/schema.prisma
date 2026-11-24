@@ -78,6 +78,7 @@ enum AuditAction {
   BLOCK
   ACTIVATE
   PASSWORD_RESET
+  VIEW
 }
 
 enum TransactionType {

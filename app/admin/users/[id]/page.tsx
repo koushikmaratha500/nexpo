@@ -13,6 +13,7 @@ import { AdminUserTransactionBrowse } from '@/components/features/transactions';
 import { AdminUserPresenceBadge } from '@/components/features/presence';
 import type { Transaction } from '@/store/transactionStore';
 import { formatDateTime as toDateTime, formatDate as toDate } from '@/lib/date';
+import { AdminUserChats } from '@/components/features/admin/users';
 
 interface UserDetail {
   id: string;
@@ -126,7 +127,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
   const [loadError, setLoadError] = useState('');
 
   // Tabs state
-  const [activeTab, setActiveTab] = useState<'overview' | 'expenses' | 'logs'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'expenses' | 'logs' | 'chats'>('overview');
 
   // Modals state
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -621,6 +622,16 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
           >
             Activity Trail
           </button>
+          <button
+            onClick={() => setActiveTab('chats')}
+            className={`pb-md font-title-md text-title-md font-semibold transition-all relative ${
+              activeTab === 'chats'
+                ? 'text-primary border-b-2 border-primary font-bold'
+                : 'text-on-surface-variant hover:text-primary'
+            }`}
+          >
+            AI Chats
+          </button>
         </div>
 
         {/* Tab Content render panels */}
@@ -764,6 +775,9 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
               }}
             />
           )}
+
+          {/* AI Chats Tab Content (read-only) */}
+          {activeTab === 'chats' && <AdminUserChats userId={id} />}
 
           {/* Activity Trail Tab Content */}
           {activeTab === 'logs' && (
