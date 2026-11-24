@@ -43,9 +43,19 @@ export interface SubscriptionHaltedEvent {
   providerSubscriptionId: string;
 }
 
+/** Money was returned to the customer. `refundedTotalPaise` is cumulative for the payment. */
+export interface PaymentRefundedEvent {
+  type: 'payment_refunded';
+  provider: PaymentProvider;
+  providerPaymentId: string;
+  refundedTotalPaise: number;
+  paymentAmountPaise?: number;
+}
+
 export type BillingWebhookEvent =
   | CheckoutFulfillmentEvent
   | RenewalPaidEvent
   | SubscriptionCanceledEvent
   | PaymentFailedEvent
-  | SubscriptionHaltedEvent;
+  | SubscriptionHaltedEvent
+  | PaymentRefundedEvent;

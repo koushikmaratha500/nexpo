@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import type { Section } from './content';
+import { LEGAL_LAST_UPDATED, type Section } from './content';
 
 const ARTICLE = 'ps:max-w-[68ch] ps:text-[17px] ps:leading-8 ps:text-ink/80';
 
@@ -18,7 +18,7 @@ export function LegalPage({ title, intro, sections }: { title: string; intro: st
       <article>
         <h1 className="ps:text-4xl ps:font-extrabold ps:tracking-tight ps:sm:text-5xl">{title}</h1>
         <p className={`${ARTICLE} ps:mt-4`}>{intro}</p>
-        <p className="ps:mt-2 ps:text-sm ps:text-ink/50">Last updated 30 September 2026</p>
+        <p className="ps:mt-2 ps:text-sm ps:text-ink/50">Last updated {LEGAL_LAST_UPDATED}</p>
         {sections.map((s, i) => (
           <section key={s.h} id={`s${i}`} className="ps:mt-12 ps:scroll-mt-24">
             <h2 className="ps:text-2xl ps:font-bold">{s.h}</h2>
@@ -28,7 +28,8 @@ export function LegalPage({ title, intro, sections }: { title: string; intro: st
         <p className="ps:mt-16 ps:text-sm ps:text-ink/60">
           Also read: <Link className="ps:underline" href="/terms-and-conditions">Terms &amp; Conditions</Link>,{' '}
           <Link className="ps:underline" href="/terms-of-use">Terms of Use</Link>,{' '}
-          <Link className="ps:underline" href="/privacy-policy">Privacy Policy</Link>.
+          <Link className="ps:underline" href="/privacy-policy">Privacy Policy</Link>,{' '}
+          <Link className="ps:underline" href="/refund-policy">Refund &amp; Cancellation Policy</Link>.
         </p>
       </article>
     </div>

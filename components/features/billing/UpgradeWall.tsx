@@ -63,7 +63,7 @@ function loadRazorpayScript(): Promise<void> {
 }
 
 export function UpgradeWall() {
-  const { plan, upgradeOpen, setUpgradeOpen, refresh } = usePlan();
+  const { plan, upgradeOpen, setUpgradeOpen, refreshUntilPlanChanges } = usePlan();
   const { addToast } = useToast();
   const { user } = useAuth();
   const pathname = usePathname();
@@ -131,17 +131,23 @@ export function UpgradeWall() {
               );
               addToast('Payment successful. Your plan is now active.', 'success');
               setUpgradeOpen(false);
-              await refresh();
             } catch (err: unknown) {
               const msg =
                 axios.isAxiosError(err) && err.response?.data?.error
                   ? String(err.response.data.error)
-                  : 'Payment verification failed';
-              addToast(msg, 'error');
+                  : 'Payment received. Confirming with the bank, your plan will update shortly.';
+              addToast(msg, 'warning');
+            } finally {
+              // The webhook may confirm the payment even when client verification fails.
+              void refreshUntilPlanChanges();
             }
           },
           modal: {
-            ondismiss: () => setLoadingSku(null),
+            ondismiss: () => {
+              setLoadingSku(null);
+              // UPI QR / collect payments can complete after the sheet is closed.
+              void refreshUntilPlanChanges();
+            },
           },
         });
         rzp.open();
@@ -155,7 +161,7 @@ export function UpgradeWall() {
         setLoadingSku(null);
       }
     },
-    [addToast, pageSearch, pathname, plan?.plan, refresh, setUpgradeOpen, user?.role],
+    [addToast, pageSearch, pathname, plan, refreshUntilPlanChanges, setUpgradeOpen, user],
   );
 
   const gstNote = checkoutAvailable
@@ -242,7 +248,10 @@ export function UpgradeWall() {
         </div>
         {checkoutAvailable && plan && (
           <p className="text-xs text-on-surface-variant text-center">
-            Total with GST from {formatInr(Math.round(prices.starterMonthly * 1.18))} / month
+            Total with GST from {formatInr(Math.round(prices.starterMonthly * 1.18))} / month. By paying you agree to the{' '}
+            <a href="/terms-and-conditions" target="_blank" rel="noreferrer" className="underline">Terms</a> and{' '}
+            <a href="/refund-policy" target="_blank" rel="noreferrer" className="underline">Refund &amp; Cancellation Policy</a>.
+            Starter renews automatically until cancelled.
           </p>
         )}
         <button

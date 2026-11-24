@@ -11,6 +11,7 @@ export class BillingAdminService {
       recentPayments: data.recentPayments.map((payment) => ({
         ...payment,
         amountInr: formatPaiseAsInr(payment.amountPaise),
+        refundedInr: payment.refundedPaise > 0 ? formatPaiseAsInr(payment.refundedPaise) : null,
       })),
     };
   }

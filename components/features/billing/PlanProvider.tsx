@@ -30,6 +30,7 @@ interface PlanContextValue {
   plan: PlanPayload | null;
   loading: boolean;
   refresh: () => Promise<void>;
+  refreshUntilPlanChanges: () => Promise<void>;
   upgradeOpen: boolean;
   setUpgradeOpen: (open: boolean) => void;
 }
@@ -45,6 +46,10 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const { enqueueSnackbar, closeSnackbar } = useSnackbar();
   const prevUpgradeOpen = useRef(false);
+  const planRef = useRef<PlanPayload | null>(null);
+  useEffect(() => {
+    planRef.current = plan;
+  }, [plan]);
 
   const refresh = useCallback(async () => {
     try {
@@ -58,8 +63,41 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    void refresh();
+    // Initial load: state is set in promise callbacks, not synchronously in the effect.
+    axios
+      .get<PlanPayload>('/api/user/plan')
+      .then((response) => setPlan(response.data))
+      .catch(() => setPlan(null))
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Returning to the tab (e.g. after paying in a UPI app) must show the new plan without a reload.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
   }, [refresh]);
+
+  /**
+   * Payments can be confirmed by the provider webhook after the checkout closes (UPI QR,
+   * bank redirects), so poll until the plan changes or ~60s pass.
+   */
+  const refreshUntilPlanChanges = useCallback(async () => {
+    const keyOf = (p: PlanPayload | null) => (p ? `${p.plan}|${p.status}|${p.billingInterval}` : '');
+    const before = keyOf(planRef.current);
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      try {
+        const response = await axios.get<PlanPayload>('/api/user/plan');
+        setPlan(response.data);
+        if (keyOf(response.data) !== before) return;
+      } catch {
+        // keep polling; a transient failure should not leave the page stale
+      }
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
+  }, []);
 
   useEffect(() => {
     const interceptor = axios.interceptors.response.use(
@@ -143,8 +181,8 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
   }, [upgradeOpen, pathname, searchParams, plan?.plan, user?.role]);
 
   const value = useMemo(
-    () => ({ plan, loading, refresh, upgradeOpen, setUpgradeOpen }),
-    [plan, loading, refresh, upgradeOpen],
+    () => ({ plan, loading, refresh, refreshUntilPlanChanges, upgradeOpen, setUpgradeOpen }),
+    [plan, loading, refresh, refreshUntilPlanChanges, upgradeOpen],
   );
 
   return <PlanContext.Provider value={value}>{children}</PlanContext.Provider>;
@@ -157,6 +195,7 @@ export function usePlan(): PlanContextValue {
       plan: null,
       loading: false,
       refresh: async () => undefined,
+      refreshUntilPlanChanges: async () => undefined,
       upgradeOpen: false,
       setUpgradeOpen: () => undefined,
     };

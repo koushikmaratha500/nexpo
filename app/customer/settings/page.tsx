@@ -13,7 +13,6 @@ import { SmsImportStatusCard } from '@/components/features/sms-import';
 import { isSmsImportUiEnabled } from '@/lib/featureFlags';
 import { AccountLifecycleCard } from '@/components/features/account-lifecycle';
 import { BillingInvoices, BillingSubscription, UsageMeters, usePlan } from '@/components/features/billing';
-import { formatInr } from '@/lib/billing/catalog';
 import { shouldShowUpgradeCta } from '@/lib/billing/planUi';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
@@ -113,13 +112,14 @@ export default function CustomerSettingsPage() {
     void loadProfileAndMetadata();
   }, [updateUser]);
 
-  // Keep settings preview in sync when global auth user updates (e.g. header after upload)
-  useEffect(() => {
-    const imageUrl = user?.avatar || user?.profileImageUrl;
-    if (imageUrl && imageUrl !== avatar) {
-      setAvatar(imageUrl);
-    }
-  }, [user?.avatar, user?.profileImageUrl, avatar]);
+  // Keep settings preview in sync when global auth user updates (e.g. header after upload).
+  // Adjusted during render (not in an effect) so it does not cascade renders.
+  const userImage = user?.avatar || user?.profileImageUrl || '';
+  const [syncedUserImage, setSyncedUserImage] = useState(userImage);
+  if (userImage !== syncedUserImage) {
+    setSyncedUserImage(userImage);
+    if (userImage) setAvatar(userImage);
+  }
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -242,7 +242,7 @@ export default function CustomerSettingsPage() {
             </div>
             {shouldShowUpgradeCta(plan) && (
               <Button type="button" onClick={() => setUpgradeOpen(true)}>
-                {plan.writesLocked ? 'Upgrade to continue' : `Plans from ${formatInr(100)}/mo`}
+                {plan.writesLocked ? 'Upgrade to continue' : 'Upgrade Plan'}
               </Button>
             )}
           </div>

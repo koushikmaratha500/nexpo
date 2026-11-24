@@ -21,6 +21,7 @@ const CUSTOMER_NAV_LINKS: NavLink[] = [
     icon: 'smart_toy',
     renderSubMenu: (onNavigate) => <AiChatHistoryMenu onNavigate={onNavigate} />,
   },
+  { name: 'Orders', path: '/customer/orders', icon: 'shopping_bag' },
   { name: 'Settings', path: '/customer/settings', icon: 'settings' },
 ];
 

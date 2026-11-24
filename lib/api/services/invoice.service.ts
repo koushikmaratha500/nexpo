@@ -4,7 +4,9 @@ import { EmailService } from './email.service';
 import {
   computeGstBreakdown,
   formatPaiseAsInr,
+  getAppBaseUrl,
   getBillingAddress,
+  getBillingGstRate,
   getBillingGstin,
   getBillingLegalName,
   getBillingSac,
@@ -12,6 +14,8 @@ import {
 import { buildInvoicePdf } from '@/lib/billing/invoice-pdf';
 import { getSkuDefinition } from '@/lib/billing/skus';
 import { prisma } from '@/lib/prisma';
+
+const SUPPORT_EMAIL = 'support@paysasuchan.com';
 
 export class InvoiceService {
   static async issueForPayment(paymentId: string) {
@@ -55,6 +59,11 @@ export class InvoiceService {
       sgstPaise: breakdown.sgstPaise,
       igstPaise: breakdown.igstPaise,
       totalPaise: record.amountPaise,
+      paymentRef: record.providerPaymentId,
+      paymentMethod: record.provider === 'RAZORPAY' ? 'Razorpay' : 'Stripe',
+      gstRatePercent: getBillingGstRate(),
+      supportEmail: SUPPORT_EMAIL,
+      website: getAppBaseUrl().replace(/^https?:\/\//, ''),
     });
 
     const invoice = await BillingRepository.createInvoice({

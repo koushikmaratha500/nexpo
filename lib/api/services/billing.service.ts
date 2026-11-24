@@ -4,6 +4,7 @@ import {
   CheckoutSessionStatus,
   CheckoutSku,
   PaymentProvider,
+  PaymentStatus,
   PlanStatus,
 } from '@prisma/client';
 import { HttpError } from '../middleware/errorHandler';
@@ -11,7 +12,8 @@ import { BillingRepository } from '../repositories/billing.repository';
 import { UserRepository } from '../repositories/user.repository';
 import { InvoiceService } from './invoice.service';
 import { SettingsService } from './settings.service';
-import { computeGstBreakdown, getAppBaseUrl, isProviderConfigured } from '@/lib/billing/config';
+import { computeGstBreakdown, formatPaiseAsInr, getAppBaseUrl, isProviderConfigured } from '@/lib/billing/config';
+import { formatDate } from '@/lib/date';
 import { getGateway, getConfiguredGateways } from '@/lib/billing/gateway';
 import { validateCheckoutSku } from '@/lib/billing/checkout-rules';
 import { getSkuDefinition, parseCheckoutSku } from '@/lib/billing/skus';
@@ -118,6 +120,39 @@ export class BillingService {
       canceled: true,
       effectiveUntil: user.currentPeriodEndsAt?.toISOString() ?? null,
     };
+  }
+
+  /** Customer order history: every payment with its invoice and final status. */
+  static async listOrders(userId: string) {
+    const rows = await BillingRepository.listOrdersByUser(userId);
+    return rows.map((row) => {
+      const sku = getSkuDefinition(row.sku);
+      const subtotalPaise = row.invoice?.subtotalPaise ?? row.checkoutSession.subtotalPaise;
+      const taxPaise = row.invoice
+        ? row.invoice.cgstPaise + row.invoice.sgstPaise + row.invoice.igstPaise
+        : row.checkoutSession.gstPaise;
+      return {
+        id: row.id,
+        orderNumber: row.invoice?.invoiceNumber ?? row.providerPaymentId,
+        planLabel: row.invoice?.planLabel ?? sku.label,
+        sku: row.sku,
+        recurring: sku.recurring,
+        provider: row.provider.toLowerCase(),
+        providerPaymentId: row.providerPaymentId,
+        status: row.status,
+        currency: row.currency,
+        subtotalPaise,
+        taxPaise,
+        amountPaise: row.amountPaise,
+        refundedPaise: row.refundedPaise,
+        netPaidPaise: row.amountPaise - row.refundedPaise,
+        paidAt: row.createdAt.toISOString(),
+        refundedAt: row.refundedAt?.toISOString() ?? null,
+        invoice: row.invoice
+          ? { id: row.invoice.id, invoiceNumber: row.invoice.invoiceNumber, issuedAt: row.invoice.issuedAt.toISOString() }
+          : null,
+      };
+    });
   }
 
   static async createCheckout(userId: string, skuInput: string) {
@@ -306,6 +341,9 @@ export class BillingService {
       case 'subscription_halted':
         await this.processSubscriptionHalted(event);
         break;
+      case 'payment_refunded':
+        await this.processRefund(event);
+        break;
       default:
         break;
     }
@@ -421,6 +459,8 @@ export class BillingService {
         firstName: existingUser.firstName,
         planLabel: skuDef.label,
         isLifetime: skuDef.plan === BillingPlan.PRO,
+        amount: formatPaiseAsInr(input.amountPaise),
+        renewsOn: userPatch.currentPeriodEndsAt ? formatDate(userPatch.currentPeriodEndsAt) : null,
       });
     }
 
@@ -536,6 +576,71 @@ export class BillingService {
       planStatus: PlanStatus.EXPIRED,
       razorpaySubscriptionId: null,
     });
+  }
+
+  /**
+   * Records a provider refund. A full refund of the payment that funds the user's current
+   * plan also ends that plan (Starter subscription canceled at the provider).
+   */
+  private static async processRefund(event: Extract<BillingWebhookEvent, { type: 'payment_refunded' }>) {
+    const payment = await BillingRepository.findPaymentByProvider(event.provider, event.providerPaymentId);
+    if (!payment) return;
+
+    const refundedPaise = Math.min(event.refundedTotalPaise, payment.amountPaise);
+    if (refundedPaise <= payment.refundedPaise) return; // already recorded (redelivery)
+
+    const fullRefund = refundedPaise >= payment.amountPaise;
+    await BillingRepository.recordRefund(payment.id, {
+      refundedPaise,
+      status: fullRefund ? PaymentStatus.REFUNDED : PaymentStatus.PARTIALLY_REFUNDED,
+      refundedAt: new Date(),
+    });
+
+    const user = await UserRepository.findById(payment.userId);
+    if (!user) return;
+
+    if (fullRefund) {
+      const latest = await BillingRepository.findLatestActivePaymentForUser(user.id);
+      const fundedCurrentPlan =
+        !latest || latest.createdAt <= payment.createdAt; // no newer paid order supersedes this one
+      const skuPlan = getSkuDefinition(payment.sku).plan;
+      if (fundedCurrentPlan && user.plan === skuPlan) {
+        if (skuPlan === BillingPlan.STARTER) {
+          const subscriptionId =
+            user.paymentProvider === PaymentProvider.STRIPE ? user.stripeSubscriptionId : user.razorpaySubscriptionId;
+          if (user.paymentProvider && subscriptionId) {
+            try {
+              await getGateway(user.paymentProvider).cancelSubscription(subscriptionId, false);
+            } catch (error) {
+              console.error('Failed to cancel subscription after refund:', error);
+            }
+          }
+          await UserRepository.update(user.id, {
+            planStatus: PlanStatus.EXPIRED,
+            currentPeriodEndsAt: new Date(),
+            razorpaySubscriptionId: null,
+            stripeSubscriptionId: null,
+          });
+        } else {
+          await UserRepository.update(user.id, {
+            plan: BillingPlan.FREEMIUM,
+            planStatus: PlanStatus.EXPIRED,
+            billingInterval: BillingInterval.NONE,
+            currentPeriodEndsAt: null,
+          });
+        }
+      }
+    }
+
+    if (user.email) {
+      await EmailService.sendRefundEmail(user.email, {
+        firstName: user.firstName,
+        planLabel: getSkuDefinition(payment.sku).label,
+        amount: formatPaiseAsInr(refundedPaise - payment.refundedPaise),
+        fullRefund,
+        invoiceNumber: payment.invoice?.invoiceNumber ?? null,
+      });
+    }
   }
 
     private static async processPaymentFailed(

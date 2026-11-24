@@ -27,3 +27,13 @@ describe('invoice PDF', () => {
     expect(toWinAnsi('José रमेश')).toBe('José ????');
   });
 });
+
+describe('amountInWords', () => {
+  it('uses the Indian numbering system', async () => {
+    const { amountInWords } = await import('@/lib/billing/invoice-pdf');
+    expect(amountInWords(11800)).toBe('Rupees One Hundred Eighteen Only');
+    expect(amountInWords(118000)).toBe('Rupees One Thousand One Hundred Eighty Only');
+    expect(amountInWords(1180000)).toBe('Rupees Eleven Thousand Eight Hundred Only');
+    expect(amountInWords(123456789)).toBe('Rupees Twelve Lakh Thirty Four Thousand Five Hundred Sixty Seven and Eighty Nine Paise Only');
+  });
+});

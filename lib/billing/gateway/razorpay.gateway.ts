@@ -144,7 +144,15 @@ interface RazorpayWebhookBody {
       entity?: {
         id?: string;
         amount?: number;
+        amount_refunded?: number;
         notes?: Record<string, string> | unknown[];
+      };
+    };
+    refund?: {
+      entity?: {
+        id?: string;
+        payment_id?: string;
+        amount?: number;
       };
     };
     subscription?: {
@@ -187,6 +195,21 @@ export function parseRazorpayWebhookEvent(rawBody: string): BillingWebhookEvent 
       providerPaymentId: payment.id,
       amountPaise: payment.amount ?? 0,
       sku,
+    };
+  }
+
+  if (eventName === 'refund.processed') {
+    const refund = event.payload?.refund?.entity;
+    const paymentId = refund?.payment_id ?? payment?.id;
+    if (!paymentId) return null;
+    // Prefer the payment's cumulative total so redelivered or multiple refunds stay idempotent.
+    const refundedTotalPaise = payment?.amount_refunded ?? refund?.amount ?? 0;
+    return {
+      type: 'payment_refunded',
+      provider: PaymentProvider.RAZORPAY,
+      providerPaymentId: paymentId,
+      refundedTotalPaise,
+      paymentAmountPaise: payment?.amount,
     };
   }
 

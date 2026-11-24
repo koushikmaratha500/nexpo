@@ -6,6 +6,8 @@ import { Card } from '@/components/ui/Card';
 import { useToast } from '@/hooks/useToast';
 import { usePlan } from './PlanProvider';
 import { formatDate } from '@/lib/date';
+import Link from 'next/link';
+import { downloadInvoicePdf } from './downloadInvoice';
 
 interface InvoiceRow {
   id: string;
@@ -33,19 +35,12 @@ export function BillingInvoices({
       .then((res) => setInvoices(res.data))
       .catch(() => setInvoices([]))
       .finally(() => setLoading(false));
-  }, []);
+    // A new payment issues a new invoice; refetch when the plan changes.
+  }, [plan?.plan, plan?.status, plan?.billingInterval]);
 
   const download = async (id: string, invoiceNumber: string) => {
     try {
-      const res = await axios.get<{ base64: string }>(`/api/user/billing/invoices/${id}`);
-      const bytes = Uint8Array.from(atob(res.data.base64), (c) => c.charCodeAt(0));
-      const blob = new Blob([bytes], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${invoiceNumber}.pdf`;
-      link.click();
-      URL.revokeObjectURL(url);
+      await downloadInvoicePdf(id, invoiceNumber);
     } catch {
       addToast('Could not download invoice', 'error');
     }
@@ -74,6 +69,9 @@ export function BillingInvoices({
       <h3 className={`font-bold text-primary ${compact || embedded ? 'text-sm mb-2' : 'font-title-md mb-3'}`}>
         GST invoices
       </h3>
+      <Link href="/customer/orders" className="text-xs font-semibold text-primary hover:underline">
+        View all orders &amp; refunds
+      </Link>
       <ul className="flex flex-col gap-1">
         {visibleInvoices.map((inv) => (
           <li
