@@ -1,9 +1,11 @@
+import { MobilePushTokenRepository } from '../repositories/mobile-push-token.repository';
 import { NextRequest } from 'next/server';
 import { BaseController } from './base.controller';
 import { NotificationService } from '../services/notification.service';
 import {
   notificationListQuerySchema,
   updateNotificationPreferencesSchema,
+  mobilePushTokenSchema,
   registerPushSubscriptionSchema,
 } from '../dtos/notification.dto';
 
@@ -61,5 +63,21 @@ export class NotificationController extends BaseController {
         validated.platform,
       );
     }, { status: 201, fallbackMessage: 'Failed to register push subscription' });
+  }
+
+  static async registerMobileToken(req: NextRequest, userId: string) {
+    return this.safeExecuteJson(async () => {
+      const { token, platform } = mobilePushTokenSchema.parse(await req.json());
+      await MobilePushTokenRepository.upsert(userId, token, platform);
+      return { ok: true };
+    }, { fallbackMessage: 'Failed to register this device for push' });
+  }
+
+  static async removeMobileToken(req: NextRequest, userId: string) {
+    return this.safeExecuteJson(async () => {
+      const { token } = mobilePushTokenSchema.pick({ token: true }).parse(await req.json());
+      await MobilePushTokenRepository.remove(userId, token);
+      return { ok: true };
+    }, { fallbackMessage: 'Failed to unregister this device' });
   }
 }

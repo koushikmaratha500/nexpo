@@ -10,6 +10,8 @@ import {
 } from '@/lib/auth/oauthRedirect';
 import {
   isAllowedMobileAppRedirect,
+  isValidSealKey,
+  MOBILE_OAUTH_KEY_COOKIE,
   MOBILE_OAUTH_REDIRECT_COOKIE,
 } from '@/lib/auth/mobileOAuth';
 
@@ -42,6 +44,15 @@ export async function GET(request: NextRequest) {
       secure: process.env.NODE_ENV === 'production',
       path: '/',
       maxAge: 60 * 10,
+    });
+    // Apps that send a key get the token sealed; older apps keep the plain token.
+    const appKey = request.nextUrl.searchParams.get('app_key');
+    cookieStore.set(MOBILE_OAUTH_KEY_COOKIE, isValidSealKey(appKey) ? appKey : '', {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: isValidSealKey(appKey) ? 60 * 10 : 0,
     });
   } else {
     const next = normalizeOAuthNextPath(request.nextUrl.searchParams.get('next'));

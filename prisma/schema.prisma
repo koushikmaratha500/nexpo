@@ -224,6 +224,7 @@ model User {
   inAppNotifications InAppNotification[]
   notificationPreference UserNotificationPreference?
   pushSubscriptions UserPushSubscription[]
+  mobilePushTokens  MobilePushToken[]
   transactionShares TransactionShare[]
   channelAccounts   ChannelAccount[]
   smsImportSettings UserSmsImportSettings?
@@ -894,6 +895,20 @@ model UserPushSubscription {
   lastSeenAt         DateTime     @default(now())
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// FCM registration token of the Android/iOS app (pushes go straight to Firebase, not OneSignal).
+model MobilePushToken {
+  id         String       @id @default(uuid())
+  userId     String
+  token      String       @unique
+  platform   PushPlatform @default(ANDROID)
+  lastSeenAt DateTime     @default(now())
+  createdAt  DateTime     @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
