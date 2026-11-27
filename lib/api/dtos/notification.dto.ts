@@ -23,6 +23,11 @@ export const registerPushSubscriptionSchema = z.object({
   platform: z.enum(['WEB', 'IOS', 'ANDROID']).default('WEB'),
 });
 
+export const mobilePushTokenSchema = z.object({
+  token: z.string().trim().min(20).max(4096),
+  platform: z.enum(['IOS', 'ANDROID']).default('ANDROID'),
+});
+
 export type UpdateNotificationPreferencesDto = z.infer<typeof updateNotificationPreferencesSchema>;
 export type RegisterPushSubscriptionDto = z.infer<typeof registerPushSubscriptionSchema>;
 

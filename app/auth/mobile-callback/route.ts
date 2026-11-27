@@ -5,7 +5,10 @@ import { AuthService } from '@/lib/api/services/auth.service';
 import {
   buildMobileAppReturnUrl,
   isAllowedMobileAppRedirect,
+  isValidSealKey,
+  MOBILE_OAUTH_KEY_COOKIE,
   MOBILE_OAUTH_REDIRECT_COOKIE,
+  sealToken,
 } from '@/lib/auth/mobileOAuth';
 
 /**
@@ -19,15 +22,18 @@ export async function GET(request: Request) {
   const code = url.searchParams.get('code');
   const cookieStore = await cookies();
   const appRedirect = cookieStore.get(MOBILE_OAUTH_REDIRECT_COOKIE)?.value;
+  const appKey = cookieStore.get(MOBILE_OAUTH_KEY_COOKIE)?.value;
 
   const clearMobileCookie = () => {
-    cookieStore.set(MOBILE_OAUTH_REDIRECT_COOKIE, '', {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      path: '/',
-      maxAge: 0,
-    });
+    for (const name of [MOBILE_OAUTH_REDIRECT_COOKIE, MOBILE_OAUTH_KEY_COOKIE]) {
+      cookieStore.set(name, '', {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        path: '/',
+        maxAge: 0,
+      });
+    }
   };
 
   if (appRedirect && isAllowedMobileAppRedirect(appRedirect)) {
@@ -83,10 +89,12 @@ export async function GET(request: Request) {
     try {
       const result = await AuthService.loginWithGoogle(data.session.access_token, { ip: '', ua: '' });
       return NextResponse.redirect(
-        buildMobileAppReturnUrl(appRedirect, {
-          token: result.token,
-          success: '1',
-        }),
+        buildMobileAppReturnUrl(
+          appRedirect,
+          isValidSealKey(appKey)
+            ? { sealed: sealToken(result.token, appKey), success: '1' }
+            : { token: result.token, success: '1' },
+        ),
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : 'google_auth_failed';

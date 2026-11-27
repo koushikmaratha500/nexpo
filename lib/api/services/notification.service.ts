@@ -9,6 +9,8 @@ import { GroupRepository } from '../repositories/group.repository';
 import { UserRepository } from '../repositories/user.repository';
 import { SettingsService } from './settings.service';
 import { PushService } from './push.service';
+import { FcmService } from './fcm.service';
+import { MobilePushTokenRepository } from '../repositories/mobile-push-token.repository';
 import { EmailService } from './email.service';
 import type { UpdateNotificationPreferencesDto } from '../dtos/notification.dto';
 import { formatDate } from '@/lib/date';
@@ -252,7 +254,9 @@ export class NotificationService {
     }
 
     const globallyEnabled = await SettingsService.isNotificationChannelGloballyEnabled('PUSH');
-    if (!globallyEnabled || !PushService.isConfigured()) {
+    const oneSignal = PushService.isConfigured();
+    const fcm = FcmService.isConfigured();
+    if (!globallyEnabled || (!oneSignal && !fcm)) {
       await NotificationRepository.logDelivery({
         reminderId,
         userId: userIds.length === 1 ? userIds[0] : undefined,
@@ -263,8 +267,11 @@ export class NotificationService {
       return { sent: 0, skipped: true };
     }
 
-    const subscriptions = await PushSubscriptionRepository.findByUserIds(userIds);
-    if (subscriptions.length === 0) {
+    const [subscriptions, mobileTokens] = await Promise.all([
+      oneSignal ? PushSubscriptionRepository.findByUserIds(userIds) : Promise.resolve([]),
+      fcm ? MobilePushTokenRepository.tokensForUsers(userIds) : Promise.resolve([]),
+    ]);
+    if (subscriptions.length === 0 && mobileTokens.length === 0) {
       await NotificationRepository.logDelivery({
         reminderId,
         userId: userIds.length === 1 ? userIds[0] : undefined,
@@ -276,7 +283,12 @@ export class NotificationService {
     }
 
     try {
-      const result = await PushService.send(userIds, payload);
+      // Web through OneSignal, the mobile app through FCM.
+      const [web, mobile] = await Promise.all([
+        subscriptions.length > 0 ? PushService.send(userIds, payload) : Promise.resolve({ sent: 0 }),
+        mobileTokens.length > 0 ? FcmService.send(mobileTokens, payload) : Promise.resolve({ sent: 0 }),
+      ]);
+      const result = { sent: web.sent + mobile.sent, skipped: false };
       await NotificationRepository.logDelivery({
         reminderId,
         userId: userIds.length === 1 ? userIds[0] : undefined,
