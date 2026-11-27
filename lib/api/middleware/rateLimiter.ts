@@ -41,6 +41,8 @@ export const RATE_LIMIT_PRESETS = {
   aiChat: { limit: 20, windowSeconds: 60 },
   aiOcr: { limit: 10, windowSeconds: 60 },
   aiInsights: { limit: 10, windowSeconds: 60 },
+  // Mobile auto-capture checks: up to 20 messages per call, ~1,000 messages a day.
+  captureAssess: { limit: 50, windowSeconds: 86400 },
   groupInvite: { limit: 20, windowSeconds: 60 },
   shareCreate: { limit: 20, windowSeconds: 86400 },
   sharePublic: { limit: 60, windowSeconds: 60 },

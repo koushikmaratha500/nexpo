@@ -229,6 +229,7 @@ model User {
   smsImportSettings UserSmsImportSettings?
   smsIngestMessages SmsIngestMessage[]
   transactionImportFingerprints TransactionImportFingerprint[]
+  captureDecisions CaptureDecision[]
   monthlyDigestDeliveries MonthlyDigestDelivery[]
   aiChatThreads AiChatThread[]
 
@@ -340,6 +341,29 @@ model SmsIngestMessage {
   @@unique([userId, messageHash])
   @@index([userId, status])
   @@index([syncBatchId])
+}
+
+enum CaptureDecisionKind {
+  SAVED
+  REJECTED
+}
+
+/// Mobile auto-capture: the user's Save/Reject decision per captured message.
+/// Only a one-way fingerprint (sha256 computed on the phone) is stored, never the message text.
+model CaptureDecision {
+  id            String              @id @default(uuid())
+  userId        String
+  fingerprint   String
+  reference     String?
+  decision      CaptureDecisionKind
+  transactionId String?
+  createdAt     DateTime            @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, fingerprint])
+  @@index([userId, reference])
+  @@index([userId, createdAt])
 }
 
 model TransactionImportFingerprint {
