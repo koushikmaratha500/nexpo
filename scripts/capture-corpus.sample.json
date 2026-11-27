@@ -1,0 +1,18 @@
+[
+  { "sender": "AD-HDFCBK-T", "text": "Sent Rs.40000.00\nFrom HDFC Bank A/C *3504\nTo PAVANI VADISA\nOn 30/10/26\nRef 666919548464\nNot You?\nCall 18002586161/SMS BLOCK UPI to [phone]", "expected": { "isTransaction": true, "kind": "DEBIT", "amount": 40000 } },
+  { "sender": "JD-HDFCBK-S", "text": "Sent Rs.50.00\nFrom HDFC Bank A/C *3504\nTo Jai bhavani fruits shop\nOn 23/11/26\nRef 669331338784\nNot You?", "expected": { "isTransaction": true, "kind": "DEBIT", "amount": 50 } },
+  { "sender": "CP-IDFCFB-S", "text": "Transaction Successful! INR 120.00 spent on your IDFC FIRST Bank Credit Card ending XX0288 at NEW BLUE SHARK AQUAR on 24 NOV 2026 at 12:44 PM [balance] If not done by you, call 180010888 for dispute", "expected": { "isTransaction": true, "kind": "DEBIT", "amount": 120 } },
+  { "sender": "CP-IDFCFB-S", "text": "Delicious Purchase! INR 469.00 spent on your IDFC FIRST Bank Credit Card ending XX0288 at ICICI on 24 NOV 2026 at 07:05 PM [balance]", "expected": { "isTransaction": true, "kind": "DEBIT", "amount": 469 } },
+  { "sender": "AX-ICICIT-S", "text": "ICICI Bank Acct XX123 debited for Rs 250.00 on 24-Nov-26; SWIGGY credited. UPI:432112345678. Call 18002662 for dispute.", "expected": { "isTransaction": true, "kind": "DEBIT", "amount": 250 } },
+  { "sender": "VM-SBIUPI", "text": "Dear SBI UPI User, ur A/cX1234 credited by Rs500 on 24Nov26 by (Ref no 432112345678)", "expected": { "isTransaction": true, "kind": "CREDIT", "amount": 500 } },
+  { "sender": "VK-AXISBK", "text": "INR 50,000.00 credited to A/c no. XX1234 on 01-11-26 by NEFT-ACME CORP SALARY. [balance]", "expected": { "isTransaction": true, "kind": "CREDIT", "amount": 50000 } },
+  { "sender": "com.google.android.apps.nbu.paisa.user", "source": "notification", "text": "₹120 paid to Ramesh", "expected": { "isTransaction": true, "kind": "DEBIT", "amount": 120 } },
+  { "sender": "com.phonepe.app", "source": "notification", "text": "Received ₹1,250.50 from Suresh Kumar", "expected": { "isTransaction": true, "kind": "CREDIT", "amount": 1250.5 } },
+  { "sender": "VM-TATACQ", "text": "Credited Rs.1000 worth cash in Tata Cliq Wallet for BOSS merchandise shopping. Terms & conditions Apply", "expected": { "isTransaction": false } },
+  { "sender": "AD-HDFCBK-T", "text": "123456 is your OTP for txn of Rs 500 at AMAZON. Do not share.", "expected": { "isTransaction": false } },
+  { "sender": "com.google.android.apps.nbu.paisa.user", "source": "notification", "text": "Ramesh has requested Rs 500 from you", "expected": { "isTransaction": false } },
+  { "sender": "AD-HDFCBK-T", "text": "Your payment of Rs 250 to SWIGGY has failed. Any amount debited will be refunded.", "expected": { "isTransaction": false } },
+  { "sender": "JM-KOTAKB", "text": "Rs 1,000 will be debited from your A/c XX1234 on 01-12-26 for SIP", "expected": { "isTransaction": false } },
+  { "sender": "VM-PAYTMB", "text": "Get 10% cashback up to Rs 100 on your next UPI payment. T&C apply", "expected": { "isTransaction": false } },
+  { "sender": "AD-HDFCBK-T", "text": "Avl Bal in A/c XX1234 is [balance] as on 24-11-26", "expected": { "isTransaction": false } }
+]
